@@ -35,8 +35,6 @@ impl<T: ?Sized> Number<T> {
 
 mod number;
 
-mod int;
-
 pub struct Finite<T>(T);
 
 impl Finite<f64> {
@@ -52,5 +50,3 @@ impl Finite<f32> {
 }
 
 mod float;
-
-mod string;

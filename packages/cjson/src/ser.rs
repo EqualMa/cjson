@@ -20,4 +20,7 @@ impl<T: ?Sized + ToJson> ToJson for &T {
     }
 }
 
+mod int;
+mod string;
+
 mod slice;
