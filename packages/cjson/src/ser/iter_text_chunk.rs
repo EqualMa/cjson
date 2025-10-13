@@ -10,6 +10,10 @@ pub trait IterTextChunk {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct Empty;
+mod empty;
+
 mod array_string;
 mod str;
 mod u8_slice;

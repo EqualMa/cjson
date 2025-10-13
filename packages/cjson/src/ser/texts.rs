@@ -1,5 +1,9 @@
 use super::traits;
 
+#[derive(Debug, Clone, Copy)]
+pub struct Empty;
+mod empty;
+
 mod literal_names;
 
 /// Json array.
