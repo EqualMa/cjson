@@ -1,0 +1,16 @@
+[package]
+name = "cjson"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+arrayvec = { version = "0.7.6", default-features = false }
+itoa = { version = "1.0.15", optional = true }
+polonius-the-crab = "0.4.2"
+ref-cast = "1.0.25"
+ryu = "1.0.20"
+
+[features]
+default = ["alloc", "itoa"]
+alloc = []
+itoa = ["dep:itoa"]
