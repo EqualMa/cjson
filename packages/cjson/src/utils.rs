@@ -1,3 +1,4 @@
+pub(crate) mod iter_map;
 pub(crate) mod size_hint;
 
 macro_rules! impl_many {

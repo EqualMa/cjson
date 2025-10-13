@@ -149,32 +149,7 @@ impl<I: Iterator<Item: traits::IntoTextChunks<IntoTextChunks = B>>, B> Iterator
 {
     type Item = B;
 
-    #[inline]
-    fn next(&mut self) -> Option<B> {
-        self.iter
-            .next()
-            .map(traits::IntoTextChunks::into_text_chunks)
-    }
-
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.iter.size_hint()
-    }
-
-    fn fold<Acc, G>(self, init: Acc, g: G) -> Acc
-    where
-        G: FnMut(Acc, Self::Item) -> Acc,
-    {
-        self.iter
-            .fold(init, map_fold(traits::IntoTextChunks::into_text_chunks, g))
-    }
-}
-
-fn map_fold<T, B, Acc>(
-    mut f: impl FnMut(T) -> B,
-    mut g: impl FnMut(Acc, B) -> Acc,
-) -> impl FnMut(Acc, T) -> Acc {
-    move |acc, elt| g(acc, f(elt))
+    crate::utils::iter_map::impl_iter_map!(traits::IntoTextChunks::into_text_chunks);
 }
 
 impl<I: Iterator<Item: traits::Text>> traits::IntoTextChunks for ArrayOfIter<I> {
