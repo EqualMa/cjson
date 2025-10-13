@@ -20,13 +20,4 @@ impl<T: ?Sized + ToJson> ToJson for &T {
     }
 }
 
-// impl<T: ToJson> ToJson for [T] {
-//     type ToJson<'a>
-//         = texts::ArrayOfIter<core::slice::Iter<'a, T>>
-//     where
-//         Self: 'a;
-
-//     fn to_json(&self) -> Self::ToJson<'_> {
-//         todo!()
-//     }
-// }
+mod slice;
