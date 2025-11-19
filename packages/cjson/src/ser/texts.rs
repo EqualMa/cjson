@@ -65,6 +65,20 @@ define_refined_type!(
     #[assert_refined(Text, Value)]
     /// Json number.
     #[derive(Debug, Clone, Copy)]
+    pub struct Text<T: traits::IntoTextChunks>(T);
+);
+
+define_refined_type!(
+    #[assert_refined(Text, Value)]
+    /// Json number.
+    #[derive(Debug, Clone, Copy)]
+    pub struct Value<T: traits::IntoTextChunks>(T);
+);
+
+define_refined_type!(
+    #[assert_refined(Text, Value)]
+    /// Json number.
+    #[derive(Debug, Clone, Copy)]
     pub struct Number<T: traits::IntoTextChunks>(T);
 );
 
