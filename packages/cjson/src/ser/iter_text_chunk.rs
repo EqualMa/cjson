@@ -18,6 +18,9 @@ mod array_string;
 mod str;
 mod u8_slice;
 
+#[cfg(feature = "alloc")]
+mod alloc;
+
 pub enum EitherTextChunks<A, B> {
     A(A),
     B(B),
