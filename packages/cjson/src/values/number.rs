@@ -31,6 +31,15 @@ impl Number<[u8]> {
         }
     }
 }
+impl<const LEN: usize> Number<[u8; LEN]> {
+    pub const fn new_byte_array_checked(s: [u8; LEN]) -> Option<Self> {
+        if validate_json_number(&s) {
+            Some(Number::new_without_validation(s))
+        } else {
+            None
+        }
+    }
+}
 
 const fn validate_json_number(bytes: &[u8]) -> bool {
     let after_minus = match bytes.split_first() {

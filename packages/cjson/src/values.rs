@@ -28,6 +28,11 @@ crate::utils::impl_many!(
 #[repr(transparent)]
 pub struct Number<T: ?Sized>(T);
 
+impl<T> Number<T> {
+    pub(crate) const fn new_without_validation(s: T) -> Self {
+        Self(s)
+    }
+}
 impl<T: ?Sized> Number<T> {
     #[ref_cast_custom]
     pub(crate) const fn ref_cast_without_validation(s: &T) -> &Self;
