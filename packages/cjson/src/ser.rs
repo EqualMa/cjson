@@ -2,6 +2,8 @@ pub mod iter_text_chunk;
 pub mod texts;
 pub mod traits;
 
+pub mod exts;
+
 pub trait ToJson {
     type ToJson<'a>: traits::Text
     where
