@@ -26,8 +26,19 @@ macro_rules! define_refined_type {
         $vis $struct $Type<$T: $Bounds> $body;
 
         impl<T: $Bounds> $Type<T> {
-            pub(crate) fn new_without_validation(chunks: T) -> Self {
+            /// - `T` MUST satisfy the constraints of this refined type.
+            /// - `T` MUST NOT have inner mutability which means `T: core::marker::Freeze`
+            ///   because of public api [`Self::inner`].
+            pub(crate) const fn new_without_validation(chunks: T) -> Self {
                 Self(chunks)
+            }
+
+            pub const fn inner(&self) -> &T {
+                &self.0
+            }
+
+            pub fn into_inner(self) -> T {
+                self.0
             }
         }
 
