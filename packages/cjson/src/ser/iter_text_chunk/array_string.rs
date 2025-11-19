@@ -30,4 +30,10 @@ impl<const CAP: usize> IterTextChunk for ArrayString<CAP> {
         let len = self.len();
         (len, Some(len))
     }
+
+    #[doc(hidden)]
+    #[cfg(feature = "alloc")]
+    fn _private_collect_into_vec(self) -> ::alloc::vec::Vec<u8> {
+        self.as_bytes().into()
+    }
 }

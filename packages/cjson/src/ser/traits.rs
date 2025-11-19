@@ -3,6 +3,15 @@ use super::iter_text_chunk::IterTextChunk;
 pub trait IntoTextChunks {
     type IntoTextChunks: IterTextChunk;
     fn into_text_chunks(self) -> Self::IntoTextChunks;
+
+    #[doc(hidden)]
+    #[cfg(feature = "alloc")]
+    fn _private_into_text_chunks_vec(self) -> alloc::vec::Vec<u8>
+    where
+        Self: Sized,
+    {
+        IterTextChunk::_private_collect_into_vec(self.into_text_chunks())
+    }
 }
 
 impl<T: IterTextChunk> IntoTextChunks for T {

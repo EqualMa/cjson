@@ -17,5 +17,11 @@ impl_many!(
                 Some(s)
             }
         }
+
+        #[doc(hidden)]
+        #[cfg(feature = "alloc")]
+        fn _private_collect_into_vec(self) -> Vec<u8> {
+            self.into()
+        }
     }
 );

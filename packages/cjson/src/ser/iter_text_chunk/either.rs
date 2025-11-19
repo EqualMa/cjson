@@ -33,4 +33,13 @@ impl<A: IterTextChunk, B: IterTextChunk> IterTextChunk for EitherTextChunks<A, B
             EitherTextChunks::B(this) => this.bytes_len_hint(),
         }
     }
+
+    #[doc(hidden)]
+    #[cfg(feature = "alloc")]
+    fn _private_collect_into_vec(self) -> ::alloc::vec::Vec<u8> {
+        match self {
+            EitherTextChunks::A(this) => this._private_collect_into_vec(),
+            EitherTextChunks::B(this) => this._private_collect_into_vec(),
+        }
+    }
 }

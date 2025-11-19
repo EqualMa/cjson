@@ -8,6 +8,25 @@ pub trait IterTextChunk {
     fn bytes_len_hint(&self) -> (usize, Option<usize>) {
         (0, None)
     }
+
+    #[doc(hidden)]
+    #[cfg(feature = "alloc")]
+    fn _private_collect_into_vec(mut self) -> ::alloc::vec::Vec<u8>
+    where
+        Self: Sized,
+    {
+        use ::alloc::vec::Vec;
+
+        let cap = self.bytes_len_hint().0; // TODO: OPTIMIZE
+        let mut bytes = Vec::with_capacity(cap);
+
+        while let Some(chunk) = self.next_text_chunk() {
+            let chunk = chunk.as_ref();
+            bytes.extend_from_slice(chunk);
+        }
+
+        bytes
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

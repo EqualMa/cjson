@@ -21,4 +21,10 @@ impl IterTextChunk for super::Empty {
     fn bytes_len_hint(&self) -> (usize, Option<usize>) {
         (0, Some(0))
     }
+
+    #[doc(hidden)]
+    #[cfg(feature = "alloc")]
+    fn _private_collect_into_vec(self) -> ::alloc::vec::Vec<u8> {
+        Default::default()
+    }
 }
