@@ -12,13 +12,19 @@ pub(super) const fn needs_escape(x: &u8) -> bool {
 /// `byte <= 0x5C` must be true.
 ///
 /// [`needs_escape(byte)`](needs_escape) is sufficient.
-pub unsafe fn escape_to_bytes_unchecked(byte: u8) -> &'static [u8] {
+///
+// See https://godbolt.org/z/zfYfndx9W
+pub(super) const unsafe fn escape_to_bytes_unchecked(byte: u8) -> &'static [u8] {
     debug_assert!((byte as usize) < ESCAPE_BYTES.len());
+    // SAFETY: byte <= 0x5C
+    unsafe { core::hint::assert_unchecked((byte as usize) < ESCAPE_BYTES.len()) };
 
-    let ret = *(
-        // SAFETY: byte <= 0x5C
-        unsafe { ESCAPE_BYTES.get_unchecked(byte as usize) }
-    );
+    escape_to_bytes(byte)
+}
+
+#[inline(always)]
+const fn escape_to_bytes(byte: u8) -> &'static [u8] {
+    let ret = ESCAPE_BYTES[byte as usize];
 
     debug_assert!(!ret.is_empty());
 
