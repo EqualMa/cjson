@@ -29,5 +29,5 @@ macro_rules! impl_for_literal_name {
 }
 
 impl_for_literal_name!(Null = NullChunk = b"null");
-impl_for_literal_name!(False = FalseChunk = b"false");
-impl_for_literal_name!(True = TrueChunk = b"true");
+impl_for_literal_name!(False = FalseChunk = super::boolean::Chunk(false).as_ref_u8_slice());
+impl_for_literal_name!(True = TrueChunk = super::boolean::Chunk(true).as_ref_u8_slice());
