@@ -10,13 +10,31 @@ impl IterTextChunk for &str {
         if self.is_empty() {
             None
         } else {
+            let this = *self;
             *self = "";
-            Some(self)
+            Some(this)
         }
     }
 
     fn bytes_len_hint(&self) -> (usize, Option<usize>) {
         let len = self.len();
         (len, Some(len))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::IterTextChunk;
+
+    #[test]
+    fn empty() {
+        assert!("".next_text_chunk().is_none());
+    }
+
+    #[test]
+    fn hello() {
+        let mut s = "hello";
+        assert_eq!(s.next_text_chunk(), Some("hello"));
+        assert!(s.next_text_chunk().is_none());
     }
 }

@@ -10,8 +10,9 @@ impl IterTextChunk for &[u8] {
         if self.is_empty() {
             None
         } else {
+            let this = *self;
             *self = &[];
-            Some(self)
+            Some(this)
         }
     }
 
