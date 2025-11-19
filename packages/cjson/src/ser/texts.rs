@@ -6,6 +6,10 @@ mod empty;
 
 mod literal_names;
 
+#[derive(Debug, Clone, Copy)]
+pub struct Boolean(pub bool);
+mod boolean;
+
 /// Json array.
 #[derive(Debug, Clone, Copy)]
 pub struct Array<Values: traits::EmptyOrCommaSeparatedElements>(pub Values);
