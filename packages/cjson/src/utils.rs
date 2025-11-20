@@ -7,6 +7,22 @@ macro_rules! impl_many {
             impl $Trait for $Ty $body
         )+
     };
+    (
+        type $T:ident = each_of! $each_of:tt;
+
+        $($rest:tt)*
+    ) => {
+        $crate::utils::impl_many! {
+            @impl_type $T $each_of
+            {$($rest)*}
+        }
+    };
+    (@impl_type $T:ident [$($Ty:ty),+ $(,)?] $rest:tt ) => {$(
+        const _: () = {
+            type $T = $Ty;
+            const _: () = $rest;
+        };
+    )+};
 }
 
 pub(crate) use impl_many;
