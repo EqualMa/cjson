@@ -30,6 +30,8 @@ impl<'a> Iter<'a> {
             i += 1;
         }
 
+        self.0 = b"";
+
         None
     }
 }
