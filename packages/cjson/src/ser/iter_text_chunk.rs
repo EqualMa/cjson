@@ -34,6 +34,7 @@ pub struct Empty;
 mod empty;
 
 mod array_string;
+mod const_array_string;
 mod str;
 mod u8_slice;
 

@@ -4,7 +4,7 @@ use super::traits;
 pub struct Empty;
 mod empty;
 
-mod literal_names;
+pub(crate) mod literal_names;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Boolean(pub bool);
@@ -75,12 +75,16 @@ define_refined_type!(
     pub struct Value<T: traits::IntoTextChunks>(T);
 );
 
+mod value_const;
+
 define_refined_type!(
     #[assert_refined(Text, Value)]
     /// Json number.
     #[derive(Debug, Clone, Copy)]
     pub struct Number<T: traits::IntoTextChunks>(T);
 );
+
+mod number_const;
 
 define_refined_type!(
     #[assert_refined(Text, Value)]

@@ -10,3 +10,13 @@ impl ToJson for bool {
         super::texts::Boolean(*self)
     }
 }
+
+mod r#const {
+    use crate::{r#const::ConstIntoJson, ser::texts};
+
+    impl ConstIntoJson<bool> {
+        pub const fn const_into_json(self) -> texts::Boolean {
+            texts::Boolean(self.0)
+        }
+    }
+}

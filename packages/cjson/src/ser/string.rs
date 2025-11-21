@@ -13,3 +13,5 @@ impl ToJson for str {
 
 #[cfg(feature = "alloc")]
 mod alloc;
+
+mod r#const;

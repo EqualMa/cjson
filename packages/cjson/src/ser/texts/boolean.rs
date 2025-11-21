@@ -8,7 +8,7 @@ use super::Boolean;
 pub struct Chunk(pub(crate) bool);
 
 impl Chunk {
-    const fn as_ref_str(&self) -> &'static str {
+    pub(crate) const fn as_ref_str(&self) -> &'static str {
         if self.0 { "true" } else { "false" }
     }
     pub(crate) const fn as_ref_u8_slice(&self) -> &'static [u8] {
@@ -34,3 +34,5 @@ impl traits::sealed::Text for Boolean {}
 impl traits::Text for Boolean {}
 impl traits::sealed::Value for Boolean {}
 impl traits::Value for Boolean {}
+
+mod r#const;

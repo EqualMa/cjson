@@ -8,3 +8,8 @@ pub mod ser;
 pub mod values;
 
 mod utils;
+pub mod r#const;
+mod macros;
+
+#[doc(hidden)]
+pub mod __private;

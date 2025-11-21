@@ -5,6 +5,8 @@ use crate::ser::ToJson;
 #[derive(Debug, Clone, Copy)]
 pub struct Null;
 
+mod null_const;
+
 #[derive(Debug, Clone, Copy)]
 pub struct False;
 
