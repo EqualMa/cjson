@@ -95,7 +95,7 @@ define_refined_type!(
 
 define_refined_type!(
     #[assert_refined(JsonStringFragment)]
-    /// Json string.
+    /// Json string fragment.
     #[derive(Debug, Clone, Copy)]
     pub struct JsonStringFragment<T: traits::IntoTextChunks>(T);
 );
