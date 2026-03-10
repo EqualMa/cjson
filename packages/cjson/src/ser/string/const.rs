@@ -43,6 +43,25 @@ impl ConstIntoJsonValueString<&str> {
 
         JsonValueArrayStr::new_without_validation(bytes)
     }
+
+    pub const fn const_concat_after_stated_chunk_buf<const CAP: usize>(
+        self,
+        mut buf: crate::r#const::StatedChunkBuf<CAP>,
+    ) -> crate::r#const::StatedChunkBuf<CAP> {
+        {
+            buf = buf.double_quote();
+
+            let mut chunks = StrToJsonStringFragment(self.0).const_into_text_chunks();
+
+            while let Some(chunk) = chunks.next_text_chunk() {
+                buf = buf.json_string_fragments(chunk);
+            }
+
+            buf = buf.double_quote();
+        }
+
+        buf
+    }
 }
 
 #[cfg(test)]

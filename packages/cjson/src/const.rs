@@ -136,3 +136,202 @@ mod const_tests {
 
 pub(crate) mod array_string;
 pub(crate) mod json_value_array_str;
+
+mod state;
+
+pub use self::state::{CompileTimeChunk, HasConstCompileTimeChunk, State};
+
+pub(crate) use self::state::assert_json_value;
+
+pub mod array;
+
+pub struct StatedChunkStr<'a> {
+    prev_state: State,
+    next_state: State,
+    chunk: &'a str,
+}
+
+pub struct StatedChunkString<const LEN: usize> {
+    prev_state: State,
+    next_state: State,
+    chunk: [u8; LEN],
+}
+
+impl<const LEN: usize> StatedChunkString<LEN> {
+    pub const fn as_str(&self) -> StatedChunkStr<'_> {
+        StatedChunkStr {
+            prev_state: self.prev_state.copied(),
+            next_state: self.next_state.copied(),
+            chunk: unsafe { str::from_utf8_unchecked(&self.chunk) },
+        }
+    }
+}
+
+pub struct StatedChunkBuf<const CAP: usize> {
+    prev_state: State,
+    cur_state: State,
+    buf: ChunkBuf<CAP>,
+}
+
+impl<const CAP: usize> StatedChunkBuf<CAP> {
+    pub const fn new(prev_state: State) -> Self {
+        Self {
+            prev_state: prev_state.copied(),
+            cur_state: prev_state,
+            buf: ChunkBuf::DEFAULT,
+        }
+    }
+}
+
+pub struct ChunkLen(usize);
+struct ChunkBuf<const CAP: usize> {
+    buf: [u8; CAP],
+    len: usize,
+}
+
+impl ChunkLen {
+    pub const DEFAULT: Self = Self(0);
+
+    pub const fn len(self) -> usize {
+        self.0
+    }
+
+    pub const fn left_bracket(mut self) -> Self {
+        self.0 += 1;
+        self
+    }
+
+    pub const fn right_bracket(mut self) -> Self {
+        self.0 += 1;
+        self
+    }
+
+    pub const fn comma(mut self) -> Self {
+        self.0 += 1;
+        self
+    }
+
+    pub const fn json_value(mut self, len: usize) -> Self {
+        assert!(len > 0);
+        self.0 += len;
+        self
+    }
+}
+
+impl<const CAP: usize> ChunkBuf<CAP> {
+    pub const DEFAULT: Self = Self {
+        buf: [0u8; CAP],
+        len: 0,
+    };
+
+    const fn with_byte(mut self, b: u8) -> Self {
+        let (_, rest) = self.buf.split_at_mut(self.len);
+        let (insert, _) = rest.split_first_mut().expect("not full");
+        *insert = b;
+
+        self.len += 1;
+
+        self
+    }
+
+    pub const fn left_bracket(self) -> Self {
+        self.with_byte(b'[')
+    }
+
+    pub const fn right_bracket(self) -> Self {
+        self.with_byte(b']')
+    }
+
+    pub const fn comma(self) -> Self {
+        self.with_byte(b',')
+    }
+
+    const fn with_bytes(mut self, bytes: &[u8]) -> Self {
+        let (_, rest) = self.buf.split_at_mut(self.len);
+        let (insert, _) = rest.split_at_mut(bytes.len());
+        insert.copy_from_slice(bytes);
+        self.len += bytes.len();
+        self
+    }
+
+    const fn with_str(self, s: &str) -> Self {
+        self.with_bytes(s.as_bytes())
+    }
+
+    const fn json_value(self, value: texts::Value<&'_ str>) -> Self {
+        self.with_str(value.inner())
+    }
+
+    pub const fn double_quote(self) -> Self {
+        self.with_byte(b'"')
+    }
+
+    const fn json_string_fragments(self, chunk: &[u8]) -> Self {
+        self.with_bytes(chunk)
+    }
+
+    const fn assert(self) -> [u8; CAP] {
+        assert!(self.len == CAP);
+        debug_assert!(str::from_utf8(&self.buf).is_ok());
+        self.buf
+    }
+}
+
+impl<const CAP: usize> StatedChunkBuf<CAP> {
+    pub const fn left_bracket(self) -> Self {
+        Self {
+            prev_state: self.prev_state,
+            cur_state: self.cur_state.left_bracket(),
+            buf: self.buf.left_bracket(),
+        }
+    }
+
+    pub const fn right_bracket(self) -> Self {
+        Self {
+            prev_state: self.prev_state,
+            cur_state: self.cur_state.right_bracket(),
+            buf: self.buf.right_bracket(),
+        }
+    }
+
+    pub const fn comma(self) -> Self {
+        Self {
+            prev_state: self.prev_state,
+            cur_state: self.cur_state.comma(),
+            buf: self.buf.comma(),
+        }
+    }
+
+    pub(crate) const fn json_value(self, value: texts::Value<&'_ str>) -> Self {
+        Self {
+            prev_state: self.prev_state,
+            cur_state: self.cur_state.json_value(),
+            buf: self.buf.json_value(value),
+        }
+    }
+
+    pub const fn double_quote(self) -> Self {
+        Self {
+            prev_state: self.prev_state,
+            cur_state: self.cur_state.double_quote(),
+            buf: self.buf.double_quote(),
+        }
+    }
+
+    /// `chunk` must be valid string fragment
+    pub(crate) const fn json_string_fragments(self, chunk: &[u8]) -> Self {
+        Self {
+            prev_state: self.prev_state,
+            cur_state: self.cur_state.json_string_fragments(),
+            buf: self.buf.json_string_fragments(chunk),
+        }
+    }
+
+    pub const fn assert(self) -> StatedChunkString<CAP> {
+        StatedChunkString {
+            prev_state: self.prev_state,
+            next_state: self.cur_state,
+            chunk: self.buf.assert(),
+        }
+    }
+}

@@ -69,6 +69,16 @@ impl_many!(
 
                 texts::Number::new_without_validation(res)
             }
+
+            pub const fn const_concat_after_stated_chunk_buf<const CAP: usize>(
+                self,
+                chunk_buf: crate::r#const::StatedChunkBuf<CAP>,
+            ) -> crate::r#const::StatedChunkBuf<CAP> {
+                let mut buf = const_ryu::Buffer::new();
+                let s = const_ryu::FormatFinite(&mut buf, self.0.0).call_once();
+
+                chunk_buf.json_value(texts::Value::new_without_validation(s))
+            }
         }
 
         assert!(SIZE <= u8::MAX as usize);

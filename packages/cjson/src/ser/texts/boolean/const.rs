@@ -24,6 +24,13 @@ impl ConstIntoJsonValueString<Boolean> {
         let s = Chunk(self.0.0).as_ref_str();
         texts::Value::new_without_validation(s)
     }
+
+    pub const fn const_concat_after_stated_chunk_buf<const CAP: usize>(
+        self,
+        chunk_buf: crate::r#const::StatedChunkBuf<CAP>,
+    ) -> crate::r#const::StatedChunkBuf<CAP> {
+        chunk_buf.json_value(self.const_into_json_value_string_without_const_len())
+    }
 }
 
 impl AsRefU8Slice<Chunk> {

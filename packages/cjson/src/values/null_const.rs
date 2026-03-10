@@ -31,6 +31,13 @@ impl ConstIntoJsonValueString<Null> {
     ) -> texts::Value<&'static str> {
         JSON_NULL
     }
+
+    pub const fn const_concat_after_stated_chunk_buf<const CAP: usize>(
+        self,
+        chunk_buf: crate::r#const::StatedChunkBuf<CAP>,
+    ) -> crate::r#const::StatedChunkBuf<CAP> {
+        chunk_buf.json_value(JSON_NULL)
+    }
 }
 
 const JSON_NULL: texts::Value<&'static str> = literal_names::NullChunk::JSON_STR;

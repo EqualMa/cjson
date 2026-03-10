@@ -8,6 +8,41 @@ pub mod ser;
 pub mod values;
 
 mod utils;
+/*
+macro_rules! json_string {
+    () => {};
+}
+
+const _: () = {
+    json_string!(runtime!(String::from("")));
+
+    json_string!("" + const {} + runtime! { String::from("") });
+};
+
+macro_rules! json {
+    (null) => {
+        $crate::values::Null
+    };
+    // (false) => {
+    //     $crate::values::False
+    // };
+    // (true) => {
+    //     $crate::values::True
+    // };
+    ($lit:literal) => {
+        const { RustLiteral::into_json::<{ RustLiteral::json_len($lit) }>($lit) }
+    };
+    (const $const_block:block) => {
+        const { RustConst($const_block).into_json() }
+    };
+}
+
+json! {false}
+ */
+// mod macros;
+
+// mod const_json;
+
 pub mod r#const;
 mod macros;
 

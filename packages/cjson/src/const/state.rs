@@ -1,0 +1,490 @@
+use core::marker::PhantomData;
+
+use crate::r#const::HasConstJsonValue;
+
+use super::StatedChunkStr;
+
+use self::IntermediateState::*;
+
+pub struct State(StateInner);
+
+impl State {
+    pub const INIT: Self = Self(StateInner::Init);
+
+    pub const fn json_value(self) -> Self {
+        Self(match self.0 {
+            StateInner::Init => StateInner::Eof,
+            StateInner::Intermediate(Intermediate { stack, state }) => {
+                let new_state = match state {
+                    InString => panic!(),
+                    AfterArrayStart | AfterArrayComma => AfterArrayItem,
+                    AfterArrayItem => panic!(),
+                    AfterObjectStart | AfterObjectComma => panic!(),
+                    InObjectFieldName => panic!(),
+                    AfterObjectFieldName => panic!(),
+                    AfterObjectFieldColon => AfterObjectFieldValue,
+                    AfterObjectFieldValue => panic!(),
+                };
+                StateInner::Intermediate(Intermediate {
+                    stack,
+                    state: new_state,
+                })
+            }
+            StateInner::Eof => {
+                panic!()
+            }
+        })
+    }
+
+    /// Single `"`
+    pub const fn double_quote(self) -> Self {
+        Self(match self.0 {
+            StateInner::Init => StateInner::Intermediate(Intermediate {
+                stack: Stack::INIT,
+                state: InString,
+            }),
+            StateInner::Intermediate(Intermediate { stack, state }) => {
+                StateInner::Intermediate(Intermediate {
+                    state: match state {
+                        InString => {
+                            if stack.is_in_array_or_object().expect("in array or object") {
+                                AfterArrayItem
+                            } else {
+                                AfterObjectFieldValue
+                            }
+                        }
+                        AfterArrayStart | AfterArrayComma => InString,
+                        AfterArrayItem => panic!(),
+                        AfterObjectStart | AfterObjectComma => InObjectFieldName,
+                        InObjectFieldName => AfterObjectFieldName,
+                        AfterObjectFieldName => panic!(),
+                        AfterObjectFieldColon => InString,
+                        AfterObjectFieldValue => panic!(),
+                    },
+                    stack,
+                })
+            }
+            StateInner::Eof => panic!(),
+        })
+    }
+
+    pub const fn json_string_fragments(self) -> Self {
+        Self(match self.0 {
+            StateInner::Init => {
+                panic!()
+            }
+            StateInner::Intermediate(Intermediate { stack, state }) => {
+                StateInner::Intermediate(Intermediate {
+                    stack,
+                    state: match state {
+                        InString => InString,
+                        InObjectFieldName => InObjectFieldName,
+                        _ => panic!(),
+                    },
+                })
+            }
+            StateInner::Eof => {
+                panic!()
+            }
+        })
+    }
+
+    pub const fn comma(self) -> Self {
+        Self(match self.0 {
+            StateInner::Init => {
+                panic!()
+            }
+            StateInner::Intermediate(Intermediate { stack, state }) => {
+                StateInner::Intermediate(Intermediate {
+                    stack,
+                    state: match state {
+                        InString => panic!(),
+                        AfterArrayStart | AfterArrayComma => panic!(),
+                        AfterArrayItem => AfterArrayComma,
+                        AfterObjectStart | AfterObjectComma => panic!(),
+                        InObjectFieldName => panic!(),
+                        AfterObjectFieldName => panic!(),
+                        AfterObjectFieldColon => panic!(),
+                        AfterObjectFieldValue => AfterObjectComma,
+                    },
+                })
+            }
+            StateInner::Eof => {
+                panic!()
+            }
+        })
+    }
+
+    #[cfg(todo)]
+    pub const fn colon(self) -> Self {
+        Self(match self.0 {
+            StateInner::Init => panic!(),
+            StateInner::Intermediate(Intermediate { stack, state }) => match state {
+                AfterObjectFieldName => StateInner::Intermediate(Intermediate {
+                    stack,
+                    state: AfterObjectFieldColon,
+                }),
+                _ => panic!(),
+            },
+            StateInner::Eof => panic!(),
+        })
+    }
+
+    pub const fn left_bracket(self) -> Self {
+        Self(match self.0 {
+            StateInner::Init => StateInner::Intermediate(Intermediate {
+                stack: Stack::INIT.start_array(),
+                state: AfterArrayStart,
+            }),
+            StateInner::Intermediate(Intermediate { stack, state }) => {
+                state.assert_expecting_value();
+                StateInner::Intermediate(Intermediate {
+                    stack: stack.start_array(),
+                    state: AfterArrayStart,
+                })
+            }
+            StateInner::Eof => panic!(),
+        })
+    }
+
+    pub const fn right_bracket(self) -> Self {
+        Self(match self.0 {
+            StateInner::Init => panic!(),
+            StateInner::Intermediate(Intermediate { stack, state }) => match state {
+                InString => panic!(),
+                AfterArrayStart | AfterArrayItem => stack.end_array().into_state_inner(),
+                AfterArrayComma => panic!(),
+                AfterObjectStart | AfterObjectComma => panic!(),
+                InObjectFieldName => panic!(),
+                AfterObjectFieldName => panic!(),
+                AfterObjectFieldColon => panic!(),
+                AfterObjectFieldValue => panic!(),
+            },
+            StateInner::Eof => panic!(),
+        })
+    }
+
+    #[cfg(todo)]
+    pub const fn left_brace(self) -> Self {
+        Self(match self.0 {
+            StateInner::Init => StateInner::Intermediate(Intermediate {
+                stack: Stack::INIT.start_object(),
+                state: AfterObjectStart,
+            }),
+            StateInner::Intermediate(Intermediate { stack, state }) => {
+                state.assert_expecting_value();
+                StateInner::Intermediate(Intermediate {
+                    stack: stack.start_object(),
+                    state: AfterObjectStart,
+                })
+            }
+            StateInner::Eof => panic!(),
+        })
+    }
+
+    #[cfg(todo)]
+    pub const fn right_brace(self) -> Self {
+        Self(match self.0 {
+            StateInner::Init => panic!(),
+            StateInner::Intermediate(Intermediate { stack, state }) => match state {
+                AfterObjectStart | AfterObjectFieldValue => stack.end_object(),
+                InString => panic!(),
+                AfterArrayStart => panic!(),
+                AfterArrayItem => panic!(),
+                AfterArrayComma => panic!(),
+                InObjectFieldName => panic!(),
+                AfterObjectFieldName => panic!(),
+                AfterObjectFieldColon => panic!(),
+                AfterObjectComma => panic!(),
+            },
+            StateInner::Eof => panic!(),
+        })
+    }
+
+    pub(crate) const fn copied(&self) -> Self {
+        Self(match &self.0 {
+            StateInner::Init => StateInner::Init,
+            StateInner::Intermediate(intermediate) => {
+                StateInner::Intermediate(intermediate.copied())
+            }
+            StateInner::Eof => StateInner::Eof,
+        })
+    }
+}
+
+struct Intermediate {
+    stack: Stack,
+    state: IntermediateState,
+}
+
+impl Intermediate {
+    const fn copied(&self) -> Self {
+        Self {
+            stack: self.stack.copied(),
+            state: self.state.copied(),
+        }
+    }
+}
+
+enum StateInner {
+    Init,
+    Intermediate(Intermediate),
+    Eof,
+}
+
+impl StateInner {
+    const fn assert_same(self, other: Self) {
+        match (self, other) {
+            (StateInner::Init, StateInner::Init) => {}
+            (
+                StateInner::Intermediate(Intermediate { stack, state }),
+                StateInner::Intermediate(Intermediate {
+                    stack: other_stack,
+                    state: other_state,
+                }),
+            ) => {
+                stack.assert_same(&other_stack);
+                state.assert_same(&other_state);
+            }
+            (StateInner::Eof, StateInner::Eof) => {}
+            _ => panic!("State mismatch"),
+        }
+    }
+}
+
+type StackInner = u64;
+
+struct Stack {
+    // bit 1 means in array
+    // bit 0 means in object
+    inner: StackInner,
+    len: usize,
+}
+
+impl Stack {
+    const INIT: Self = Self { inner: 0, len: 0 };
+
+    const fn is_in_array_or_object(&self) -> Option<bool> {
+        if self.len == 0 {
+            None
+        } else {
+            Some((self.inner & 1) != 0)
+        }
+    }
+
+    const fn pop(&mut self) -> Option<bool> {
+        if self.len == 0 {
+            None
+        } else {
+            Some({
+                self.len -= 1;
+                let last = self.inner & 1;
+                self.inner >>= 1;
+                last != 0
+            })
+        }
+    }
+
+    const fn start_array(mut self) -> Stack {
+        assert!(
+            self.len < (StackInner::BITS as usize),
+            "too many nested array or object"
+        );
+        self.inner <<= 1;
+        self.inner |= 1;
+        self.len += 1;
+
+        self
+    }
+
+    const fn start_object(mut self) -> Stack {
+        assert!(
+            self.len < (StackInner::BITS as usize),
+            "too many nested array or object"
+        );
+        self.inner <<= 1;
+        self.inner &= !1;
+        self.len += 1;
+
+        self
+    }
+
+    const fn end_array(mut self) -> AfterEndArrayOrObject {
+        let popped = self.pop();
+        assert!(popped.expect("in array"), "in array not in object");
+
+        self.current_state_after_array_or_object()
+    }
+
+    const fn end_object(mut self) -> AfterEndArrayOrObject {
+        let popped = self.pop();
+        assert!(!popped.expect("in object"), "in object not in array");
+
+        self.current_state_after_array_or_object()
+    }
+
+    const fn current_state_after_array_or_object(self) -> AfterEndArrayOrObject {
+        match self.is_in_array_or_object() {
+            Some(true) => {
+                // after value in array
+                AfterEndArrayOrObject::Intermediate(Intermediate {
+                    stack: self,
+                    state: AfterArrayItem,
+                })
+            }
+            Some(false) => {
+                // after value in object
+                AfterEndArrayOrObject::Intermediate(Intermediate {
+                    stack: self,
+                    state: AfterObjectFieldValue,
+                })
+            }
+            None => AfterEndArrayOrObject::Eof,
+        }
+    }
+
+    const fn assert_same(&self, other: &Stack) {
+        if self.len == other.len && self.inner == other.inner {
+            return;
+        }
+
+        panic!("state stack mismatch")
+    }
+
+    const fn copied(&self) -> Self {
+        Self {
+            inner: self.inner,
+            len: self.len,
+        }
+    }
+}
+
+enum AfterEndArrayOrObject {
+    Intermediate(Intermediate),
+    Eof,
+}
+
+impl AfterEndArrayOrObject {
+    const fn into_state_inner(self) -> StateInner {
+        match self {
+            Self::Intermediate(intermediate) => StateInner::Intermediate(intermediate),
+            Self::Eof => StateInner::Eof,
+        }
+    }
+}
+
+enum IntermediateState {
+    InString,
+    AfterArrayStart,
+    AfterArrayItem,
+    AfterArrayComma,
+    AfterObjectStart,
+    InObjectFieldName,
+    AfterObjectFieldName,
+    AfterObjectFieldColon,
+    AfterObjectFieldValue,
+    AfterObjectComma,
+}
+impl IntermediateState {
+    /// Assert the state is expecting
+    /// json value except object field name
+    const fn assert_expecting_value(&self) {
+        match self {
+            AfterArrayStart | AfterArrayComma | AfterObjectFieldColon => {}
+            InString => panic!(),
+            AfterArrayItem => panic!(),
+            AfterObjectStart | AfterObjectComma => panic!(),
+            InObjectFieldName => panic!(),
+            AfterObjectFieldName => panic!(),
+            AfterObjectFieldValue => panic!(),
+        }
+    }
+
+    const fn assert_same(&self, other_state: &IntermediateState) {
+        match (self, other_state) {
+            (InString, InString) => {}
+            (AfterArrayStart, AfterArrayStart) => {}
+            (AfterArrayItem, AfterArrayItem) => {}
+            (AfterArrayComma, AfterArrayComma) => {}
+            (AfterObjectStart, AfterObjectStart) => {}
+            (InObjectFieldName, InObjectFieldName) => {}
+            (AfterObjectFieldName, AfterObjectFieldName) => {}
+            (AfterObjectFieldColon, AfterObjectFieldColon) => {}
+            (AfterObjectFieldValue, AfterObjectFieldValue) => {}
+            (AfterObjectComma, AfterObjectComma) => {}
+            _ => {
+                panic!("state mismatch")
+            }
+        }
+    }
+
+    const fn copied(&self) -> Self {
+        match self {
+            Self::InString => Self::InString,
+            Self::AfterArrayStart => Self::AfterArrayStart,
+            Self::AfterArrayItem => Self::AfterArrayItem,
+            Self::AfterArrayComma => Self::AfterArrayComma,
+            Self::AfterObjectStart => Self::AfterObjectStart,
+            Self::InObjectFieldName => Self::InObjectFieldName,
+            Self::AfterObjectFieldName => Self::AfterObjectFieldName,
+            Self::AfterObjectFieldColon => Self::AfterObjectFieldColon,
+            Self::AfterObjectFieldValue => Self::AfterObjectFieldValue,
+            Self::AfterObjectComma => Self::AfterObjectComma,
+        }
+    }
+}
+
+impl<'a> StatedChunkStr<'a> {
+    pub(crate) const fn assert(self) {
+        let s = deserializer::Deserializer::new(self.chunk);
+        let next_state = match s.parse_till_eof_with_state(self.prev_state.0) {
+            Ok(v) => v,
+            Err(msg) => panic!("{}", msg),
+        };
+
+        self.next_state.0.assert_same(next_state);
+    }
+}
+
+/// Panics if `s` is not a json value or `s` contains json whitespaces.
+pub(crate) const fn assert_json_value<'a>(s: &'a str) {
+    StatedChunkStr {
+        prev_state: State::INIT,
+        next_state: State(StateInner::Eof),
+        chunk: s,
+    }
+    .assert();
+}
+
+pub trait HasConstCompileTimeChunk {
+    const CHUNK: super::StatedChunkStr<'static>;
+}
+
+pub struct CompileTimeChunk<T: ?Sized + HasConstCompileTimeChunk>(PhantomData<T>);
+
+enum Never {}
+
+pub struct CompileTimeChunkIsJsonValue<T: ?Sized + HasConstCompileTimeChunk>(Never, PhantomData<T>);
+
+impl<T: ?Sized + HasConstCompileTimeChunk> HasConstJsonValue for CompileTimeChunkIsJsonValue<T> {
+    const JSON_VALUE: crate::ser::texts::Value<&'static str> = {
+        () = CompileTimeChunk::<T>::ASSERT_JSON_VALUE;
+        crate::ser::texts::Value::new_without_validation(T::CHUNK.chunk)
+    };
+}
+
+impl<T: ?Sized + HasConstCompileTimeChunk> CompileTimeChunk<T> {
+    pub(crate) const ASSERT: () = T::CHUNK.assert();
+
+    const ASSERT_JSON_VALUE: () = {
+        assert!(matches!(T::CHUNK.prev_state.0, StateInner::Init));
+        assert!(matches!(T::CHUNK.next_state.0, StateInner::Eof));
+    };
+
+    pub const JSON_VALUE: super::ConstJsonValue<CompileTimeChunkIsJsonValue<T>> = {
+        () = Self::ASSERT_JSON_VALUE;
+        super::ConstJsonValue::new()
+    };
+}
+
+mod deserializer;
