@@ -37,8 +37,7 @@ macro_rules! json {
     (
         $(const $CONST:ident: $ConstTy:ty $(= $const_value:expr)? ; $(,)?)*
         [$($array_content:tt)*]
-    ) => {{
-        // let mut state = $crate::r#const::State::INIT.left_bracket;
+    ) => {
         $crate::__private_json_after_array_start!(
             [
                 prev[]
@@ -52,7 +51,7 @@ macro_rules! json {
             ]
             $($array_content)*
         )
-    }};
+    };
     ({$($object_content:tt)*}) => {
         compiler_error! {}
     };
@@ -298,6 +297,44 @@ macro_rules! __private_json_value {
             $($($rest)*)?
         }
     };
+    // array
+    (
+        // options
+        {
+            after_comma_bang $after_comma_bang:tt
+            before_value($($before_value:tt)*)
+        }
+        // state
+        [
+            prev $prev:tt
+            current_compile_time[$($current_compile_time:tt)*]
+            after_value $after_value:tt
+        ]
+        // tokens
+        [$($array_content:tt)*]
+        $(, $($rest:tt)*)?
+    ) => {
+        $crate::__private_json_after_array_start! {
+            [
+                prev $prev
+                current_compile_time[
+                    $($current_compile_time)*
+                    $($before_value)*
+                    left_bracket()
+                ]
+                after_value {
+                    do(
+                        after_comma {
+                            after_comma_bang $after_comma_bang
+                            rest($($($rest)*)?)
+                            after_value $after_value
+                        }
+                    )
+                }
+            ]
+            $($array_content)*
+        }
+    };
 //
 // ($runtime_value:expr)
 }
@@ -357,6 +394,30 @@ macro_rules! __private_json_after_value {
     //         after_value $after_value:tt
     //     ]
     // ) => {};
+    (
+        chunks[
+            prev_compile_runtime $prev:tt
+            last_compile_time $last_compile_time:tt
+        ]
+        after_value {
+            do(
+                after_comma {
+                    after_comma_bang($($after_comma_bang:tt)+)
+                    rest($($rest:tt)*)
+                    after_value $after_value:tt
+                }
+            )
+        }
+    ) => {
+        $($after_comma_bang)+ {
+            [
+                prev $prev
+                current_compile_time $last_compile_time
+                after_value $after_value
+            ]
+            $($rest)*
+        }
+    };
     (
         chunks[
             prev_compile_runtime[]

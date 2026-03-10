@@ -32,9 +32,9 @@ const fn test_simple() -> TestSimple<impl ToJson + Copy, impl ToJson + Copy, imp
         },
         nested: {
             // let v = json!([[]]);
-            let v = json!([]);
+            let v = json!([[["\t", [[[]]]], false]]);
             let s = v.as_json_value_str().inner().as_bytes();
-            assert!(matches!(s, b"[]"));
+            assert!(matches!(s, br#"[[["\t",[[[]]]],false]]"#));
             v
         },
     }
@@ -65,4 +65,6 @@ fn tests() {
         to_json_string(mixed),
         r#"[false,true,1,2,null,"","hello","\nworld"]"#
     );
+
+    assert_eq!(to_json_string(nested), r#"[[["\t",[[[]]]],false]]"#);
 }
