@@ -33,8 +33,9 @@ pub trait HasConstJsonValue {
 
 pub struct ConstJsonValue<T: ?Sized>(PhantomData<T>);
 impl<T: ?Sized> ConstJsonValue<T> {
+    pub const DEFAULT: Self = Self(PhantomData);
     pub const fn new() -> Self {
-        Self(PhantomData)
+        Self::DEFAULT
     }
 }
 

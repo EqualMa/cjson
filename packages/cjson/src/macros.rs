@@ -73,7 +73,7 @@ macro_rules! __private_json {
         [] // outer const generics
         const $const_block:block
     ) => {
-        const {
+        {
             enum HasConstJsonValue {}
 
             impl $crate::r#const::HasConstJsonValue for HasConstJsonValue {
@@ -93,14 +93,14 @@ macro_rules! __private_json {
                 };
             }
 
-            $crate::r#const::ConstJsonValue::<HasConstJsonValue>::new()
+            $crate::r#const::ConstJsonValue::<HasConstJsonValue>::DEFAULT
         }
     };
     (
         [$({$CONST:ident $ConstTy:ty $(= $const_value:expr)?})+] // outer const generics
         const $const_block:block
     ) => {
-        const {
+        {
             enum HasConstJsonValue
                 <$(const $CONST: $ConstTy),+>
                 {}
@@ -125,7 +125,7 @@ macro_rules! __private_json {
 
             $crate::r#const::ConstJsonValue::<HasConstJsonValue::
                 <$({$crate::__private::__expand_or!([$($const_value)?][$CONST])}),+>
-            >::new()
+            >::DEFAULT
         }
     };
     (
