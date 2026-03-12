@@ -145,10 +145,17 @@ pub(crate) use self::state::assert_json_value;
 
 pub mod array;
 
+#[derive(Debug)]
 pub struct StatedChunkStr<'a> {
     prev_state: State,
     next_state: State,
     chunk: &'a str,
+}
+
+impl<'a> StatedChunkStr<'a> {
+    pub const fn next_state(self) -> State {
+        self.next_state
+    }
 }
 
 pub struct StatedChunkString<const LEN: usize> {
@@ -332,6 +339,138 @@ impl<const CAP: usize> StatedChunkBuf<CAP> {
             prev_state: self.prev_state,
             next_state: self.cur_state,
             chunk: self.buf.assert(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ChunkConcatJsonValue<C: RuntimeChunk, V: ToJson>(pub C, pub V);
+
+impl<C: RuntimeChunk, V: ToJson> RuntimeChunk for ChunkConcatJsonValue<C, V> {
+    const PREV_STATE: State = C::PREV_STATE;
+    const NEXT_STATE: State = C::NEXT_STATE.json_value();
+
+    type ToIntoTextChunks<'a>
+        = crate::ser::iter_text_chunk::Chain<
+        <C::ToIntoTextChunks<'a> as IntoTextChunks>::IntoTextChunks,
+        <V::ToJson<'a> as IntoTextChunks>::IntoTextChunks,
+    >
+    where
+        Self: 'a;
+
+    fn to_into_text_chunks(&self) -> Self::ToIntoTextChunks<'_> {
+        const { _ = Self::NEXT_STATE }
+        crate::ser::iter_text_chunk::Chain::new(
+            self.0.to_into_text_chunks().into_text_chunks(),
+            self.1.to_json().into_text_chunks(),
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ChunkConcat<A: RuntimeChunk, B: RuntimeChunk>(pub A, pub B);
+
+impl<A: RuntimeChunk, B: RuntimeChunk> ChunkConcat<A, B> {
+    const ASSERT: () = {
+        A::NEXT_STATE.assert_same(B::PREV_STATE);
+    };
+}
+
+impl<A: RuntimeChunk, B: RuntimeChunk> RuntimeChunk for ChunkConcat<A, B> {
+    const PREV_STATE: State = {
+        Self::ASSERT;
+        A::PREV_STATE
+    };
+    const NEXT_STATE: State = {
+        Self::ASSERT;
+        B::NEXT_STATE
+    };
+
+    type ToIntoTextChunks<'a>
+        = crate::ser::iter_text_chunk::Chain<
+        <A::ToIntoTextChunks<'a> as IntoTextChunks>::IntoTextChunks,
+        <B::ToIntoTextChunks<'a> as IntoTextChunks>::IntoTextChunks,
+    >
+    where
+        Self: 'a;
+
+    fn to_into_text_chunks(&self) -> Self::ToIntoTextChunks<'_> {
+        const { () = Self::ASSERT }
+
+        crate::ser::iter_text_chunk::Chain::new(
+            self.0.to_into_text_chunks().into_text_chunks(),
+            self.1.to_into_text_chunks().into_text_chunks(),
+        )
+    }
+}
+
+// TODO: sealed
+pub trait RuntimeChunk {
+    const PREV_STATE: State;
+    const NEXT_STATE: State;
+
+    type ToIntoTextChunks<'a>: IntoTextChunks
+    where
+        Self: 'a;
+    fn to_into_text_chunks(&self) -> Self::ToIntoTextChunks<'_>;
+}
+
+impl<T: ?Sized + HasConstCompileTimeChunk> RuntimeChunk for CompileTimeChunk<T> {
+    const PREV_STATE: State = T::CHUNK.prev_state;
+    const NEXT_STATE: State = T::CHUNK.next_state;
+
+    type ToIntoTextChunks<'a>
+        = Self
+    where
+        Self: 'a;
+
+    fn to_into_text_chunks(&self) -> Self::ToIntoTextChunks<'_> {
+        *self
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct AssertJsonValueChunks<C: RuntimeChunk>(pub C);
+
+impl<C: RuntimeChunk> AssertJsonValueChunks<C> {
+    const ASSERT: () = {
+        C::PREV_STATE.assert_same(State::INIT);
+        C::NEXT_STATE.assert_same(State::EOF);
+    };
+}
+
+mod ser_chunks {
+    use crate::ser::{
+        ToJson,
+        traits::{self, IntoTextChunks},
+    };
+
+    use super::{AssertJsonValueChunks, RuntimeChunk};
+
+    pub struct AssertJsonValueChunksToJson<'a, C: RuntimeChunk>(&'a C);
+
+    impl<C: RuntimeChunk> ToJson for AssertJsonValueChunks<C> {
+        type ToJson<'a>
+            = AssertJsonValueChunksToJson<'a, C>
+        where
+            Self: 'a;
+
+        fn to_json(&self) -> Self::ToJson<'_> {
+            const { () = Self::ASSERT }
+
+            AssertJsonValueChunksToJson(&self.0)
+        }
+    }
+
+    impl<C: RuntimeChunk> traits::sealed::Text for AssertJsonValueChunksToJson<'_, C> {}
+    impl<C: RuntimeChunk> traits::Text for AssertJsonValueChunksToJson<'_, C> {}
+
+    impl<'a, C: RuntimeChunk> IntoTextChunks for AssertJsonValueChunksToJson<'a, C> {
+        type IntoTextChunks = <C::ToIntoTextChunks<'a> as IntoTextChunks>::IntoTextChunks;
+
+        fn into_text_chunks(self) -> Self::IntoTextChunks {
+            const { AssertJsonValueChunks::<C>::ASSERT }
+            C::to_into_text_chunks(self.0).into_text_chunks()
         }
     }
 }

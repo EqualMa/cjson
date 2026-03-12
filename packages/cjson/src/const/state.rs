@@ -1,4 +1,4 @@
-use core::marker::PhantomData;
+use core::{fmt, marker::PhantomData};
 
 use crate::r#const::HasConstJsonValue;
 
@@ -8,8 +8,19 @@ use self::IntermediateState::*;
 
 pub struct State(StateInner);
 
+impl fmt::Debug for State {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 impl State {
+    pub(crate) const fn assert_same(self, other: Self) {
+        self.0.assert_same(other.0);
+    }
+
     pub const INIT: Self = Self(StateInner::Init);
+    pub(crate) const EOF: Self = Self(StateInner::Eof);
 
     pub const fn json_value(self) -> Self {
         Self(match self.0 {
@@ -212,6 +223,7 @@ impl State {
     }
 }
 
+#[derive(Debug)]
 struct Intermediate {
     stack: Stack,
     state: IntermediateState,
@@ -226,6 +238,7 @@ impl Intermediate {
     }
 }
 
+#[derive(Debug)]
 enum StateInner {
     Init,
     Intermediate(Intermediate),
@@ -259,6 +272,22 @@ struct Stack {
     // bit 0 means in object
     inner: StackInner,
     len: usize,
+}
+
+impl fmt::Debug for Stack {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut this = self.copied();
+
+        while let Some(array_or_object) = this.pop() {
+            if array_or_object {
+                write!(f, "[")?;
+            } else {
+                write!(f, "{{")?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl Stack {
@@ -373,6 +402,7 @@ impl AfterEndArrayOrObject {
     }
 }
 
+#[derive(Debug)]
 enum IntermediateState {
     InString,
     AfterArrayStart,
@@ -462,6 +492,50 @@ pub trait HasConstCompileTimeChunk {
 
 pub struct CompileTimeChunk<T: ?Sized + HasConstCompileTimeChunk>(PhantomData<T>);
 
+impl<T: ?Sized + HasConstCompileTimeChunk> fmt::Debug for CompileTimeChunk<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CompileTimeChunk")
+            .field("CHUNK", &T::CHUNK)
+            .finish()
+    }
+}
+
+impl<T: ?Sized + HasConstCompileTimeChunk> Copy for CompileTimeChunk<T> {}
+impl<T: ?Sized + HasConstCompileTimeChunk> Clone for CompileTimeChunk<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+mod ser {
+    use core::{iter, marker::PhantomData};
+
+    use crate::ser::{iter_text_chunk::IterNonLending, traits::IntoTextChunks};
+
+    use super::{CompileTimeChunk, HasConstCompileTimeChunk};
+
+    pub struct Chunk<T: ?Sized + HasConstCompileTimeChunk>(PhantomData<T>);
+
+    impl<T: ?Sized + HasConstCompileTimeChunk> AsRef<[u8]> for Chunk<T> {
+        fn as_ref(&self) -> &[u8] {
+            const { T::CHUNK.chunk.as_bytes() }
+        }
+    }
+
+    impl<T: ?Sized + HasConstCompileTimeChunk> IntoTextChunks for CompileTimeChunk<T> {
+        type IntoTextChunks = IterNonLending<iter::Once<Chunk<T>>>;
+
+        fn into_text_chunks(self) -> Self::IntoTextChunks {
+            IterNonLending(iter::once(Chunk(PhantomData)))
+        }
+
+        #[cfg(feature = "alloc")]
+        fn _private_into_text_chunks_vec(self) -> alloc::vec::Vec<u8> {
+            const { T::CHUNK.chunk }.into()
+        }
+    }
+}
+
 enum Never {}
 
 pub struct CompileTimeChunkIsJsonValue<T: ?Sized + HasConstCompileTimeChunk>(Never, PhantomData<T>);
@@ -474,6 +548,8 @@ impl<T: ?Sized + HasConstCompileTimeChunk> HasConstJsonValue for CompileTimeChun
 }
 
 impl<T: ?Sized + HasConstCompileTimeChunk> CompileTimeChunk<T> {
+    pub const DEFAULT: Self = Self(PhantomData);
+
     pub(crate) const ASSERT: () = T::CHUNK.assert();
 
     const ASSERT_JSON_VALUE: () = {
