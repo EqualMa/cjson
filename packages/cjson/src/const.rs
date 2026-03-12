@@ -2,7 +2,9 @@ use core::marker::PhantomData;
 
 use ref_cast::{RefCastCustom, ref_cast_custom};
 
-use crate::ser::{ToJson, iter_text_chunk::IterNonLending, texts, traits::IntoTextChunks};
+use crate::ser::{
+    ToJson, ToJsonStringFragment, iter_text_chunk::IterNonLending, texts, traits::IntoTextChunks,
+};
 
 pub struct ConstIntoJson<T>(pub T);
 
@@ -11,6 +13,8 @@ pub struct ConstAsJsonValueStr<T>(pub T);
 
 pub struct ConstIntoTextChunks<T: ?Sized>(pub T);
 pub struct ConstIterTextChunk<T: ?Sized>(pub T);
+
+pub struct ConstIntoJsonStringFragment<T>(pub T);
 
 pub struct BooleanTextChunks(Option<bool>);
 
@@ -219,8 +223,18 @@ impl ChunkLen {
         self
     }
 
+    pub const fn double_quote(mut self) -> Self {
+        self.0 += 1;
+        self
+    }
+
     pub const fn json_value(mut self, len: usize) -> Self {
         assert!(len > 0);
+        self.0 += len;
+        self
+    }
+
+    pub const fn json_string_fragment(mut self, len: usize) -> Self {
         self.0 += len;
         self
     }
@@ -330,7 +344,7 @@ impl<const CAP: usize> StatedChunkBuf<CAP> {
     pub(crate) const fn json_string_fragments(self, chunk: &[u8]) -> Self {
         Self {
             prev_state: self.prev_state,
-            cur_state: self.cur_state.json_string_fragments(),
+            cur_state: self.cur_state.json_string_fragment(),
             buf: self.buf.json_string_fragments(chunk),
         }
     }
@@ -364,6 +378,32 @@ impl<C: RuntimeChunk, V: ToJson> RuntimeChunk for ChunkConcatJsonValue<C, V> {
         crate::ser::iter_text_chunk::Chain::new(
             self.0.to_into_text_chunks().into_text_chunks(),
             self.1.to_json().into_text_chunks(),
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ChunkConcatJsonStringFragment<C: RuntimeChunk, V: ToJsonStringFragment>(pub C, pub V);
+
+impl<C: RuntimeChunk, V: ToJsonStringFragment> RuntimeChunk
+    for ChunkConcatJsonStringFragment<C, V>
+{
+    const PREV_STATE: State = C::PREV_STATE;
+    const NEXT_STATE: State = C::NEXT_STATE.json_string_fragment();
+
+    type ToIntoTextChunks<'a>
+        = crate::ser::iter_text_chunk::Chain<
+        <C::ToIntoTextChunks<'a> as IntoTextChunks>::IntoTextChunks,
+        <V::ToJsonStringFragment<'a> as IntoTextChunks>::IntoTextChunks,
+    >
+    where
+        Self: 'a;
+
+    fn to_into_text_chunks(&self) -> Self::ToIntoTextChunks<'_> {
+        const { _ = Self::NEXT_STATE }
+        crate::ser::iter_text_chunk::Chain::new(
+            self.0.to_into_text_chunks().into_text_chunks(),
+            self.1.to_json_string_fragment().into_text_chunks(),
         )
     }
 }

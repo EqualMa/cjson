@@ -22,6 +22,24 @@ impl<T: ?Sized + ToJson> ToJson for &T {
     }
 }
 
+pub trait ToJsonStringFragment {
+    type ToJsonStringFragment<'a>: traits::JsonStringFragment
+    where
+        Self: 'a;
+    fn to_json_string_fragment(&self) -> Self::ToJsonStringFragment<'_>;
+}
+
+impl<T: ?Sized + ToJsonStringFragment> ToJsonStringFragment for &T {
+    type ToJsonStringFragment<'a>
+        = T::ToJsonStringFragment<'a>
+    where
+        Self: 'a;
+
+    fn to_json_string_fragment(&self) -> Self::ToJsonStringFragment<'_> {
+        T::to_json_string_fragment(self)
+    }
+}
+
 mod bool;
 mod int;
 mod string;

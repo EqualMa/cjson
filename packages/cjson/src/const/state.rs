@@ -57,13 +57,11 @@ impl State {
             StateInner::Intermediate(Intermediate { stack, state }) => {
                 StateInner::Intermediate(Intermediate {
                     state: match state {
-                        InString => {
-                            if stack.is_in_array_or_object().expect("in array or object") {
-                                AfterArrayItem
-                            } else {
-                                AfterObjectFieldValue
-                            }
-                        }
+                        InString => match stack.is_in_array_or_object() {
+                            Some(true) => AfterArrayItem,
+                            Some(false) => AfterObjectFieldValue,
+                            None => return Self::EOF,
+                        },
                         AfterArrayStart | AfterArrayComma => InString,
                         AfterArrayItem => panic!(),
                         AfterObjectStart | AfterObjectComma => InObjectFieldName,
@@ -79,7 +77,7 @@ impl State {
         })
     }
 
-    pub const fn json_string_fragments(self) -> Self {
+    pub const fn json_string_fragment(self) -> Self {
         Self(match self.0 {
             StateInner::Init => {
                 panic!()

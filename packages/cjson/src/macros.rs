@@ -52,6 +52,22 @@ macro_rules! json {
             $($array_content)*
         )
     };
+    (
+        $(const $CONST:ident: $ConstTy:ty $(= $const_value:expr)? ; $(,)?)*
+        $well_known_macro:ident $bang:tt $well_known_macro_body:tt
+    ) => {
+        $crate::__private_json_macro!(
+            $well_known_macro $bang $well_known_macro_body
+            [
+                prev[]
+                current_compile_time[]
+                after_value {
+                    do(EOF)
+                    outer_const_generics [$({ $CONST $ConstTy $(= $const_value)? })*]
+                }
+            ]
+        )
+    };
     ({$($object_content:tt)*}) => {
         compiler_error! {}
     };
@@ -580,7 +596,7 @@ macro_rules! __private_json_concat_chunks_then {
         current {
             compile_time $compile_time:tt
             runtime[
-                json_value($runtime_json_value:expr)
+                $runtime_kind:ident ($runtime_expr:expr)
             ]
         }
         then_macro_bang($($then_macro_bang:tt)+)
@@ -589,9 +605,9 @@ macro_rules! __private_json_concat_chunks_then {
         $crate::__private_json_concat_only_compile_time_tokens! {
             prev_state $prev_state
             then(
-                let cjson_prev_compile_runtime = $crate::r#const::ChunkConcatJsonValue(
+                let cjson_prev_compile_runtime = $crate::__private::runtime_kinds::$runtime_kind(
                     $crate::r#const::CompileTimeChunk::<HasConstCompileTimeChunk>::DEFAULT,
-                    $runtime_json_value,
+                    $runtime_expr,
                 );
 
                 enum PrevState {}
@@ -600,7 +616,7 @@ macro_rules! __private_json_concat_chunks_then {
                     const STATE: $crate::r#const::State =
                         <HasConstCompileTimeChunk as $crate::r#const::HasConstCompileTimeChunk>::CHUNK
                             .next_state()
-                            .json_value();
+                            .$runtime_kind();
                 }
 
                 $($then_macro_bang)+ {
@@ -622,7 +638,7 @@ macro_rules! __private_json_concat_chunks_then {
         current {
             compile_time $compile_time:tt
             runtime[
-                json_value($runtime_json_value:expr)
+                $runtime_kind:ident ($runtime_expr:expr)
             ]
         }
         then_macro_bang($($then_macro_bang:tt)+)
@@ -635,9 +651,9 @@ macro_rules! __private_json_concat_chunks_then {
             then(
                 let cjson_prev_compile_runtime = $crate::r#const::ChunkConcat(
                     $prev_compile_runtime,
-                    $crate::r#const::ChunkConcatJsonValue(
+                    $crate::__private::runtime_kinds::$runtime_kind(
                         $crate::r#const::CompileTimeChunk::<HasConstCompileTimeChunk>::DEFAULT,
-                        $runtime_json_value,
+                        $runtime_expr,
                     ),
                 );
 
@@ -648,7 +664,7 @@ macro_rules! __private_json_concat_chunks_then {
                         const STATE: $crate::r#const::State =
                             <HasConstCompileTimeChunk as $crate::r#const::HasConstCompileTimeChunk>::CHUNK
                                 .next_state()
-                                .json_value();
+                                .$runtime_kind();
                     }
 
                     $($then_macro_bang)+ {
@@ -663,6 +679,10 @@ macro_rules! __private_json_concat_chunks_then {
             outer_const_generics $outer_const_generics
         }
     };
+}
+
+macro_rules! __private_json_compile_runtime {
+    () => {};
 }
 
 #[macro_export]
@@ -780,10 +800,18 @@ macro_rules! __private_json_concat_compile_time_token_buf {
         json_value
         ($json_value:expr)
     ) => {
-        crate::r#const::ConstIntoJsonValueString(
-            crate::r#const::ConstIntoJson($json_value).const_into_json(),
+        $crate::r#const::ConstIntoJsonValueString(
+            $crate::r#const::ConstIntoJson($json_value).const_into_json(),
         )
         .const_concat_after_stated_chunk_buf($buf)
+    };
+    (
+        $buf:ident
+        json_string_fragment
+        ($json_string_fragment:expr)
+    ) => {
+        $crate::r#const::ConstIntoJsonStringFragment($json_string_fragment)
+            .const_concat_after_stated_chunk_buf($buf)
     };
     (
         $buf:ident
@@ -797,29 +825,190 @@ macro_rules! __private_json_concat_compile_time_token_buf {
 #[macro_export]
 macro_rules! __private_json_expand_token_args_for_len {
     (json_value $v:expr) => {
-        crate::r#const::ConstIntoJsonValueString(
-            crate::r#const::ConstIntoJson($v).const_into_json(),
+        $crate::r#const::ConstIntoJsonValueString(
+            $crate::r#const::ConstIntoJson($v).const_into_json(),
         )
         .const_into_json_value_string_len()
     };
+    (json_string_fragment $v:expr) => {
+        $crate::r#const::ConstIntoJsonStringFragment($v).const_into_json_string_fragment_len()
+    };
 }
 
-#[cfg(todo)]
-macro_rules! __private_parse_array_content {
-    ({$const_or_runtime:ident $values:tt $before:expr} ($runtime_expr:expr) $(, $($rest:tt)*)?) => {
-        $crate::__private_parse_array_content! {
-            {runtime ($before, $runtime_expr)}
-            $($($rest)*)?
-        }
+#[macro_export]
+macro_rules! __private_json_macro {
+    ($macro:ident $bang:tt {$($body:tt)*} $state:tt) => [ $crate::__private_json_macro! { $macro $bang ($($body)*) $state} ];
+    ($macro:ident $bang:tt [$($body:tt)*] $state:tt) => [ $crate::__private_json_macro! { $macro $bang ($($body)*) $state} ];
+    ($macro:ident $bang:tt $body:tt       $state:tt) => {
+        $crate::__private::well_known_macro::$macro! { $body $state }
     };
-    ({const   ($($values:tt)*) $before:expr} $lit:literal $(, $($rest:tt)*)?) => {
-        $crate::__private_parse_array_content! {
-            {const   ($($values)* ($lit)) $before}
-            $($($rest)*)?
-        }
-    };
-    ({runtime $values:tt $before:expr} $lit:literal $(, $($rest:tt)*)?) => {
+}
 
+#[macro_export]
+macro_rules! __private_json_string {
+    (
+        ($($body:tt)*)
+        // state
+        [
+            prev $prev:tt
+            current_compile_time[$($current_compile_time:tt)*]
+            after_value $after_value:tt
+        ]
+    ) => {
+        $crate::__private_json_in_string!(
+            [
+                prev $prev
+                current_compile_time[
+                    $($current_compile_time)*
+                    double_quote()
+                ]
+                after_value $after_value
+            ]
+            $($body)*
+        )
+    };
+}
+
+#[macro_export]
+macro_rules! __private_json_in_string {
+    // EOF
+    (
+        [
+            prev $prev:tt
+            current_compile_time[
+                $($current_compile_time:tt)*
+            ]
+            after_value $after_value:tt
+        ]
+        // EOF
+    ) => {
+        $crate::__private_json_after_value! {
+            chunks[
+                prev_compile_runtime $prev
+                last_compile_time[
+                    $($current_compile_time)*
+                    double_quote()
+                ]
+            ]
+            after_value $after_value
+        }
+    };
+    // fragment
+    (
+        $state:tt
+        $($rest:tt)+
+    ) => {
+        $crate::__private_json_string_fragment! {
+            {
+                after_bang(
+                    $crate::__private_json_in_string!
+                )
+            }
+            $state
+            $($rest)+
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_json_string_fragment {
+    // literal
+    (
+        // options
+        {
+            after_bang($($after_bang:tt)+)
+        }
+        // state
+        [
+            prev $prev:tt
+            current_compile_time[$($current_compile_time:tt)*]
+            after_value $after_value:tt
+        ]
+        // tokens
+        $lit:literal
+        $(, $($rest:tt)*)?
+    ) => {
+        $($after_bang)+ {
+            [
+                prev $prev
+                current_compile_time[
+                    $($current_compile_time)*
+                    json_string_fragment($lit)
+                ]
+                after_value $after_value
+            ]
+            $($($rest)*)?
+        }
+    };
+    // const { ... }
+    (
+        // options
+        {
+            after_bang($($after_bang:tt)+)
+        }
+        // state
+        [
+            prev $prev:tt
+            current_compile_time[$($current_compile_time:tt)*]
+            after_value $after_value:tt
+        ]
+        // tokens
+        const $const_block:block
+        $(, $($rest:tt)*)?
+    ) => {
+        $($after_bang)+ {
+            [
+                prev $prev
+                current_compile_time[
+                    $($current_compile_time)*
+                    json_string_fragment($const_block)
+                ]
+                after_value $after_value
+            ]
+            $($($rest)*)?
+        }
+    };
+    // runtime expr
+    (
+        // options
+        {
+            after_bang($($after_bang:tt)+)
+        }
+        // state
+        [
+            prev $prev:tt
+            current_compile_time $current_compile_time:tt
+            after_value $after_value:tt
+        ]
+        // tokens
+        ($runtime_expr:expr)
+        $(, $($rest:tt)*)?
+    ) => {
+        $($after_bang)+ {
+            [
+                prev[
+                    prev $prev
+                    current {
+                        compile_time $current_compile_time
+                        runtime[
+                            json_string_fragment($runtime_expr)
+                        ]
+                    }
+                ]
+                current_compile_time[]
+                after_value $after_value
+            ]
+            $($($rest)*)?
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_json_well_known_macro_json_string {
+    ($($t:tt)*) => {
+        $crate::__private_json_string! {
+            $($t)*
+        }
     };
 }
 

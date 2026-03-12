@@ -1,5 +1,5 @@
 use crate::r#const::json_value_array_str::JsonValueArrayStr;
-use crate::r#const::{ConstIntoJson, ConstIntoJsonValueString};
+use crate::r#const::{ConstIntoJson, ConstIntoJsonStringFragment, ConstIntoJsonValueString};
 use crate::ser::texts::StrToJsonStringFragment;
 
 impl<'a> ConstIntoJson<&'a str> {
@@ -10,14 +10,7 @@ impl<'a> ConstIntoJson<&'a str> {
 
 impl ConstIntoJsonValueString<&str> {
     pub const fn const_into_json_value_string_len(self) -> usize {
-        let mut len = 0usize;
-
-        let mut chunks = StrToJsonStringFragment(self.0).const_into_text_chunks();
-
-        while let Some(chunk) = chunks.next_text_chunk() {
-            len += chunk.len();
-        }
-
+        let len = ConstIntoJsonStringFragment(self.0).const_into_json_string_fragment_len();
         len + 2 // two double-quotes
     }
 
@@ -51,13 +44,36 @@ impl ConstIntoJsonValueString<&str> {
         {
             buf = buf.double_quote();
 
-            let mut chunks = StrToJsonStringFragment(self.0).const_into_text_chunks();
-
-            while let Some(chunk) = chunks.next_text_chunk() {
-                buf = buf.json_string_fragments(chunk);
-            }
+            buf = ConstIntoJsonStringFragment(self.0).const_concat_after_stated_chunk_buf(buf);
 
             buf = buf.double_quote();
+        }
+
+        buf
+    }
+}
+
+impl ConstIntoJsonStringFragment<&str> {
+    pub const fn const_into_json_string_fragment_len(self) -> usize {
+        let mut len = 0usize;
+
+        let mut chunks = StrToJsonStringFragment(self.0).const_into_text_chunks();
+
+        while let Some(chunk) = chunks.next_text_chunk() {
+            len += chunk.len();
+        }
+
+        len
+    }
+
+    pub const fn const_concat_after_stated_chunk_buf<const CAP: usize>(
+        self,
+        mut buf: crate::r#const::StatedChunkBuf<CAP>,
+    ) -> crate::r#const::StatedChunkBuf<CAP> {
+        let mut chunks = StrToJsonStringFragment(self.0).const_into_text_chunks();
+
+        while let Some(chunk) = chunks.next_text_chunk() {
+            buf = buf.json_string_fragments(chunk);
         }
 
         buf
