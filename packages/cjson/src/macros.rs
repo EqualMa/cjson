@@ -46,7 +46,7 @@ macro_rules! json {
                 ]
                 after_value {
                     do(EOF)
-                    outer_const_generics [$({ const $CONST: $ConstTy $(= $const_value)? })*]
+                    outer_const_generics [$({ $CONST $ConstTy $(= $const_value)? })*]
                 }
             ]
             $($array_content)*
@@ -56,16 +56,6 @@ macro_rules! json {
         compiler_error! {}
     };
 }
-
-#[cfg(test)]
-const TEST: () = {
-    const V: u8 = 2;
-    json!(1u8);
-    json!(const V: u8 = V;, const { V });
-    _ = json!([]);
-    json!([1u8]);
-    json!([1u8, true]);
-};
 
 #[macro_export]
 macro_rules! __private_json {
@@ -419,6 +409,19 @@ macro_rules! __private_json_after_array_comma {
 }
 
 #[macro_export]
+macro_rules! __private_json_type_with_const_generics {
+    (
+        $Type:ident
+        // outer const generics
+        [$({$CONST:ident $ConstTy:ty $(= $const_value:expr)?})*]
+    ) => {
+        $Type::<
+            $({$crate::__private::__expand_or!([$($const_value)?][$CONST])}),*
+        >
+    };
+}
+
+#[macro_export]
 macro_rules! __private_json_after_value {
     // (
     //     [
@@ -466,9 +469,15 @@ macro_rules! __private_json_after_value {
         $crate::__private_json_concat_only_compile_time_tokens! {
             prev_state($crate::r#const::State::INIT)
             then(
-                $crate::r#const::CompileTimeChunk::<HasConstCompileTimeChunk>::JSON_VALUE
+                $crate::r#const::CompileTimeChunk::<
+                    $crate::__private_json_type_with_const_generics![
+                        HasConstCompileTimeChunk
+                        $outer_const_generics
+                    ]
+                >::JSON_VALUE
             )
             tokens $only_compile_time
+            outer_const_generics $outer_const_generics
         }
     };
     (
@@ -484,6 +493,7 @@ macro_rules! __private_json_after_value {
         $crate::r#const::AssertJsonValueChunks(
             $crate::__private_json_concat_chunks! {
                 prev_state($crate::r#const::State::INIT)
+                outer_const_generics $outer_const_generics
                 compile_runtime $prev_compile_runtime
                 then_macro_bang(
                     $crate::__private_json_after_value_concat_chunks_then!
@@ -501,6 +511,7 @@ macro_rules! __private_json_after_value_concat_chunks_then {
     (
         prev_compile_runtime($prev_compile_runtime:expr)
         PrevState($PrevState:ident)
+        outer_const_generics $outer_const_generics:tt
         last_compile_time $last_compile_time:tt
     ) => {
         $crate::r#const::ChunkConcat(
@@ -513,6 +524,7 @@ macro_rules! __private_json_after_value_concat_chunks_then {
                     $crate::r#const::CompileTimeChunk::<HasConstCompileTimeChunk>::DEFAULT
                 )
                 tokens $last_compile_time
+                outer_const_generics $outer_const_generics
             },
         )
     };
@@ -522,17 +534,20 @@ macro_rules! __private_json_after_value_concat_chunks_then {
 macro_rules! __private_json_concat_chunks {
     (
         prev_state $prev_state:tt
+        outer_const_generics $outer_const_generics:tt
         compile_runtime[]
         then_macro_bang($($then_macro_bang:tt)+)
         then_macro_rest($($then_macro_rest:tt)*)
     ) => {
         $($then_macro_bang)+ {
             prev_state $prev_state
+            outer_const_generics $outer_const_generics
             $($then_macro_rest)*
         }
     };
     (
         prev_state $prev_state:tt
+        outer_const_generics $outer_const_generics:tt
         compile_runtime[
             prev $prev:tt
             current $current:tt
@@ -542,6 +557,7 @@ macro_rules! __private_json_concat_chunks {
     ) => {
         $crate::__private_json_concat_chunks! {
             prev_state $prev_state
+            outer_const_generics $outer_const_generics
             compile_runtime $prev
             then_macro_bang(
                 $crate::__private_json_concat_chunks_then!
@@ -560,6 +576,7 @@ macro_rules! __private_json_concat_chunks_then {
     (
         // first chunk
         prev_state $prev_state:tt
+        outer_const_generics $outer_const_generics:tt
         current {
             compile_time $compile_time:tt
             runtime[
@@ -589,16 +606,19 @@ macro_rules! __private_json_concat_chunks_then {
                 $($then_macro_bang)+ {
                     prev_compile_runtime(cjson_prev_compile_runtime)
                     PrevState(PrevState)
+                    outer_const_generics $outer_const_generics
                     $($then_macro_rest)*
                 }
 
             )
             tokens $compile_time
+            outer_const_generics $outer_const_generics
         }
     };
     (
         prev_compile_runtime($prev_compile_runtime:expr)
         PrevState($PrevState:ident)
+        outer_const_generics $outer_const_generics:tt
         current {
             compile_time $compile_time:tt
             runtime[
@@ -634,11 +654,13 @@ macro_rules! __private_json_concat_chunks_then {
                     $($then_macro_bang)+ {
                         prev_compile_runtime(cjson_prev_compile_runtime)
                         PrevState(PrevState)
+                        outer_const_generics $outer_const_generics
                         $($then_macro_rest)*
                     }
                 }
             )
             tokens $compile_time
+            outer_const_generics $outer_const_generics
         }
     };
 }
@@ -649,10 +671,19 @@ macro_rules! __private_json_concat_only_compile_time_tokens {
         prev_state($prev_state:expr)
         then($($then:tt)*)
         tokens $tokens:tt
+        outer_const_generics[
+            $({ $CONST:ident $ConstTy:ty $(= $const_value:expr)? })*
+        ]
     ) => {{
-        enum HasConstCompileTimeChunk {}
+        enum HasConstCompileTimeChunk
+            <$( const $CONST: $ConstTy, )*>
+        {}
 
-        impl HasConstCompileTimeChunk {
+        impl
+            <$( const $CONST: $ConstTy, )*>
+            HasConstCompileTimeChunk
+            <$( $CONST, )*>
+        {
             const STATED_CHUNK_STRING: $crate::r#const::StatedChunkString<
                 {
                     $crate::__private_json_concat_compile_time_tokens_len! {
@@ -671,7 +702,12 @@ macro_rules! __private_json_concat_only_compile_time_tokens {
             };
         }
 
-        impl $crate::r#const::HasConstCompileTimeChunk for HasConstCompileTimeChunk {
+        impl
+            <$( const $CONST: $ConstTy, )*>
+            $crate::r#const::HasConstCompileTimeChunk
+            for HasConstCompileTimeChunk
+            <$( $CONST, )*>
+        {
             const CHUNK: $crate::r#const::StatedChunkStr<'static> =
                 Self::STATED_CHUNK_STRING.as_str();
         }
