@@ -32,8 +32,30 @@ const fn test_simple() -> TestSimple<impl ToJson + Copy, impl ToJson + Copy, imp
     }
 }
 
+struct TestRuntime<One: ToJson + Copy, Two: ToJson + Copy, Nested: ToJson + Copy> {
+    one: (One, &'static str),
+    two: (Two, &'static str),
+    nested: (Nested, &'static str),
+}
+
+const fn test_runtime() -> TestRuntime<impl ToJson + Copy, impl ToJson + Copy, impl ToJson + Copy> {
+    TestRuntime {
+        one: (json!([json_string!(("1"))]), r#"["1"]"#),
+        two: (json!(json_string![("1"), "null", ("3")]), "\"1null3\""),
+        nested: (
+            json!([
+                1u8,
+                [2u8, json_string![("3"), "4"], [(5)],],
+                json_string! {"6", ("7")}
+            ]),
+            r#"[1,[2,"34",[5]],"67"]"#,
+        ),
+    }
+}
+
 const _: () = {
     test_simple();
+    test_runtime();
 };
 
 #[cfg(feature = "alloc")]
@@ -52,5 +74,15 @@ fn tests() {
 
     assert_eq!(to_json_string(empty), "\"\"");
     assert_eq!(to_json_string(mixed), "\"1\\n234\\t5\\\\67\"");
-    assert_eq!(to_json_string(nested), r#"["",null,"123\t456"]"#)
+    assert_eq!(to_json_string(nested), r#"["",null,"123\t456"]"#);
+
+    let TestRuntime {
+        //
+        one,
+        two,
+        nested,
+    } = test_runtime();
+    assert_eq!(to_json_string(one.0), one.1);
+    assert_eq!(to_json_string(two.0), two.1);
+    assert_eq!(to_json_string(nested.0), nested.1);
 }
