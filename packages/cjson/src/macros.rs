@@ -378,6 +378,43 @@ macro_rules! __private_json_value {
             $($($rest)*)?
         }
     };
+    // macro
+    (
+        // options
+        {
+            after_comma_bang $after_comma_bang:tt
+            before_value($($before_value:tt)*)
+        }
+        // state
+        [
+            prev $prev:tt
+            current_compile_time[$($current_compile_time:tt)*]
+            after_value $after_value:tt
+        ]
+        // tokens
+        $well_known_macro:ident $bang:tt $well_known_macro_body:tt
+        $(, $($rest:tt)*)?
+    ) => {
+        $crate::__private_json_macro! {
+            $well_known_macro $bang $well_known_macro_body
+            [
+                prev $prev
+                current_compile_time[
+                    $($current_compile_time)*
+                    $($before_value)*
+                ]
+                after_value {
+                    do(
+                        after_comma {
+                            after_comma_bang $after_comma_bang
+                            rest($($($rest)*)?)
+                            after_value $after_value
+                        }
+                    )
+                }
+            ]
+        }
+    };
 }
 
 #[macro_export]
