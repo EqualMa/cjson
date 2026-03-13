@@ -218,7 +218,22 @@ impl ChunkLen {
         self
     }
 
+    pub const fn left_brace(mut self) -> Self {
+        self.0 += 1;
+        self
+    }
+
+    pub const fn right_brace(mut self) -> Self {
+        self.0 += 1;
+        self
+    }
+
     pub const fn comma(mut self) -> Self {
+        self.0 += 1;
+        self
+    }
+
+    pub const fn colon(mut self) -> Self {
         self.0 += 1;
         self
     }
@@ -264,8 +279,20 @@ impl<const CAP: usize> ChunkBuf<CAP> {
         self.with_byte(b']')
     }
 
+    pub const fn left_brace(self) -> Self {
+        self.with_byte(b'{')
+    }
+
+    pub const fn right_brace(self) -> Self {
+        self.with_byte(b'}')
+    }
+
     pub const fn comma(self) -> Self {
         self.with_byte(b',')
+    }
+
+    pub const fn colon(self) -> Self {
+        self.with_byte(b':')
     }
 
     const fn with_bytes(mut self, bytes: &[u8]) -> Self {
@@ -316,11 +343,35 @@ impl<const CAP: usize> StatedChunkBuf<CAP> {
         }
     }
 
+    pub const fn left_brace(self) -> Self {
+        Self {
+            prev_state: self.prev_state,
+            cur_state: self.cur_state.left_brace(),
+            buf: self.buf.left_brace(),
+        }
+    }
+
+    pub const fn right_brace(self) -> Self {
+        Self {
+            prev_state: self.prev_state,
+            cur_state: self.cur_state.right_brace(),
+            buf: self.buf.right_brace(),
+        }
+    }
+
     pub const fn comma(self) -> Self {
         Self {
             prev_state: self.prev_state,
             cur_state: self.cur_state.comma(),
             buf: self.buf.comma(),
+        }
+    }
+
+    pub const fn colon(self) -> Self {
+        Self {
+            prev_state: self.prev_state,
+            cur_state: self.cur_state.colon(),
+            buf: self.buf.colon(),
         }
     }
 

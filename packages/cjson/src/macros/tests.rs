@@ -2,6 +2,7 @@ use crate::ser::{ToJson, exts::TextExt};
 
 mod array;
 mod json_string;
+mod object;
 
 const fn assert_to_json<T: ToJson>(v: T) -> T {
     assert!(core::mem::size_of_val(&v) == 0);

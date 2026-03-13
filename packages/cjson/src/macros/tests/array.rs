@@ -1,12 +1,19 @@
 use crate::ser::{ToJson, exts::TextExt};
 
-struct TestSimple<Empty: ToJson + Copy, Mixed: ToJson + Copy, Nested: ToJson + Copy> {
+struct TestSimple<
+    Empty: ToJson + Copy,
+    Mixed: ToJson + Copy,
+    Nested: ToJson + Copy,
+    NegLiteral: ToJson + Copy,
+> {
     empty: Empty,
     mixed: Mixed,
     nested: Nested,
+    neg_literal: NegLiteral,
 }
 
-const fn test_simple() -> TestSimple<impl ToJson + Copy, impl ToJson + Copy, impl ToJson + Copy> {
+const fn test_simple()
+-> TestSimple<impl ToJson + Copy, impl ToJson + Copy, impl ToJson + Copy, impl ToJson + Copy> {
     TestSimple {
         empty: {
             let v = json!([]);
@@ -26,10 +33,15 @@ const fn test_simple() -> TestSimple<impl ToJson + Copy, impl ToJson + Copy, imp
             v
         },
         nested: {
-            // let v = json!([[]]);
             let v = json!([[["\t", [[[]]]], false]]);
             let s = v.as_json_value_str().inner().as_bytes();
             assert!(matches!(s, br#"[[["\t",[[[]]]],false]]"#));
+            v
+        },
+        neg_literal: {
+            let v = json!([-1i8]);
+            let s = v.as_json_value_str().inner().as_bytes();
+            assert!(matches!(s, b"[-1]"));
             v
         },
     }
@@ -67,6 +79,7 @@ fn tests() {
         empty,
         mixed,
         nested,
+        neg_literal,
     } = test_simple();
 
     assert_eq!(to_json_string(empty), "[]");
@@ -76,6 +89,7 @@ fn tests() {
     );
 
     assert_eq!(to_json_string(nested), r#"[[["\t",[[[]]]],false]]"#);
+    assert_eq!(to_json_string(neg_literal), "[-1]");
 
     let TestRuntime {
         //

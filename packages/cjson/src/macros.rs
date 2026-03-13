@@ -68,8 +68,23 @@ macro_rules! json {
             ]
         )
     };
-    ({$($object_content:tt)*}) => {
-        compiler_error! {}
+    (
+        $(const $CONST:ident: $ConstTy:ty $(= $const_value:expr)? ; $(,)?)*
+        {$($object_content:tt)*}
+    ) => {
+        $crate::__private_json_after_object_start!(
+            [
+                prev[]
+                current_compile_time[
+                    left_brace()
+                ]
+                after_value {
+                    do(EOF)
+                    outer_const_generics [$({ $CONST $ConstTy $(= $const_value)? })*]
+                }
+            ]
+            $($object_content)*
+        )
     };
 }
 
@@ -341,6 +356,44 @@ macro_rules! __private_json_value {
             $($array_content)*
         }
     };
+    // object
+    (
+        // options
+        {
+            after_comma_bang $after_comma_bang:tt
+            before_value($($before_value:tt)*)
+        }
+        // state
+        [
+            prev $prev:tt
+            current_compile_time[$($current_compile_time:tt)*]
+            after_value $after_value:tt
+        ]
+        // tokens
+        {$($object_content:tt)*}
+        $(, $($rest:tt)*)?
+    ) => {
+        $crate::__private_json_after_object_start! {
+            [
+                prev $prev
+                current_compile_time[
+                    $($current_compile_time)*
+                    $($before_value)*
+                    left_brace()
+                ]
+                after_value {
+                    do(
+                        after_comma {
+                            after_comma_bang $after_comma_bang
+                            rest($($($rest)*)?)
+                            after_value $after_value
+                        }
+                    )
+                }
+            ]
+            $($object_content)*
+        }
+    };
     // runtime expr
     (
         // options
@@ -501,6 +554,29 @@ macro_rules! __private_json_after_value {
         }
     ) => {
         $($after_comma_bang)+ {
+            [
+                prev $prev
+                current_compile_time $last_compile_time
+                after_value $after_value
+            ]
+            $($rest)*
+        }
+    };
+    (
+        chunks[
+            prev_compile_runtime $prev:tt
+            last_compile_time $last_compile_time:tt
+        ]
+        after_value {
+            do(
+                after_object_colon {
+                    rest($($rest:tt)*)
+                    after_value $after_value:tt
+                }
+            )
+        }
+    ) => {
+        $crate::__private_json_after_object_colon! {
             [
                 prev $prev
                 current_compile_time $last_compile_time
@@ -869,6 +945,321 @@ macro_rules! __private_json_expand_token_args_for_len {
     };
     (json_string_fragment $v:expr) => {
         $crate::r#const::ConstIntoJsonStringFragment($v).const_into_json_string_fragment_len()
+    };
+}
+
+#[macro_export]
+macro_rules! __private_json_after_object_start {
+    // EOF
+    (
+        [
+            prev $prev:tt
+            current_compile_time[
+                $($current_compile_time:tt)*
+            ]
+            after_value $after_value:tt
+        ]
+        // EOF
+    ) => {
+        $crate::__private_json_after_value! {
+            chunks[
+                prev_compile_runtime $prev
+                last_compile_time[
+                    $($current_compile_time)*
+                    right_brace()
+                ]
+            ]
+            after_value $after_value
+        }
+    };
+    // runtime fields
+    (
+        [
+            prev $prev:tt
+            current_compile_time $compile_time:tt
+            after_value $after_value:tt
+        ]
+        ..($runtime_fields:expr)
+        $(, $($rest:tt)*)?
+    ) => {
+        $crate::__private_json_after_object_comma! {
+            [
+                prev[
+                    prev $prev
+                    current {
+                        compile_time $compile_time
+                        runtime[
+                            json_fields($runtime_fields)
+                        ]
+                    }
+                ]
+                current_compile_time[]
+                after_value $after_value
+            ]
+            $($($rest)*)?
+        }
+    };
+    // field name
+    (
+        $state:tt
+        $($rest:tt)+
+    ) => {
+        $crate::__private_json_object_field_name! {
+            {
+                before_field_name()
+            }
+            $state
+            $($rest)+
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_json_object_field_name {
+    (
+        {
+            before_field_name($($before_field_name:tt)*)
+        }
+        [
+            prev $prev:tt
+            current_compile_time[
+                $($current_compile_time:tt)*
+            ]
+            after_value $after_value:tt
+        ]
+        $(-)? const $field_name:block
+        = $($rest:tt)+
+    ) => {
+        $crate::__private_json_after_object_colon! {
+            [
+                prev $prev
+                current_compile_time[
+                    $($current_compile_time)*
+                    $($before_field_name)*
+                    double_quote()
+                    json_string_fragment($field_name)
+                    double_quote()
+                ]
+                after_value $after_value
+            ]
+            $($rest)+
+        }
+    };
+    (
+        // options
+        {
+            before_field_name($($before_field_name:tt)*)
+        }
+        // state
+        [
+            prev $prev:tt
+            current_compile_time[
+                $($current_compile_time:tt)*
+            ]
+            after_value $after_value:tt
+        ]
+        // tokens
+        $field_name:literal
+        = $($rest:tt)+
+    ) => {
+        $crate::__private_json_after_object_colon! {
+            [
+                prev $prev
+                current_compile_time[
+                    $($current_compile_time)*
+                    $($before_field_name)*
+                    double_quote()
+                    json_string_fragment($field_name)
+                    double_quote()
+                ]
+                after_value $after_value
+            ]
+            $($rest)+
+        }
+    };
+    (
+        {
+            before_field_name($($before_field_name:tt)*)
+        }
+        [
+            prev $prev:tt
+            current_compile_time[
+                $($current_compile_time:tt)*
+            ]
+            after_value $after_value:tt
+        ]
+        $well_known_macro:ident $bang:tt $well_known_macro_body:tt
+        = $($rest:tt)+
+    ) => {
+        $crate::__private_json_macro! {
+            $well_known_macro $bang $well_known_macro_body
+            [
+                prev $prev
+                current_compile_time[
+                    $($current_compile_time)*
+                    $($before_field_name)*
+                ]
+                after_value {
+                    do(
+                        after_object_colon {
+                            rest($($rest)+)
+                            after_value $after_value
+                        }
+                    )
+                }
+            ]
+        }
+    };
+    (
+        // options
+        {
+            before_field_name($($before_field_name:tt)*)
+        }
+        // state
+        [
+            prev $prev:tt
+            current_compile_time[
+                $($current_compile_time:tt)*
+            ]
+            after_value $after_value:tt
+        ]
+        // tokens
+        ($runtime_field_name:expr)
+        = $($rest:tt)+
+    ) => {
+        $crate::__private_json_after_object_colon! {
+            [
+                prev[
+                    prev $prev
+                    current {
+                        compile_time[
+                            $($current_compile_time)*
+                            $($before_field_name)*
+                            double_quote()
+                        ]
+                        runtime[
+                            json_string_fragment($runtime_field_name)
+                        ]
+                    }
+                ]
+                current_compile_time[
+                    double_quote()
+                ]
+                after_value $after_value
+            ]
+            $($rest)+
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_json_after_object_colon {
+    // $lit:literal
+    (
+        $state:tt
+        $lit:literal
+        $(; $($rest:tt)*)?
+    ) => {
+        $crate::__private_json_value! {
+            {
+                after_comma_bang($crate::__private_json_after_object_field_value!)
+                before_value(colon())
+            }
+            $state
+            $lit
+            , $($($rest)*)?
+        }
+    };
+    // ($runtime:expr)
+    // $well_known_ident:ident
+    // [$($array_content:tt)*]
+    (
+        $state:tt
+        $v:tt
+        $(; $($rest:tt)*)?
+    ) => {
+        $crate::__private_json_value! {
+            {
+                after_comma_bang($crate::__private_json_after_object_field_value!)
+                before_value(colon())
+            }
+            $state
+            $v
+            , $($($rest)*)?
+        }
+    };
+    // const { ... }
+    (
+        $state:tt
+        const $const_block:block
+        $(; $($rest:tt)*)?
+    ) => {
+        $crate::__private_json_value! {
+            {
+                after_comma_bang($crate::__private_json_after_object_field_value!)
+                before_value(colon())
+            }
+            $state
+            const $const_block
+            , $($($rest)*)?
+        }
+    };
+    // macro
+    (
+        $state:tt
+        $well_known_macro:ident $bang:tt $well_known_macro_body:tt
+        $(; $($rest:tt)*)?
+    ) => {
+        $crate::__private_json_value! {
+            {
+                after_comma_bang($crate::__private_json_after_object_field_value!)
+                before_value(colon())
+            }
+            $state
+            $well_known_macro $bang $well_known_macro_body
+            , $($($rest)*)?
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_json_after_object_field_value {
+    (
+        [
+            prev $prev:tt
+            current_compile_time[
+                $($current_compile_time:tt)*
+            ]
+            after_value $after_value:tt
+        ]
+        // EOF
+    ) => {
+        $crate::__private_json_after_value! {
+            chunks[
+                prev_compile_runtime $prev
+                last_compile_time[
+                    $($current_compile_time)*
+                    right_brace()
+                ]
+            ]
+            after_value $after_value
+        }
+    };
+    // TODO: ..($runtime_fields:expr)
+    // field_value, ...
+    (
+        $state:tt
+        $($rest:tt)+
+    ) => {
+        $crate::__private_json_object_field_name! {
+            {
+                before_field_name(
+                    comma()
+                )
+            }
+            $state
+            $($rest)+
+        }
     };
 }
 

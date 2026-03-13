@@ -124,7 +124,6 @@ impl State {
         })
     }
 
-    #[cfg(todo)]
     pub const fn colon(self) -> Self {
         Self(match self.0 {
             StateInner::Init => panic!(),
@@ -173,7 +172,6 @@ impl State {
         })
     }
 
-    #[cfg(todo)]
     pub const fn left_brace(self) -> Self {
         Self(match self.0 {
             StateInner::Init => StateInner::Intermediate(Intermediate {
@@ -191,12 +189,11 @@ impl State {
         })
     }
 
-    #[cfg(todo)]
     pub const fn right_brace(self) -> Self {
         Self(match self.0 {
             StateInner::Init => panic!(),
             StateInner::Intermediate(Intermediate { stack, state }) => match state {
-                AfterObjectStart | AfterObjectFieldValue => stack.end_object(),
+                AfterObjectStart | AfterObjectFieldValue => stack.end_object().into_state_inner(),
                 InString => panic!(),
                 AfterArrayStart => panic!(),
                 AfterArrayItem => panic!(),
