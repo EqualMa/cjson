@@ -1,5 +1,5 @@
 use crate::ser::{
-    iter_text_chunk,
+    ToJsonStringFragment, iter_text_chunk,
     traits::{self, IntoTextChunks},
 };
 
@@ -21,6 +21,20 @@ impl<A: traits::JsonStringFragment, B: traits::JsonStringFragment>
 impl<A: traits::JsonStringFragment, B: traits::JsonStringFragment> traits::JsonStringFragment
     for Chain<A, B>
 {
+}
+
+impl<A: ToJsonStringFragment, B: ToJsonStringFragment> ToJsonStringFragment for Chain<A, B> {
+    type ToJsonStringFragment<'a>
+        = Chain<A::ToJsonStringFragment<'a>, B::ToJsonStringFragment<'a>>
+    where
+        Self: 'a;
+
+    fn to_json_string_fragment(&self) -> Self::ToJsonStringFragment<'_> {
+        Chain(
+            self.0.to_json_string_fragment(),
+            self.1.to_json_string_fragment(),
+        )
+    }
 }
 
 impl<

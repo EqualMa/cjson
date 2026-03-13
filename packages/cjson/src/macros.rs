@@ -1396,6 +1396,52 @@ macro_rules! __private_json_string_fragment {
             $($($rest)*)?
         }
     };
+    // runtime expr after runtime expr
+    (
+        // options
+        {
+            after_bang($($after_bang:tt)+)
+        }
+        // state
+        [
+            prev[
+                prev $prev:tt
+                current {
+                    compile_time $current_compile_time:tt
+                    runtime[
+                        json_string_fragment($prev_fragment:expr)
+                    ]
+                }
+            ]
+            current_compile_time[]
+            after_value $after_value:tt
+        ]
+        // tokens
+        ($runtime_expr:expr)
+        $(, $($rest:tt)*)?
+    ) => {
+        $($after_bang)+ {
+            [
+                prev[
+                    prev $prev
+                    current {
+                        compile_time $current_compile_time
+                        runtime[
+                            json_string_fragment(
+                                $crate::ser::texts::Chain(
+                                    $prev_fragment,
+                                    $runtime_expr,
+                                )
+                            )
+                        ]
+                    }
+                ]
+                current_compile_time[]
+                after_value $after_value
+            ]
+            $($($rest)*)?
+        }
+    };
     // runtime expr
     (
         // options
