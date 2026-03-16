@@ -11,9 +11,9 @@ pub trait ToJson {
     fn to_json(&self) -> Self::ToJson<'_>;
 }
 
-impl<T: ?Sized + ToJson> ToJson for &T {
+impl<'this, T: ?Sized + ToJson> ToJson for &'this T {
     type ToJson<'a>
-        = T::ToJson<'a>
+        = T::ToJson<'this>
     where
         Self: 'a;
 
@@ -29,9 +29,9 @@ pub trait ToJsonStringFragment {
     fn to_json_string_fragment(&self) -> Self::ToJsonStringFragment<'_>;
 }
 
-impl<T: ?Sized + ToJsonStringFragment> ToJsonStringFragment for &T {
+impl<'this, T: ?Sized + ToJsonStringFragment> ToJsonStringFragment for &'this T {
     type ToJsonStringFragment<'a>
-        = T::ToJsonStringFragment<'a>
+        = T::ToJsonStringFragment<'this>
     where
         Self: 'a;
 
