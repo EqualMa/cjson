@@ -532,37 +532,20 @@ impl<C: RuntimeChunk> AssertJsonValueChunks<C> {
 }
 
 mod ser_chunks {
-    use crate::ser::{
-        ToJson,
-        traits::{self, IntoTextChunks},
-    };
+    use crate::ser::{ToJson, texts};
 
     use super::{AssertJsonValueChunks, RuntimeChunk};
 
-    pub struct AssertJsonValueChunksToJson<'a, C: RuntimeChunk>(&'a C);
-
     impl<C: RuntimeChunk> ToJson for AssertJsonValueChunks<C> {
         type ToJson<'a>
-            = AssertJsonValueChunksToJson<'a, C>
+            = texts::Value<C::ToIntoTextChunks<'a>>
         where
             Self: 'a;
 
         fn to_json(&self) -> Self::ToJson<'_> {
             const { () = Self::ASSERT }
 
-            AssertJsonValueChunksToJson(&self.0)
-        }
-    }
-
-    impl<C: RuntimeChunk> traits::sealed::Text for AssertJsonValueChunksToJson<'_, C> {}
-    impl<C: RuntimeChunk> traits::Text for AssertJsonValueChunksToJson<'_, C> {}
-
-    impl<'a, C: RuntimeChunk> IntoTextChunks for AssertJsonValueChunksToJson<'a, C> {
-        type IntoTextChunks = <C::ToIntoTextChunks<'a> as IntoTextChunks>::IntoTextChunks;
-
-        fn into_text_chunks(self) -> Self::IntoTextChunks {
-            const { AssertJsonValueChunks::<C>::ASSERT }
-            C::to_into_text_chunks(self.0).into_text_chunks()
+            texts::Value::new_without_validation(self.0.to_into_text_chunks())
         }
     }
 }
