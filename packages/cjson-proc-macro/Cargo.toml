@@ -1,0 +1,11 @@
+[package]
+name = "cjson-proc-macro"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = "1.0"
+typed-quote = { version = "0.1.1", features = ["proc-macro"] }
