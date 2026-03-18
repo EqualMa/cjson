@@ -8,27 +8,26 @@ macro_rules! __expand_or {
 #[macro_export]
 macro_rules! json {
     (
-        $(const $CONST:ident: $ConstTy:ty $(= $const_value:expr)? ; $(,)?)*
         $lit:literal
     ) => {
-        $crate::__private_json!(
-            [$({$CONST $ConstTy $(= $const_value)?})*]
-            const { $lit }
+        $crate::__private_json_const!(
+            {}
+            $lit
         )
     };
     (
         $(const $CONST:ident: $ConstTy:ty $(= $const_value:expr)? ; $(,)?)*
         const $const_block:block
     ) => {
-        $crate::__private_json!(
-            [$({$CONST $ConstTy $(= $const_value)?})*]
-            const $const_block
+        $crate::__private_json_const!(
+            { $(const $CONST: $ConstTy $(= $const_value)?;)* }
+            $const_block
         )
     };
     ($well_known_ident:ident) => {
-        $crate::__private_json!(
-            []
-            const { $crate::__private::well_known_ident::$well_known_ident }
+        $crate::__private_json_const!(
+            {}
+            $crate::__private::well_known_ident::$well_known_ident
         )
     };
     (($runtime_expr:expr)) => {
@@ -89,72 +88,31 @@ macro_rules! json {
 }
 
 #[macro_export]
-macro_rules! __private_json {
+macro_rules! __private_json_const {
     (
-        [] // outer const generics
-        const $const_block:block
+        $used_const_generics:tt
+        $const_value:expr
     ) => {
-        {
-            enum HasConstJsonValue {}
-
-            impl $crate::r#const::HasConstJsonValue for HasConstJsonValue {
-                const JSON_VALUE: $crate::ser::texts::Value<&'static $crate::__private::str> = {
-                    $crate::r#const::ConstAsJsonValueStr(
-                        $crate::r#const::ConstIntoJsonValueString(
-                            $crate::r#const::ConstIntoJson($const_block).const_into_json(),
-                        )
-                        .const_into_json_value_string::<{
-                            $crate::r#const::ConstIntoJsonValueString(
-                                $crate::r#const::ConstIntoJson($const_block).const_into_json(),
-                            )
-                            .const_into_json_value_string_len()
-                        }>(),
-                    )
-                    .const_as_json_value_str()
-                };
-            }
-
-            $crate::r#const::ConstJsonValue::<HasConstJsonValue>::DEFAULT
+        $crate::__private_impl_to_json_const! {
+            then_bang($crate::__private_json_const_then!)
+            then_rest()
+            vis()
+            $used_const_generics
+            $const_value
         }
     };
-    (
-        [$({$CONST:ident $ConstTy:ty $(= $const_value:expr)?})+] // outer const generics
-        const $const_block:block
-    ) => {
-        {
-            enum HasConstJsonValue
-                <$(const $CONST: $ConstTy),+>
-                {}
+}
 
-            impl
-                <$(const $CONST: $ConstTy),+>
-                $crate::r#const::HasConstJsonValue for HasConstJsonValue
-                <$(      $CONST          ),+>
-            {
-                const JSON_VALUE: $crate::ser::texts::Value<&'static $crate::__private::str> = {
-                    $crate::r#const::ConstAsJsonValueStr(
-                        $crate::r#const::ConstIntoJsonValueString(
-                            $crate::r#const::ConstIntoJson($const_block).const_into_json(),
-                        )
-                        .const_into_json_value_string_without_const_len()
-                        // TODO: rust limitation: generic parameters may not be used in const operations
-                        // .const_into_json_value_string::<LEN>()
-                    )
-                    .const_as_json_value_str()
-                };
-            }
-
-            $crate::r#const::ConstJsonValue::<HasConstJsonValue::
-                <$({$crate::__private::__expand_or!([$($const_value)?][$CONST])}),+>
-            >::DEFAULT
-        }
-    };
+#[macro_export]
+macro_rules! __private_json_const_then {
     (
-        $outer_const_generics:tt // outer const generics
-        ($runtime_expr:expr)
-    ) => {
-        $runtime_expr
-    };
+        mod($($items:tt)*)
+        type $type:tt
+        value($value:expr)
+    ) => {{
+        $($items)*
+        $value
+    }};
 }
 
 #[macro_export]
