@@ -813,10 +813,9 @@ macro_rules! __private_impl_for_only_compile_time_tokens {
         tokens $tokens:tt
         impl_generics($($impl_generics:tt)*)
         for($For:ty)
-        $(prepend_impl_generics($($prepend_impl_generics:tt)*))?
     ) => {
         impl
-            <$($($prepend_impl_generics)*)? $($impl_generics)*>
+            <$($impl_generics)*>
             $For
         {
             const STATED_CHUNK_STRING: $crate::r#const::StatedChunkString<
@@ -1176,6 +1175,7 @@ macro_rules! __private_json_after_object_colon {
     // ($runtime:expr)
     // $well_known_ident:ident
     // [$($array_content:tt)*]
+    // {$($object_content:tt)*}
     (
         $state:tt
         $v:tt
@@ -1188,6 +1188,21 @@ macro_rules! __private_json_after_object_colon {
             }
             $state
             $v
+            , $($($rest)*)?
+        }
+    };
+    (
+        $state:tt
+        ($runtime_expr:expr) as $runtime_type:ty
+        $(; $($rest:tt)*)?
+    ) => {
+        $crate::__private_json_value! {
+            {
+                after_comma_bang($crate::__private_json_after_object_field_value!)
+                before_value(colon())
+            }
+            $state
+            ($runtime_expr) as $runtime_type
             , $($($rest)*)?
         }
     };

@@ -130,4 +130,114 @@ fn impl_to_json() {
             "[1,0,3]"
         );
     }
+
+    {
+        struct ObjectCompileTime;
+        impl_to_json!(|self: ObjectCompileTime| { "name" = ["value"] });
+
+        assert_eq!(
+            ObjectCompileTime.to_json().into_string().into_inner(),
+            r#"{"name":["value"]}"#
+        );
+    }
+
+    {
+        struct ObjectRuntime<A, B>(A, B);
+
+        impl_to_json!(
+            impl_generics![A, B],
+            where_clause![
+                where
+                    A: ToJson,
+                    B: ToJson,
+            ],
+            |self: ObjectRuntime<A, B>| {
+                "values" = [
+                    {
+                        "kind" = "A";
+                        "value" = (&self.0) as &'cjson_lt_to_json A;
+                    },
+                    {
+                        "kind" = "B";
+                        "value" = (&self.1) as &'cjson_lt_to_json B;
+                    },
+                ]
+            }
+        );
+
+        assert_eq!(
+            ObjectRuntime("hello\tworld!", 2)
+                .to_json()
+                .into_string()
+                .into_inner(),
+            r#"{"values":[{"kind":"A","value":"hello\tworld!"},{"kind":"B","value":2}]}"#
+        );
+    }
+
+    {
+        struct ObjectRuntime<A, B>(A, B);
+
+        impl_to_json!(
+            impl_generics![A, B],
+            where_clause![
+                where
+                    A: cjson::ser::ToJsonStringFragment,
+                    B: ToJson,
+            ],
+            |self: ObjectRuntime<A, B>| {
+                json_string!("namespace:", (&self.0) as &'cjson_lt_to_json A) =
+                    (&self.1) as &'cjson_lt_to_json B
+            }
+        );
+
+        assert_eq!(
+            ObjectRuntime("crlf", "\r\n")
+                .to_json()
+                .into_string()
+                .into_inner(),
+            r#"{"namespace:crlf":"\r\n"}"#
+        );
+    }
+
+    {
+        struct JsonStringCompileTime;
+        impl_to_json!(|self: JsonStringCompileTime| json_string!["hello", " ", "world", "\n"]);
+
+        assert_eq!(
+            JsonStringCompileTime.to_json().into_string().into_inner(),
+            r#""hello world\n""#
+        );
+    }
+
+    {
+        struct JsonStringRuntime<'a> {
+            to: &'a str,
+            msg: &'a str,
+            from: &'a str,
+        }
+        impl_to_json!(
+            impl_generics!['a],
+            |self: JsonStringRuntime<'a>| json_string![
+                "Dear",
+                " ",
+                (self.to) as &'a str,
+                "\n",
+                (&self.msg) as &'cjson_lt_to_json str,
+                "\nfrom ",
+                (&self.from) as &'a str,
+            ]
+        );
+
+        assert_eq!(
+            JsonStringRuntime {
+                to: "Alice",
+                msg: "hello",
+                from: "Bob"
+            }
+            .to_json()
+            .into_string()
+            .into_inner(),
+            r#""Dear Alice\nhello\nfrom Bob""#
+        );
+    }
 }
