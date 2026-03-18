@@ -14,3 +14,9 @@ pub mod runtime_kinds {
     pub use crate::r#const::ChunkConcatJsonStringFragment as json_string_fragment;
     pub use crate::r#const::ChunkConcatJsonValue as json_value;
 }
+
+pub trait ImplToJsonHelper {
+    type ImplToJsonHelper<'a>: crate::ser::ToJson
+    where
+        Self: 'a;
+}

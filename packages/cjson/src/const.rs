@@ -144,7 +144,9 @@ pub(crate) mod json_value_array_str;
 
 mod state;
 
-pub use self::state::{CompileTimeChunk, HasConstCompileTimeChunk, State};
+pub use self::state::{
+    CompileTimeChunk, CompileTimeChunkIsJsonValue, HasConstCompileTimeChunk, State,
+};
 
 pub(crate) use self::state::assert_json_value;
 

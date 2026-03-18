@@ -147,6 +147,7 @@ macro_rules! __private_json_after_array_start {
             after_value $after_value:tt
         ]
         ..($runtime_items:expr)
+        $(as $runtime_type:ty)?
         $(, $($rest:tt)*)?
     ) => {
         $crate::__private_json_after_array_comma! {
@@ -157,6 +158,7 @@ macro_rules! __private_json_after_array_start {
                         compile_time $compile_time
                         runtime[
                             json_items($runtime_items)
+                            $(as $runtime_type)?
                         ]
                     }
                 ]
@@ -367,6 +369,7 @@ macro_rules! __private_json_value {
         ]
         // tokens
         ($runtime_expr:expr)
+        $(as $runtime_type:ty)?
         $(, $($rest:tt)*)?
     ) => {
         $($after_comma_bang)+ {
@@ -380,6 +383,7 @@ macro_rules! __private_json_value {
                         ]
                         runtime[
                             json_value($runtime_expr)
+                            $(as $runtime_type)?
                         ]
                     }
                 ]
@@ -591,6 +595,18 @@ macro_rules! __private_json_after_value {
             }
         )
     };
+    (
+        chunks $chunks:tt
+        after_value {
+            EOF_impl_to_json
+            $args:tt
+        }
+    ) => {
+        $crate::__private_impl_to_json_after_value! {
+            $chunks
+            $args
+        }
+    };
 }
 
 #[macro_export]
@@ -668,6 +684,7 @@ macro_rules! __private_json_concat_chunks_then {
             compile_time $compile_time:tt
             runtime[
                 $runtime_kind:ident ($runtime_expr:expr)
+                $(as $runtime_type:ty)?
             ]
         }
         then_macro_bang($($then_macro_bang:tt)+)
@@ -676,7 +693,9 @@ macro_rules! __private_json_concat_chunks_then {
         $crate::__private_json_concat_only_compile_time_tokens! {
             prev_state $prev_state
             then(
-                let cjson_prev_compile_runtime = $crate::__private::runtime_kinds::$runtime_kind(
+                let cjson_prev_compile_runtime = $crate::__private::runtime_kinds::$runtime_kind
+                $(::<_, $runtime_type>)?
+                (
                     $crate::r#const::CompileTimeChunk::<HasConstCompileTimeChunk>::DEFAULT,
                     $runtime_expr,
                 );
@@ -710,6 +729,7 @@ macro_rules! __private_json_concat_chunks_then {
             compile_time $compile_time:tt
             runtime[
                 $runtime_kind:ident ($runtime_expr:expr)
+                $(as $runtime_type:ty)?
             ]
         }
         then_macro_bang($($then_macro_bang:tt)+)
@@ -722,7 +742,9 @@ macro_rules! __private_json_concat_chunks_then {
             then(
                 let cjson_prev_compile_runtime = $crate::r#const::ChunkConcat(
                     $prev_compile_runtime,
-                    $crate::__private::runtime_kinds::$runtime_kind(
+                    $crate::__private::runtime_kinds::$runtime_kind
+                    $(::<_, $runtime_type>)?
+                    (
                         $crate::r#const::CompileTimeChunk::<HasConstCompileTimeChunk>::DEFAULT,
                         $runtime_expr,
                     ),
@@ -791,9 +813,10 @@ macro_rules! __private_impl_for_only_compile_time_tokens {
         tokens $tokens:tt
         impl_generics($($impl_generics:tt)*)
         for($For:ty)
+        $(prepend_impl_generics($($prepend_impl_generics:tt)*))?
     ) => {
         impl
-            <$($impl_generics)*>
+            <$($($prepend_impl_generics)*)? $($impl_generics)*>
             $For
         {
             const STATED_CHUNK_STRING: $crate::r#const::StatedChunkString<
@@ -956,6 +979,7 @@ macro_rules! __private_json_after_object_start {
             after_value $after_value:tt
         ]
         ..($runtime_fields:expr)
+        $(as $runtime_type:ty)?
         $(, $($rest:tt)*)?
     ) => {
         $crate::__private_json_after_object_comma! {
@@ -966,6 +990,7 @@ macro_rules! __private_json_after_object_start {
                         compile_time $compile_time
                         runtime[
                             json_fields($runtime_fields)
+                            $(as $runtime_type)?
                         ]
                     }
                 ]
@@ -1101,6 +1126,7 @@ macro_rules! __private_json_object_field_name {
         ]
         // tokens
         ($runtime_field_name:expr)
+        $(as $runtime_type:ty)?
         = $($rest:tt)+
     ) => {
         $crate::__private_json_after_object_colon! {
@@ -1115,6 +1141,7 @@ macro_rules! __private_json_object_field_name {
                         ]
                         runtime[
                             json_string_fragment($runtime_field_name)
+                            $(as $runtime_type)?
                         ]
                     }
                 ]
@@ -1386,6 +1413,7 @@ macro_rules! __private_json_string_fragment {
                     compile_time $current_compile_time:tt
                     runtime[
                         json_string_fragment($prev_fragment:expr)
+                        $(as $prev_runtime_type:ty)?
                     ]
                 }
             ]
@@ -1394,6 +1422,7 @@ macro_rules! __private_json_string_fragment {
         ]
         // tokens
         ($runtime_expr:expr)
+        $(as $runtime_type:ty)?
         $(, $($rest:tt)*)?
     ) => {
         $($after_bang)+ {
@@ -1408,6 +1437,10 @@ macro_rules! __private_json_string_fragment {
                                     $prev_fragment,
                                     $runtime_expr,
                                 )
+                                as $crate::ser::texts::Chain<
+                                    $crate::__expand_or![[$($prev_runtime_type)?][_]],
+                                    $crate::__expand_or![[$($runtime_type)?     ][_]],
+                                >
                             )
                         ]
                     }
@@ -1432,6 +1465,7 @@ macro_rules! __private_json_string_fragment {
         ]
         // tokens
         ($runtime_expr:expr)
+        $(as $runtime_type:ty)?
         $(, $($rest:tt)*)?
     ) => {
         $($after_bang)+ {
@@ -1442,6 +1476,7 @@ macro_rules! __private_json_string_fragment {
                         compile_time $current_compile_time
                         runtime[
                             json_string_fragment($runtime_expr)
+                            $(as $runtime_type)?
                         ]
                     }
                 ]
