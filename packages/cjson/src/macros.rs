@@ -1301,7 +1301,7 @@ macro_rules! __private_json_string {
             after_value $after_value:tt
         ]
     ) => {
-        $crate::__private_json_in_string!(
+        $crate::__private_json_in_string! {
             [
                 prev $prev
                 current_compile_time[
@@ -1311,7 +1311,7 @@ macro_rules! __private_json_string {
                 after_value $after_value
             ]
             $($body)*
-        )
+        }
     };
 }
 

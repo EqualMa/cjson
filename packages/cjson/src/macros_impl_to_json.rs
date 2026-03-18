@@ -26,24 +26,24 @@ macro_rules! __private_impl_to_json_parse {
         {} // used_const_generics
         $data:tt
     ) => {
-        $crate::__private_impl_to_json_parse!(
+        $crate::__private_impl_to_json_parse! {
             ( const { $lit } )
             {}
             $data
-        )
+        }
     };
     (
         ( const $const_block:block )
         $used_const_generics:tt
         $data:tt
     ) => {
-        $crate::__private_impl_to_json_const!(
+        $crate::__private_impl_to_json_const! {
             then_bang($crate::__private_impl_to_json_expand!)
             then_rest($data)
             vis(pub)
             $used_const_generics
             const $const_block
-        )
+        }
     };
     (
         ( $well_known_ident:ident $(,)? )
@@ -74,7 +74,7 @@ macro_rules! __private_impl_to_json_parse {
         $used_const_generics:tt
         $data:tt
     ) => {
-        $crate::__private_json_after_array_start!(
+        $crate::__private_json_after_array_start! {
             [
                 prev[]
                 current_compile_time[
@@ -88,14 +88,14 @@ macro_rules! __private_impl_to_json_parse {
                 }
             ]
             $($array_content)*
-        )
+        }
     };
     (
         ( {$($object_content:tt)*} $(,)? )
         $used_const_generics:tt
         $data:tt
     ) => {
-        $crate::__private_json_after_object_start!(
+        $crate::__private_json_after_object_start! {
             [
                 prev[]
                 current_compile_time[
@@ -109,14 +109,14 @@ macro_rules! __private_impl_to_json_parse {
                 }
             ]
             $($object_content)*
-        )
+        }
     };
     (
         ( $well_known_macro:ident $bang:tt $well_known_macro_body:tt $(,)? )
         $used_const_generics:tt
         $data:tt
     ) => {
-        $crate::__private_json_macro!(
+        $crate::__private_json_macro! {
             $well_known_macro $bang $well_known_macro_body
             [
                 prev[]
@@ -128,7 +128,7 @@ macro_rules! __private_impl_to_json_parse {
                     )
                 }
             ]
-        )
+        }
     };
 }
 
