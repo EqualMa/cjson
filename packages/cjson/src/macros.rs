@@ -759,7 +759,7 @@ macro_rules! __private_json_compile_runtime {
 #[macro_export]
 macro_rules! __private_json_concat_only_compile_time_tokens {
     (
-        prev_state($prev_state:expr)
+        prev_state $prev_state:tt
         then($($then:tt)*)
         tokens $tokens:tt
         outer_const_generics[
@@ -770,10 +770,31 @@ macro_rules! __private_json_concat_only_compile_time_tokens {
             <$( const $CONST: $ConstTy, )*>
         {}
 
+        $crate::__private_impl_for_only_compile_time_tokens! {
+            prev_state $prev_state
+            tokens $tokens
+            impl_generics($( const $CONST: $ConstTy, )*)
+            for(
+                HasConstCompileTimeChunk
+                <$( $CONST, )*>
+            )
+        }
+
+        $($then)*
+    }};
+}
+
+#[macro_export]
+macro_rules! __private_impl_for_only_compile_time_tokens {
+    (
+        prev_state $prev_state:tt
+        tokens $tokens:tt
+        impl_generics($($impl_generics:tt)*)
+        for($For:ty)
+    ) => {
         impl
-            <$( const $CONST: $ConstTy, )*>
-            HasConstCompileTimeChunk
-            <$( $CONST, )*>
+            <$($impl_generics)*>
+            $For
         {
             const STATED_CHUNK_STRING: $crate::r#const::StatedChunkString<
                 {
@@ -794,17 +815,14 @@ macro_rules! __private_json_concat_only_compile_time_tokens {
         }
 
         impl
-            <$( const $CONST: $ConstTy, )*>
+            <$($impl_generics)*>
             $crate::r#const::HasConstCompileTimeChunk
-            for HasConstCompileTimeChunk
-            <$( $CONST, )*>
+            for $For
         {
             const CHUNK: $crate::r#const::StatedChunkStr<'static> =
                 Self::STATED_CHUNK_STRING.as_str();
         }
-
-        $($then)*
-    }};
+    };
 }
 
 #[macro_export]
