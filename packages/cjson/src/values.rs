@@ -8,6 +8,14 @@ pub enum Never {}
 mod never;
 
 #[derive(Debug, Clone, Copy)]
+pub enum Either<A, B> {
+    A(A),
+    B(B),
+}
+
+mod either;
+
+#[derive(Debug, Clone, Copy)]
 pub struct Null;
 
 mod null_const;

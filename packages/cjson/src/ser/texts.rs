@@ -2,6 +2,8 @@ use super::traits;
 
 mod never;
 
+mod either;
+
 #[derive(Debug, Clone, Copy)]
 pub struct Empty;
 mod empty;
