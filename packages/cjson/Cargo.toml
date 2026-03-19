@@ -12,9 +12,11 @@ ryu = "1.0.20"
 const-itoa = { version = "0.1.0" }
 const-ryu = { version = "0.1.0" }
 cjson-proc-macro = { version = "0.1.0", path = "../cjson-proc-macro", optional = true }
+either = { version = "1.15.0", default-features = false, optional = true }
 
 [features]
 default = ["alloc", "itoa", "proc-macro"]
 alloc = []
 itoa = ["dep:itoa"]
 proc-macro = ["dep:cjson-proc-macro"]
+either = ["dep:either"]

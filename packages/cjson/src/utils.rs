@@ -24,6 +24,31 @@ macro_rules! impl_many {
             const _: () = $rest;
         };
     )+};
+    ({
+        $defs:tt
+        $($imps:tt)*
+    }) => {
+        crate::utils::impl_many! {
+            @__defs
+            $defs
+            {$($imps)*}
+        }
+    };
+    (@__defs { $($(#$def_attr:tt)* {$($defs:tt)*})+ } $imps:tt) => {
+        $(
+            $(#$def_attr)*
+            const _: () = {
+                $($defs)*
+
+                crate::utils::impl_many! {
+                    @__unwrap $imps
+                }
+            };
+        )+
+    };
+    (@__unwrap {$($t:tt)*}) => {
+        $($t)*
+    }
 }
 
 pub(crate) use impl_many;
