@@ -7,6 +7,8 @@ pub enum Never {}
 
 mod never;
 
+mod option;
+
 #[derive(Debug, Clone, Copy)]
 pub enum Either<A, B> {
     A(A),
