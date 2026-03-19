@@ -3,6 +3,11 @@ use ref_cast::{RefCastCustom, ref_cast_custom};
 use crate::ser::ToJson;
 
 #[derive(Debug, Clone, Copy)]
+pub enum Never {}
+
+mod never;
+
+#[derive(Debug, Clone, Copy)]
 pub struct Null;
 
 mod null_const;

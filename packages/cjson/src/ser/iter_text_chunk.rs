@@ -29,6 +29,9 @@ pub trait IterTextChunk {
     }
 }
 
+pub enum NeverTextChunk {}
+mod never;
+
 #[derive(Debug, Clone, Copy)]
 pub struct Empty;
 mod empty;

@@ -1,5 +1,7 @@
 use super::traits;
 
+mod never;
+
 #[derive(Debug, Clone, Copy)]
 pub struct Empty;
 mod empty;
