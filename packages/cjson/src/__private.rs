@@ -21,15 +21,8 @@ pub trait ImplToJsonHelper {
         Self: 'a;
 }
 
+#[cfg(feature = "proc-macro")]
 pub mod proc_macro {
-    pub mod attrs {
-        pub mod cjson {
-            pub mod crate_path {}
-        }
-        pub mod cjson_struct {
-            pub use super::cjson::*;
-        }
-    }
     pub use ::cjson_proc_macro::unnamed_fields;
     pub use ::core::{compile_error, stringify};
 }

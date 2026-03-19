@@ -1,9 +1,6 @@
-use cjson_proc_macro::ToJson;
+#![cfg(feature = "proc-macro")]
 
-use cjson::{
-    self as my_json,
-    ser::{ToJson, exts::TextExt as _},
-};
+use cjson::{self as my_json, ToJson, ser::exts::TextExt as _};
 
 macro_rules! assert_json_eq {
     ($v:expr,$eq:expr) => {

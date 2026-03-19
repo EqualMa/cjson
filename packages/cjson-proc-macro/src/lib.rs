@@ -1,7 +1,7 @@
 use std::convert::identity;
 
 use proc_macro::{Delimiter, Group, Ident, Punct, Span, TokenStream, TokenTree};
-use typed_quote::prelude::*;
+use typed_quote::{prelude::*, tokens::IterTokens};
 
 use crate::{
     ident_eq::ident_matches,
@@ -16,26 +16,73 @@ mod syn_generic;
 mod to_json;
 
 struct ItemAttrsParser<'a> {
-    crate_path: Option<Config<TokenStream>>,
+    crate_path: Option<TokenStream>,
 
-    cjson_spans: Vec<Span>,
     errors: &'a mut ErrorCollector,
 }
 
+struct IdentTree {
+    ident: Ident,
+    mod_name: &'static str,
+    children: Vec<IdentTree>,
+}
+
+fn make_ident(name: &str, span: Span) -> Ident {
+    if let Some(name) = name.strip_prefix("r#") {
+        Ident::new_raw(name, span)
+    } else {
+        Ident::new(name, span)
+    }
+}
+
+impl IdentTree {
+    fn into_name_and_children(self) -> (Ident, Vec<IdentTree>) {
+        (
+            if self.mod_name.is_empty() {
+                self.ident
+            } else {
+                make_ident(self.mod_name, self.ident.span())
+            },
+            self.children,
+        )
+    }
+
+    fn into_tokens(self) -> impl IntoTokens {
+        let (ident, children) = self.into_name_and_children();
+        let ts = IterTokens(children.into_iter().map(|v| {
+            let ts = v.into_tokens();
+            let ts = quote!( #ts , );
+
+            Box::new(ts) as Box<dyn IntoTokens>
+        }));
+
+        quote!(#ident::{
+            #ts
+        })
+    }
+}
+
 struct Config<V> {
-    name: Ident,
+    name: (Ident, Vec<Ident>),
     value: V,
 }
 
-impl<P> syn_generic::CollectSeparated<MetaSimple, P> for &mut ItemAttrsParser<'_> {
+impl<P> syn_generic::CollectSeparated<MetaSimple, P>
+    for (&mut ItemAttrsParser<'_>, &mut Vec<IdentTree>)
+{
     fn push_pair(&mut self, item: MetaSimple, _: P) {
-        self.extend_one_attr_meta(item)
+        <(&mut ItemAttrsParser<'_>, &mut Vec<IdentTree>) as syn_generic::CollectSeparated<
+            MetaSimple,
+            P,
+        >>::collect_with_last((self.0, self.1), item);
     }
 
     type Collect = ();
 
-    fn collect_with_last(self, last: MetaSimple) -> Self::Collect {
-        self.extend_one_attr_meta(last);
+    fn collect_with_last(self, item: MetaSimple) -> Self::Collect {
+        if let Some(ident_tree) = self.0.extend_one_attr_meta(item) {
+            self.1.push(ident_tree);
+        }
     }
 
     fn collect(self) -> Self::Collect {}
@@ -45,7 +92,6 @@ impl<'a> ItemAttrsParser<'a> {
     pub fn new(errors: &'a mut ErrorCollector) -> Self {
         Self {
             crate_path: Default::default(),
-            cjson_spans: Default::default(),
             errors,
         }
     }
@@ -63,28 +109,60 @@ impl<'a> ItemAttrsParser<'a> {
         }
     }
 
-    fn extend_one_attr_meta(&mut self, v: MetaSimple) {
-        self.try_with(|this| this.try_extend_one_attr_meta(v))
-            .unwrap_or_else(identity)
+    fn extend_one_attr_meta(&mut self, v: MetaSimple) -> Option<IdentTree> {
+        self.try_with(|this| this.try_extend_one_attr_meta(v)).ok()
     }
 
     fn try_extend_one_attr_meta(
         &mut self,
         MetaSimple { path, after_path }: MetaSimple,
-    ) -> Result<(), syn_generic::ParseError> {
-        ident_match!(match path {
+    ) -> Result<IdentTree, syn_generic::ParseError> {
+        enum Config {
+            Crate,
+        }
+
+        let config_mod_name;
+
+        let config = ident_match!(match path {
             b"crate" => {
+                config_mod_name = "crate_";
+                Config::Crate
+            }
+            b"crate_" => {
+                config_mod_name = "";
+                Config::Crate
+            }
+            _ =>
+                return Err(syn_generic::ParseError::custom(
+                    "unknown attribute",
+                    path.span(),
+                )),
+        });
+
+        let config_children;
+
+        let res = match config {
+            Config::Crate => 'v: {
+                config_children = vec![];
+
+                if self.crate_path.is_some() {
+                    break 'v Err(syn_generic::ParseError::custom(
+                        "duplicated attribute `crate`",
+                        path.span(),
+                    ));
+                }
+
                 let value = match after_path {
                     syn_generic::MetaAfterPath::Empty => {
-                        return Err(syn_generic::ParseError::custom(
-                            "expect `crate_path(::path::to::crate_cjson)`",
+                        break 'v Err(syn_generic::ParseError::custom(
+                            "expect `crate(::path::to::crate_cjson)`",
                             path.span(),
                         ));
                     }
                     syn_generic::MetaAfterPath::Group(group) => {
                         if self.crate_path.is_some() {
-                            return Err(syn_generic::ParseError::custom(
-                                "expect `crate_path(::path::to::crate_cjson)`",
+                            break 'v Err(syn_generic::ParseError::custom(
+                                "expect `crate(::path::to::crate_cjson)`",
                                 path.span(),
                             ));
                         }
@@ -94,44 +172,58 @@ impl<'a> ItemAttrsParser<'a> {
                         eq,
                         before_comma_or_eof: _,
                     } => {
-                        return Err(syn_generic::ParseError::custom(
-                            "expect `crate_path(::path::to::crate_cjson)`",
+                        break 'v Err(syn_generic::ParseError::custom(
+                            "expect `crate(::path::to::crate_cjson)`",
                             eq.span(),
                         ));
                     }
                 };
 
-                self.crate_path = Some(Config { name: path, value })
-            }
-            _ =>
-                return Err(syn_generic::ParseError::custom(
-                    "unknown attribute",
-                    path.span(),
-                )),
-        });
+                self.crate_path = Some(value);
 
-        Ok(())
+                Ok(())
+            }
+        };
+
+        match res {
+            Ok(()) => {}
+            Err(error) => self.errors().push(error),
+        }
+
+        Ok(IdentTree {
+            ident: path,
+            mod_name: config_mod_name,
+            children: config_children,
+        })
     }
 
-    fn extend_attr_meta(&mut self, attr_meta: TokenStream) {
+    fn extend_attr_meta(&mut self, attr_meta: TokenStream) -> Vec<IdentTree> {
         let ref mut input: syn_generic::ParsingTokenStream = attr_meta.into();
 
+        let mut ident_trees = vec![];
+
         self.try_with(|this| {
-            syn_generic::parse_comma_separated(input, syn_generic::parse_meta_simple, this)?;
+            syn_generic::parse_comma_separated(
+                input,
+                syn_generic::parse_meta_simple,
+                (this, &mut ident_trees),
+            )?;
             input.expect_eof()
         })
         .unwrap_or_else(identity);
+
+        ident_trees
     }
 
-    pub fn push_top_level_attr_meta(&mut self, v: TokenStream) {
+    pub fn push_top_level_attr_meta(&mut self, v: TokenStream) -> Option<IdentTree> {
         self.try_with(|this| this.try_push_top_level_attr_meta(v))
-            .unwrap_or_else(identity)
+            .ok()
     }
 
     fn try_push_top_level_attr_meta(
         &mut self,
         attr_meta: TokenStream,
-    ) -> Result<(), syn_generic::ParseError> {
+    ) -> Result<IdentTree, syn_generic::ParseError> {
         let mut input: syn_generic::ParsingTokenStream = attr_meta.into();
         let input = &mut input;
 
@@ -146,13 +238,15 @@ impl<'a> ItemAttrsParser<'a> {
             }
         };
 
-        self.cjson_spans.push(cjson.span());
+        let mut sub_ident_trees = vec![];
 
         let after_path = syn_generic::parse_meta_after_path(input);
 
         match after_path {
             syn_generic::MetaAfterPath::Empty => {}
-            syn_generic::MetaAfterPath::Group(group) => self.extend_attr_meta(group.stream()),
+            syn_generic::MetaAfterPath::Group(group) => {
+                sub_ident_trees = self.extend_attr_meta(group.stream())
+            }
             syn_generic::MetaAfterPath::Eq {
                 eq,
                 before_comma_or_eof: _,
@@ -162,7 +256,15 @@ impl<'a> ItemAttrsParser<'a> {
             }
         }
 
-        input.expect_eof()
+        if let Err(err) = input.expect_eof() {
+            self.errors().push(err)
+        }
+
+        Ok(IdentTree {
+            ident: cjson,
+            mod_name: "",
+            children: sub_ident_trees,
+        })
     }
     pub fn errors(&mut self) -> &mut ErrorCollector {
         self.errors
@@ -179,12 +281,16 @@ pub fn derive_to_json(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
     let mut item_attrs = ItemAttrsParser::new(&mut errors);
 
+    let mut config_ident_trees: Vec<IdentTree> = vec![];
+
     let ParseItemStart {
         vis: _,
         first_ident,
     } = match syn_generic::parse_item_start(&mut input, |_, attr_body| match attr_body {
         TokenTree::Group(group) if group.delimiter() == Delimiter::Bracket => {
-            item_attrs.push_top_level_attr_meta(group.stream())
+            if let Some(config_ident_tree) = item_attrs.push_top_level_attr_meta(group.stream()) {
+                config_ident_trees.push(config_ident_tree);
+            }
         }
         _ => item_attrs.errors().push(syn_generic::ParseError::custom(
             "expect `[`",
@@ -200,29 +306,44 @@ pub fn derive_to_json(input: proc_macro::TokenStream) -> proc_macro::TokenStream
         }
     };
 
-    let crate_path = match item_attrs.crate_path.as_ref().map(|v| &v.value) {
-        None::<_> => typed_quote::Either::B(quote! { ::cjson }),
-        Some(v) => typed_quote::Either::A(v),
+    let crate_path = match item_attrs.crate_path.as_ref() {
+        None::<_> => typed_quote::Either::A(quote! { ::cjson }),
+        Some(v) => typed_quote::Either::B(v),
     };
 
     let default_span = first_ident.span();
 
-    let item = match (to_json::ToJson {
+    let use_item_attrs = {
+        let root_mod_name = ident_match!(match first_ident {
+            b"struct" => "r#struct",
+            b"enum" => "r#enum",
+            _ => "common",
+        });
+
+        let root_mod_name = make_ident(root_mod_name, first_ident.span());
+
+        IdentTree {
+            ident: root_mod_name,
+            mod_name: "",
+            children: config_ident_trees,
+        }
+        .into_tokens()
+    };
+
+    let item = to_json::ToJson {
         input: &mut input,
         first_ident,
     }
-    .try_parse(&mut errors))
-    {
-        Ok(item) => item,
+    .try_parse(&mut errors);
+    let item = match item {
+        Ok(item) => Some(item),
         Err(error) => {
-            return error
-                .join(errors)
-                .into_item(Some(crate_path), default_span)
-                .into_token_stream();
+            errors.push(error);
+            None
         }
     };
 
-    let ts = item.into_tokens(crate_path);
+    let ts = item.map(|item| item.into_tokens(crate_path));
 
     let errors = errors
         .ok()
@@ -231,6 +352,14 @@ pub fn derive_to_json(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
     typed_quote!(
         #ts
+
+        const _: () = {
+            #[allow(unused_imports)]
+            use #crate_path ::proc_macro::attrs::{
+                #use_item_attrs
+            };
+        };
+
         #errors
     )
     .into_token_stream()
@@ -249,7 +378,7 @@ pub fn unnamed_fields(input: proc_macro::TokenStream) -> proc_macro::TokenStream
         _ => panic!(),
     };
 
-    let fields = typed_quote::tokens::IterTokens(
+    let fields = IterTokens(
         input
             .enumerate()
             .map(|(i, _)| proc_macro::Literal::usize_unsuffixed(i)),

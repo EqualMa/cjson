@@ -7,6 +7,9 @@ extern crate alloc;
 pub mod ser;
 pub mod values;
 
+pub use cjson_proc_macro::ToJson;
+pub use ser::ToJson;
+
 mod utils;
 /*
 macro_rules! json_string {
@@ -46,7 +49,11 @@ json! {false}
 pub mod r#const;
 mod macros;
 mod macros_impl_to_json;
+#[cfg(feature = "proc-macro")]
 mod macros_proc_macro_to_json;
 
 #[doc(hidden)]
 pub mod __private;
+
+#[cfg(feature = "proc-macro")]
+pub mod proc_macro;
