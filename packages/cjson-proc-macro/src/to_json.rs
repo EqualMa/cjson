@@ -1,21 +1,27 @@
-use proc_macro::{Ident, TokenStream};
+use proc_macro::{Ident, Punct, Span, TokenStream, TokenTree};
 use typed_quote::{Either, IntoTokens, quote, tokens::IterTokens};
 
 use crate::{
     ErrorCollector, ident_match,
     syn_generic::{
         self, GroupBrace, ParseError, ParseGenericsOutput, SomeVisibility, StructData, WhereClause,
+        with_trailing_punct_if_not_empty,
     },
 };
 
 pub struct ToJson<'a> {
     pub input: &'a mut syn_generic::ParsingTokenStream,
     pub first_ident: proc_macro::Ident,
+    pub append_where_clause: Option<(Span, TokenStream)>,
 }
 
 impl<'a> ToJson<'a> {
     pub fn try_parse(self, errors: &mut ErrorCollector) -> Result<ToJsonItem, ParseError> {
-        let Self { input, first_ident } = self;
+        let Self {
+            input,
+            first_ident,
+            append_where_clause,
+        } = self;
 
         enum Kind {
             Struct,
@@ -64,6 +70,28 @@ impl<'a> ToJson<'a> {
         if let Err(e) = input.expect_eof() {
             errors.push(e);
         }
+
+        let where_clause = match (where_clause, append_where_clause) {
+            (v, None::<_>) => v,
+            (None, Some((span, bounds))) => Some(WhereClause {
+                r#where: span.into(),
+                predicates: {
+                    with_trailing_punct_if_not_empty(
+                        //
+                        bounds.into_iter().collect::<Vec<_>>(),
+                        ',',
+                    )
+                },
+            }),
+            (Some(mut where_clause), Some((_, bounds))) => {
+                where_clause.predicates.extend(bounds);
+
+                where_clause.predicates =
+                    with_trailing_punct_if_not_empty(where_clause.predicates, ',');
+
+                Some(where_clause)
+            }
+        };
 
         Ok(ToJsonItem {
             name: item_name,

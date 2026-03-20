@@ -1,13 +1,13 @@
 pub mod attrs {
     pub mod r#struct {
         pub mod cjson {
-            pub use super::super::common::cjson::crate_;
+            pub use super::super::common::cjson::{crate_, r#where};
         }
     }
 
     pub mod r#enum {
         pub mod cjson {
-            pub use super::super::common::cjson::crate_;
+            pub use super::super::common::cjson::{crate_, r#where};
         }
     }
 
@@ -22,6 +22,7 @@ pub mod attrs {
             /// struct Obj {}
             /// ```
             pub mod crate_ {}
+            pub mod r#where {}
         }
     }
 }

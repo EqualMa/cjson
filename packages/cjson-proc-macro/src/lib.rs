@@ -17,8 +17,14 @@ mod to_json;
 
 struct ItemAttrsParser<'a> {
     crate_path: Option<TokenStream>,
+    r#where: Option<ItemAttrWhere>,
 
     errors: &'a mut ErrorCollector,
+}
+
+struct ItemAttrWhere {
+    where_span: Span,
+    bound: TokenStream,
 }
 
 struct IdentTree {
@@ -92,6 +98,7 @@ impl<'a> ItemAttrsParser<'a> {
     pub fn new(errors: &'a mut ErrorCollector) -> Self {
         Self {
             crate_path: Default::default(),
+            r#where: Default::default(),
             errors,
         }
     }
@@ -119,6 +126,7 @@ impl<'a> ItemAttrsParser<'a> {
     ) -> Result<IdentTree, syn_generic::ParseError> {
         enum Config {
             Crate,
+            Where,
         }
 
         let config_mod_name;
@@ -131,6 +139,14 @@ impl<'a> ItemAttrsParser<'a> {
             b"crate_" => {
                 config_mod_name = "";
                 Config::Crate
+            }
+            b"where" => {
+                config_mod_name = "r#where";
+                Config::Where
+            }
+            b"where_" => {
+                config_mod_name = "";
+                Config::Where
             }
             _ =>
                 return Err(syn_generic::ParseError::custom(
@@ -159,15 +175,7 @@ impl<'a> ItemAttrsParser<'a> {
                             path.span(),
                         ));
                     }
-                    syn_generic::MetaAfterPath::Group(group) => {
-                        if self.crate_path.is_some() {
-                            break 'v Err(syn_generic::ParseError::custom(
-                                "expect `crate(::path::to::crate_cjson)`",
-                                path.span(),
-                            ));
-                        }
-                        group.stream()
-                    }
+                    syn_generic::MetaAfterPath::Group(group) => group.stream(),
                     syn_generic::MetaAfterPath::Eq {
                         eq,
                         before_comma_or_eof: _,
@@ -180,6 +188,51 @@ impl<'a> ItemAttrsParser<'a> {
                 };
 
                 self.crate_path = Some(value);
+
+                Ok(())
+            }
+            Config::Where => 'v: {
+                config_children = vec![];
+
+                if self.r#where.is_some() {
+                    break 'v Err(syn_generic::ParseError::custom(
+                        "duplicated attribute `where`",
+                        path.span(),
+                    ));
+                }
+
+                let value = match after_path {
+                    syn_generic::MetaAfterPath::Empty => Err(path.span()),
+                    syn_generic::MetaAfterPath::Group(group) => Err(group.span_open()),
+                    syn_generic::MetaAfterPath::Eq {
+                        eq,
+                        mut before_comma_or_eof,
+                    } => match before_comma_or_eof.next() {
+                        Some(TokenTree::Group(g)) => {
+                            let value = g.stream();
+                            if let Err(e) = before_comma_or_eof.expect_eof() {
+                                self.errors().push(e);
+                            }
+                            Ok(value)
+                        }
+                        tt => Err(tt.map_or_else(|| eq.span(), |tt| tt.span_open_or_entire())),
+                    },
+                };
+
+                let value = match value {
+                    Ok(value) => value,
+                    Err(span) => {
+                        break 'v Err(syn_generic::ParseError::custom(
+                            "expect `where = (Bounds:)`",
+                            span,
+                        ));
+                    }
+                };
+
+                self.r#where = Some(ItemAttrWhere {
+                    where_span: path.span(),
+                    bound: value,
+                });
 
                 Ok(())
             }
@@ -333,6 +386,7 @@ pub fn derive_to_json(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let item = to_json::ToJson {
         input: &mut input,
         first_ident,
+        append_where_clause: item_attrs.r#where.map(|v| (v.where_span, v.bound)),
     }
     .try_parse(&mut errors);
     let item = match item {

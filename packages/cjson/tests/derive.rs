@@ -68,7 +68,9 @@ fn obj_one_field() {
 }
 
 #[derive(ToJson)]
-struct ObjFields<'a, V: ToJson, const UNUSED: u32> {
+#[cjson(where = (V: ToJson))]
+#[cjson(crate(::cjson))]
+struct ObjFields<'a, V, const UNUSED: u32> {
     name: &'a str,
     value: V,
 }

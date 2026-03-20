@@ -161,6 +161,17 @@ impl From<TokenStream> for ParsingTokenStream {
     }
 }
 
+pub fn with_trailing_punct_if_not_empty(mut ts: Vec<TokenTree>, punct: char) -> Vec<TokenTree> {
+    if ts
+        .last()
+        .is_some_and(|tt| !matches!(tt, TokenTree::Punct(p) if *p == punct))
+    {
+        ts.push(TokenTree::Punct(Punct::new(punct, Spacing::Alone)));
+    }
+
+    ts
+}
+
 impl ParsingTokenStream {
     pub fn first(&self) -> Option<&TokenTree> {
         self.s.as_slice().first()
@@ -431,6 +442,7 @@ impl ParsingTokenStream {
         Ok((where_clause, out))
     }
 
+    /// Predicates will have an trailing comma if not empty.
     pub fn parse_where_clause(&mut self) -> Result<Option<WhereClause>, ParseError> {
         let r#where = next_if!(match self {
             #[next]
@@ -483,14 +495,7 @@ impl ParsingTokenStream {
                     return Err(error);
                 }
 
-                let mut ts = ts.to_vec();
-
-                if ts
-                    .last()
-                    .is_some_and(|tt| !matches!(tt, TokenTree::Punct(p) if *p == ','))
-                {
-                    ts.push(TokenTree::Punct(Punct::new(',', Spacing::Alone)));
-                }
+                let ts = with_trailing_punct_if_not_empty(ts.to_vec(), ',');
 
                 Ok(ts)
             },
@@ -878,6 +883,12 @@ pub struct IdentPub(Ident);
 
 /// `where`
 pub struct IdentWhere(Ident);
+
+impl From<Span> for IdentWhere {
+    fn from(span: Span) -> Self {
+        IdentWhere(Ident::new("where", span))
+    }
+}
 
 impl From<IdentWhere> for Ident {
     fn from(value: IdentWhere) -> Self {
