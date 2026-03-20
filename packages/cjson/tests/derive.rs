@@ -83,3 +83,28 @@ fn obj_fields() {
         r#"{"name":"hello","value":1}"#
     );
 }
+
+#[derive(ToJson)]
+enum Never {}
+
+#[test]
+fn never() {
+    assert_json_eq!(None::<Never>, "null");
+}
+
+/* TODO:
+#[derive(ToJson)]
+enum EnumOnlyUnit {
+    OnlyUnit,
+}
+
+#[derive(ToJson)]
+enum EnumOne {
+    Only(),
+}
+
+#[test]
+fn enum_one() {
+    assert_json_eq!(None::<Never>, "null");
+}
+*/

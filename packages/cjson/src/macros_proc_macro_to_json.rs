@@ -70,6 +70,48 @@ macro_rules! __private_proc_macro_to_json {
             )+
         }
     };
+    ((
+        enum {}
+    ) $data:tt ) => {
+        $crate::__private_proc_macro_to_json_item_resolved! {
+            $data
+            self
+            match (*self) {}
+        }
+    };
+    ((
+        enum {
+            $Var:ident $(,)?
+        }
+    ) $data:tt ) => {
+        $crate::__private_proc_macro_to_json_item_resolved! {
+            $data
+            self
+            match self {
+                Self::$Var => json!(
+                    const { $crate::__private::proc_macro::stringify!($Var) }
+                ),
+            }
+        }
+    };
+    ((
+        enum {
+            $Var:ident $var_body:tt $(,)?
+        }
+    ) $data:tt ) => {
+        $crate::__private_proc_macro_to_json_item_resolved! {
+            $data
+            self
+            match self {
+                $crate::__private_proc_macro_to_json_enum_var_pat!(
+                    $Var
+                    $var_body
+                ) => json!(
+                    const { $crate::__private::proc_macro::stringify!($Var) }
+                ),
+            }
+        }
+    };
 }
 
 #[macro_export]
@@ -111,6 +153,20 @@ macro_rules! __private_proc_macro_to_json_unnamed_fields {
                     (&self.$field) as &'cjson_lt_to_json $field_type,
                 )+
             ]
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_proc_macro_to_json_enum_var_pat {
+    [ $Var:ident () ] => [ Self::$Var() ];
+    [ $Var:ident {} ] => [ Self::$Var{} ];
+    ( $Var:ident ($($field_type:ty),+ $(,)?) ) => {
+        Self::$Var()
+    };
+    ( $Var:ident {$($field:ident : $field_type:ty),+ $(,)? } ) => {
+        Self::$Var {
+            $($field,)+
         }
     };
 }

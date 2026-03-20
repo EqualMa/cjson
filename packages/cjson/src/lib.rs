@@ -7,7 +7,7 @@ extern crate alloc;
 pub mod ser;
 pub mod values;
 
-pub use cjson_proc_macro::ToJson;
+pub use ::cjson_proc_macro::ToJson;
 pub use ser::ToJson;
 
 mod utils;

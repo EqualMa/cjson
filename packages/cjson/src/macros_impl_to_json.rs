@@ -4,6 +4,25 @@ macro_rules! impl_to_json {
         $(impl_generics![$($impl_generics:tt)*],)?
         $(where_clause![$($where_clause:tt)*],)?
         $({$($used_const_generics:tt)*},)?
+        |$_self:ident : $Type:ty|
+        match $matched:tt $match_body:tt
+    ) => {
+        $crate::__private_impl_to_json_match! {
+            ($matched)
+            $match_body
+            {$($($used_const_generics)*)?}
+            {
+                impl_generics($($($impl_generics)*)?)
+                where_clause($($($where_clause)*)?)
+                self($_self)
+                type($Type)
+            }
+        }
+    };
+    (
+        $(impl_generics![$($impl_generics:tt)*],)?
+        $(where_clause![$($where_clause:tt)*],)?
+        $({$($used_const_generics:tt)*},)?
         |$_self:ident : $Type:ty| $($macro_body:tt)*
     ) => {
         $crate::__private_impl_to_json_parse! {
@@ -171,6 +190,35 @@ macro_rules! __private_impl_to_json_expand {
                     <Self as $crate::__private::ImplToJsonHelper>::ImplToJsonHelper<'_>
                     as $crate::ser::ToJson
                 >::to_json(&$to_json_value)
+            }
+        }
+    }; };
+}
+
+#[macro_export]
+macro_rules! __private_impl_to_json_expand_verbatim {
+    (
+        mod($($mod_tt:tt)*)
+        type($ToJsonType:ty)
+        value($to_json_value:expr)
+        {
+            impl_generics($($impl_generics:tt)*)
+            where_clause($($where_clause:tt)*)
+            self($_self:ident)
+            type($Type:ty)
+        }
+    ) => { const _: () = {
+        $($mod_tt)*
+
+        impl< $($impl_generics)* > $crate::ser::ToJson
+            for $Type
+            $($where_clause)*
+        {
+            type ToJson<'cjson_lt_to_json> = $ToJsonType
+            where Self: 'cjson_lt_to_json;
+
+            fn to_json(&$_self) -> Self::ToJson<'_> {
+                $to_json_value
             }
         }
     }; };
@@ -712,4 +760,34 @@ macro_rules! __private_impl_to_json_for_type {
     (used_const_names($($consts:tt)+) prefix_path($($prefix_path:tt)*)) => {
         CjsonMacroGeneratedChunkWithConstGenerics<$($prefix_path)* HasConstCompileTimeChunk, $($consts)+>
     };
+}
+
+#[macro_export]
+macro_rules! __private_impl_to_json_match {
+    (
+        ($matched:tt)
+        $empty:tt // match empty
+        $used_const_generics:tt
+        $data:tt
+    ) => {
+        $crate::__private_impl_to_json_expand_verbatim! {
+            mod(
+                $crate::__private_impl_to_json_expect_empty! $used_const_generics
+            )
+            type($crate::values::Never)
+            value(match $crate::__private_impl_to_json_expand_matched!($matched) $empty)
+            $data
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_impl_to_json_expect_empty {
+    () => {};
+}
+
+#[macro_export]
+macro_rules! __private_impl_to_json_expand_matched {
+    [($matched:expr)] => [ $matched ];
+    [ $matched:expr ] => [ $matched ];
 }

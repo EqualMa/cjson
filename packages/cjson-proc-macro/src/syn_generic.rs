@@ -416,6 +416,21 @@ impl ParsingTokenStream {
         }
     }
 
+    pub fn parse_enum_after_generics(
+        &mut self,
+    ) -> Result<(Option<WhereClause>, GroupBrace), ParseError> {
+        let where_clause = self.parse_where_clause()?;
+
+        let out = next_if!(match self {
+            #[next]
+            Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Brace => GroupBrace(g),
+            #[skip]
+            tt => return Err(self.make_expect_err(tt, "expect `{...}`")),
+        });
+
+        Ok((where_clause, out))
+    }
+
     pub fn parse_where_clause(&mut self) -> Result<Option<WhereClause>, ParseError> {
         let r#where = next_if!(match self {
             #[next]
@@ -830,6 +845,12 @@ impl ParseError {
 
 pub struct GroupParen(Group);
 pub struct GroupBrace(Group);
+
+impl From<GroupBrace> for Group {
+    fn from(value: GroupBrace) -> Self {
+        value.0
+    }
+}
 
 /// `#`
 pub struct PunctPound(Punct);

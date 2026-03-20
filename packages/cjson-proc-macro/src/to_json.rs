@@ -1,9 +1,11 @@
 use proc_macro::{Ident, TokenStream};
-use typed_quote::{IntoTokens, quote, tokens::IterTokens};
+use typed_quote::{Either, IntoTokens, quote, tokens::IterTokens};
 
 use crate::{
     ErrorCollector, ident_match,
-    syn_generic::{self, ParseError, ParseGenericsOutput, SomeVisibility, StructData, WhereClause},
+    syn_generic::{
+        self, GroupBrace, ParseError, ParseGenericsOutput, SomeVisibility, StructData, WhereClause,
+    },
 };
 
 pub struct ToJson<'a> {
@@ -53,7 +55,9 @@ impl<'a> ToJson<'a> {
                 ToJsonItemData::Struct(struct_data)
             }
             Kind::Enum => {
-                todo!()
+                let enum_brace;
+                (where_clause, enum_brace) = input.parse_enum_after_generics()?;
+                ToJsonItemData::Enum(enum_brace)
             }
         };
 
@@ -120,15 +124,20 @@ impl ToJsonItem {
 
 enum ToJsonItemData {
     Struct(StructData),
+    Enum(GroupBrace),
 }
 
 impl ToJsonItemData {
     fn into_tokens(self) -> impl IntoTokens {
         match self {
-            ToJsonItemData::Struct(struct_data) => {
+            ToJsonItemData::Struct(struct_data) => Either::A({
                 let struct_data = struct_data.into_token_stream();
                 quote!(struct #struct_data)
-            }
+            }),
+            ToJsonItemData::Enum(group_brace) => Either::B({
+                let group_brace: proc_macro::Group = group_brace.into();
+                quote!(enum #group_brace)
+            }),
         }
     }
 }
