@@ -36,6 +36,12 @@ pub mod attrs {
             pub mod tag {}
             pub mod rename_fields {}
             pub mod transparent {}
+            pub mod to {}
+        }
+        pub mod field {
+            pub mod cjson {
+                pub mod to {}
+            }
         }
     }
 

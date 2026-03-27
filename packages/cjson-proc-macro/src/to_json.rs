@@ -2,7 +2,7 @@ use proc_macro::{Ident, Punct, Span, TokenStream, TokenTree};
 use typed_quote::{Either, IntoTokens, quote, tokens::IterTokens};
 
 use crate::{
-    ErrorCollector, ident_match,
+    ErrorCollector, IdentTree, ident_match,
     syn_generic::{
         self, GroupBrace, ParseError, ParseGenericsOutput, SomeVisibility, StructData, WhereClause,
         with_trailing_punct_if_not_empty,
@@ -24,6 +24,7 @@ impl<'a> ToJson<'a> {
         self,
         errors: &mut ErrorCollector,
         crate_path: TokenStream,
+        ident_trees: &mut Vec<IdentTree>,
     ) -> Result<ToJsonItem, ParseError> {
         let Self {
             input,
@@ -67,12 +68,20 @@ impl<'a> ToJson<'a> {
                 let struct_data;
                 (where_clause, struct_data) = input.parse_struct_after_generics()?;
 
+                let mut field_ident_trees = vec![];
                 let ctx = item_attrs.r#struct(errors).parse(
                     item_name.clone(),
                     struct_data,
                     errors,
+                    &mut field_ident_trees,
                     Options { crate_path },
                 );
+
+                ident_trees.push(IdentTree {
+                    ident: Ident::new("field", Span::call_site()),
+                    mod_name: "",
+                    children: field_ident_trees,
+                });
 
                 ToJsonItemData::Struct(ctx.into_to_json(errors))
             }

@@ -352,6 +352,7 @@ impl StructAttrs {
         name: Ident,
         struct_data: StructData,
         errors: &mut ErrorCollector,
+        field_ident_trees: &mut Vec<IdentTree>,
         options: Options,
     ) -> ContextOfStruct {
         let Self {
@@ -361,6 +362,8 @@ impl StructAttrs {
             tag,
             rename_fields,
         } = self;
+
+        let ident_trees = field_ident_trees;
 
         let fields;
         let fields_ident_to_index;
@@ -376,8 +379,6 @@ impl StructAttrs {
 
         let non_skip_field_count: usize;
 
-        let mut ident_trees = vec![];
-
         match struct_data {
             StructData::Paren { paren, semi } => {
                 _ = semi;
@@ -390,7 +391,7 @@ impl StructAttrs {
                 let res = ParsingTokenStream::from(paren.stream()).parse_into_unnamed_fields(
                     errors,
                     |_| StructFieldAttrsParser::default(),
-                    make_push_outer_attr(&mut ident_trees),
+                    make_push_outer_attr(ident_trees),
                     |_, attrs, ty, comma| {
                         if attrs.skip.is_none() {
                             non_skip_field_len += 1;
@@ -441,7 +442,7 @@ impl StructAttrs {
                 let res = ParsingTokenStream::from(brace.stream()).parse_into_named_fields(
                     errors,
                     |_| StructFieldAttrsParser::default(),
-                    make_push_outer_attr(&mut ident_trees),
+                    make_push_outer_attr(ident_trees),
                     |_, attrs, name, _colon, ty, _comma| {
                         if attrs.skip.is_none() {
                             non_skip_field_len += 1;

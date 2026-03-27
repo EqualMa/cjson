@@ -394,7 +394,7 @@ pub fn derive_to_json(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
     let default_span = first_ident.span();
 
-    let use_item_attrs = {
+    let mut item_ident_tree = {
         let root_mod_name = ident_match!(match first_ident {
             b"struct" => "r#struct",
             b"enum" => "r#enum",
@@ -408,7 +408,6 @@ pub fn derive_to_json(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             mod_name: "",
             children: config_ident_trees,
         }
-        .into_tokens()
     };
 
     let item = to_json::ToJson {
@@ -417,7 +416,11 @@ pub fn derive_to_json(input: proc_macro::TokenStream) -> proc_macro::TokenStream
         append_where_clause: r#where.map(|v| (v.where_span, v.bound)),
         item_attrs,
     }
-    .try_parse(&mut errors, crate_path.clone());
+    .try_parse(
+        &mut errors,
+        crate_path.clone(),
+        &mut item_ident_tree.children,
+    );
     let item = match item {
         Ok(item) => Some(item),
         Err(error) => {
@@ -425,6 +428,8 @@ pub fn derive_to_json(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             None
         }
     };
+
+    let use_item_attrs = item_ident_tree.into_tokens();
 
     let ts = item.map(|item| item.into_tokens(crate_path));
 
