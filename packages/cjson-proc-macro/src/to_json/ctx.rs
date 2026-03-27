@@ -48,7 +48,8 @@ impl From<MakeContextOfStruct> for ContextOfStruct {
             name,
             rename,
             accessed_rename: false,
-            rename_fields,
+            rename_fields: rename_fields
+                .map(|MetaPathSpanWith(span, paren)| MetaPathSpanWith(span, Rename::Paren(paren))),
             accessed_rename_fields: false,
             expanded_name: None,
             options,
@@ -69,7 +70,8 @@ pub struct ContextOfStruct {
     rename: Option<MetaPathSpanWith<Rename>>,
     accessed_rename: bool,
 
-    rename_fields: Option<MetaPathSpanWith<GroupParen>>,
+    /// Asserts [Rename::Paren]
+    rename_fields: Option<MetaPathSpanWith<Rename>>,
     accessed_rename_fields: bool,
 
     expanded_name: Option<Vec<TokenTree>>,
@@ -313,7 +315,14 @@ impl ContextOfStructField<'_> {
 
         let res;
 
-        let rename = this.rename.as_ref().or(self.ctx_struct.rename.as_ref());
+        let rename = match &this.rename {
+            Some(v) => Some(v),
+            None => {
+                self.ctx_struct.accessed_rename_fields = true;
+                self.ctx_struct.rename_fields.as_ref()
+            }
+        };
+
         let ts = if let Some(MetaPathSpanWith(rename_span, rename)) = rename {
             res = Ok(());
             rename.to_tokens_as_json_object_key(
