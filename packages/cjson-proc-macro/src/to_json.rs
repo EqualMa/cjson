@@ -7,10 +7,12 @@ use crate::{
         self, GroupBrace, ParseError, ParseGenericsOutput, SomeVisibility, StructData, WhereClause,
         with_trailing_punct_if_not_empty,
     },
-    to_json::item::Options,
+    to_json::ctx::Options,
 };
 
 pub mod item;
+
+mod ctx;
 
 pub struct ToJson<'a> {
     pub input: &'a mut syn_generic::ParsingTokenStream,
