@@ -7,20 +7,29 @@ use crate::{
         self, GroupBrace, ParseError, ParseGenericsOutput, SomeVisibility, StructData, WhereClause,
         with_trailing_punct_if_not_empty,
     },
+    to_json::item::Options,
 };
+
+pub mod item;
 
 pub struct ToJson<'a> {
     pub input: &'a mut syn_generic::ParsingTokenStream,
     pub first_ident: proc_macro::Ident,
     pub append_where_clause: Option<(Span, TokenStream)>,
+    pub item_attrs: item::ItemAttrsParser,
 }
 
 impl<'a> ToJson<'a> {
-    pub fn try_parse(self, errors: &mut ErrorCollector) -> Result<ToJsonItem, ParseError> {
+    pub fn try_parse(
+        self,
+        errors: &mut ErrorCollector,
+        crate_path: TokenStream,
+    ) -> Result<ToJsonItem, ParseError> {
         let Self {
             input,
             first_ident,
             append_where_clause,
+            item_attrs,
         } = self;
 
         enum Kind {
@@ -58,7 +67,14 @@ impl<'a> ToJson<'a> {
                 let struct_data;
                 (where_clause, struct_data) = input.parse_struct_after_generics()?;
 
-                ToJsonItemData::Struct(struct_data)
+                let ctx = item_attrs.r#struct(errors).parse(
+                    item_name.clone(),
+                    struct_data,
+                    errors,
+                    Options { crate_path },
+                );
+
+                ToJsonItemData::Struct(ctx.into_to_json(errors))
             }
             Kind::Enum => {
                 let enum_brace;
@@ -66,6 +82,21 @@ impl<'a> ToJson<'a> {
                 ToJsonItemData::Enum(enum_brace)
             }
         };
+
+        let where_clause = where_clause.map(
+            |WhereClause {
+                 r#where,
+                 predicates,
+             }| {
+                WhereClause {
+                    r#where,
+                    predicates: syn_generic::with_trailing_punct_if_not_empty(
+                        predicates.into_vec(),
+                        ',',
+                    ),
+                }
+            },
+        );
 
         if let Err(e) = input.expect_eof() {
             errors.push(e);
@@ -107,7 +138,7 @@ pub struct ToJsonItem {
     name: Ident,
     impl_generics: TokenStream,
     ty_generics: TokenStream,
-    where_clause: Option<WhereClause>,
+    where_clause: Option<WhereClause<Vec<TokenTree>>>,
     data: ToJsonItemData,
 }
 impl ToJsonItem {
@@ -137,30 +168,27 @@ impl ToJsonItem {
         let data = data.into_tokens();
 
         quote!(
-            #crate_path ::__private_proc_macro_to_json! {
-                (#data)
-                {
-                    impl_generics[#impl_generics]
-                    ty_generics[#ty_generics]
-                    where_clause[#where_clause]
-                    item_name(#name)
-                }
+            #crate_path ::impl_to_json! {
+                impl_generics![#impl_generics],
+                where_clause![#where_clause],
+                |self: #name< #ty_generics >|
+                    #data
             }
         )
     }
 }
 
 enum ToJsonItemData {
-    Struct(StructData),
+    Struct(Vec<TokenTree>),
     Enum(GroupBrace),
 }
 
 impl ToJsonItemData {
     fn into_tokens(self) -> impl IntoTokens {
         match self {
-            ToJsonItemData::Struct(struct_data) => Either::A({
-                let struct_data = struct_data.into_token_stream();
-                quote!(struct #struct_data)
+            ToJsonItemData::Struct(ts) => Either::A({
+                let ts = TokenStream::from_iter(ts);
+                ts
             }),
             ToJsonItemData::Enum(group_brace) => Either::B({
                 let group_brace: proc_macro::Group = group_brace.into();

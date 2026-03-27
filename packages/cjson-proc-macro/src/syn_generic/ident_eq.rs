@@ -70,15 +70,16 @@ fn display_into_buf<const N: usize>(v: impl fmt::Display) -> Buf<N> {
 pub struct IdentToBuf<const N: usize>(Buf<N>);
 
 impl<const N: usize> IdentToBuf<N> {
-    pub fn as_slice(&self) -> &[u8] {
-        self.0.buf.split_at(self.0.len).0
+    pub const fn try_as_slice(&self) -> Result<&[u8], &Self> {
+        match self.0.buf.split_at_checked(self.0.len) {
+            Some((s, _)) => Ok(s),
+            None => Err(self),
+        }
     }
 }
 
 pub fn _ident_to_buf<const N: usize>(ident: &impl fmt::Display) -> IdentToBuf<N> {
     let buf = display_into_buf(ident);
-
-    assert!(buf.len <= N, "N is too small");
 
     IdentToBuf(buf)
 }
@@ -106,6 +107,11 @@ macro_rules! ident_matches {
 
 macro_rules! ident_match {
     (match $id:ident $match_body:tt) => {
+        $crate::ident_match! {
+            match ($id) $match_body
+        }
+    };
+    (match ($id:expr) $match_body:tt) => {
         $crate::__ident_match_parse_pats! {
             (
                 match ($id) $match_body
@@ -126,7 +132,7 @@ macro_rules! __ident_match_parse_pats {
             match ($id:expr)
             $match_body:tt
         )
-        ($(($literals:literal))+)
+        ($(($literals:expr))+)
         $parsed:tt
         {} // EOF
     ) => {
@@ -134,7 +140,8 @@ macro_rules! __ident_match_parse_pats {
             $crate::ident_eq::max([
                 $($literals.len(),)+
             ])
-        }>(&$id).as_slice()
+        }>(&$id).try_as_slice()
+        .unwrap_or(b"") // ident cannot be empty
         $match_body
     };
     (
@@ -157,6 +164,31 @@ macro_rules! __ident_match_parse_pats {
             $parsed
             {
                 pat[$($lit)|+]
+                if[]
+            }
+            { $($after_fat_arrow)* }
+        }
+    };
+    (
+        $data:tt
+        ($($literals:tt)*)
+        $parsed:tt
+        {
+            $(|)? $(const_pattern!($e:expr))|+ =>
+            $($after_fat_arrow:tt)*
+        }
+    ) => {
+        $crate::__ident_match_after_fat_arrow! {
+            {
+                $data
+                (
+                    $($literals)*
+                    $( ($e) )+
+                )
+            }
+            $parsed
+            {
+                todo!()
                 if[]
             }
             { $($after_fat_arrow)* }
@@ -225,8 +257,13 @@ macro_rules! __ident_match_after_fat_arrow {
     };
 }
 
+macro_rules! const_pattern {
+    [$pat:pat] => [ $pat ];
+}
+
 pub(crate) use {
-    __ident_match_after_fat_arrow, __ident_match_parse_pats, ident_match, ident_matches,
+    __ident_match_after_fat_arrow, __ident_match_parse_pats, const_pattern, ident_match,
+    ident_matches,
 };
 
 pub const fn max<const N: usize>(nums: [usize; N]) -> usize {

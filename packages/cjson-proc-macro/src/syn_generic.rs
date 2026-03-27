@@ -1,6 +1,11 @@
 use std::{
     borrow::{Borrow, Cow},
+    convert::Infallible,
     iter,
+    mem::ManuallyDrop,
+    ops::{self, Add, Deref},
+    process::Output,
+    vec,
 };
 
 use proc_macro::{Delimiter, Group, Ident, Literal, Punct, Spacing, Span, TokenStream, TokenTree};
@@ -11,6 +16,167 @@ use crate::syn_generic;
 use self::ident_eq::ident_matches;
 
 pub(crate) mod ident_eq;
+
+pub mod parse_meta;
+pub mod parse_meta_utils;
+
+pub trait Parseable {}
+
+pub trait Parse<IN>: Sized + Parseable {
+    type ErrorPayload: TryUnwrapPayload<Self>;
+    type Error: Into<ParseError>;
+    type ErrorWithPayload: Into<ErrorWithPayload<Self::Error, Self::ErrorPayload>>;
+    fn parse(input: IN) -> Result<Self, Self::ErrorWithPayload>;
+
+    fn parse_and_report(input: IN, errors: &mut ErrorCollector) -> Result<Self, Self::Error> {
+        let err = match Self::parse(input) {
+            Ok(v) => return Ok(v),
+            Err(err) => err,
+        };
+        let ErrorWithPayload { error, payload } = err.into();
+
+        if let Some(payload) = payload.try_into_payload() {
+            errors.push(error.into());
+            Ok(payload)
+        } else {
+            Err(error)
+        }
+    }
+}
+
+pub trait ResultExt: Into<Result<Self::Ok, Self::Err>> {
+    type Ok;
+    type Err;
+}
+
+pub trait ResultWithPayload:
+    ResultExt<Err: Into<ErrorWithPayload<Self::Error, Self::ErrorPayload>>>
+{
+    type Error;
+    type ErrorPayload;
+}
+
+pub struct ErrorWithPayload<E, P> {
+    pub error: E,
+    pub payload: P,
+}
+
+pub struct NoPayload;
+
+impl From<Infallible> for NoPayload {
+    fn from(value: Infallible) -> Self {
+        match value {}
+    }
+}
+
+pub trait TryUnwrapPayload<P: Parseable> {
+    type HasPayload: Into<HasPayload<P>>;
+    type NoPayload: Into<NoPayload>;
+    fn try_unwrap_payload(self) -> Result<Self::HasPayload, Self::NoPayload>;
+    fn try_into_payload(self) -> Option<P>;
+}
+
+pub struct HasPayload<T>(pub T);
+
+impl<T> From<Infallible> for HasPayload<T> {
+    fn from(value: Infallible) -> Self {
+        match value {}
+    }
+}
+
+impl<T: Parseable> TryUnwrapPayload<T> for NoPayload {
+    type HasPayload = Infallible;
+    type NoPayload = NoPayload;
+
+    fn try_unwrap_payload(self) -> Result<Self::HasPayload, Self::NoPayload> {
+        Err(self)
+    }
+    fn try_into_payload(self) -> Option<T> {
+        None
+    }
+}
+
+impl<T: Parseable> TryUnwrapPayload<T> for T {
+    type HasPayload = HasPayload<T>;
+    type NoPayload = Infallible;
+
+    fn try_unwrap_payload(self) -> Result<Self::HasPayload, Self::NoPayload> {
+        Ok(HasPayload(self))
+    }
+    fn try_into_payload(self) -> Option<T> {
+        Some(self)
+    }
+}
+
+impl<T: Parseable> TryUnwrapPayload<T> for Option<T> {
+    type HasPayload = HasPayload<T>;
+    type NoPayload = NoPayload;
+    fn try_unwrap_payload(self) -> Result<Self::HasPayload, Self::NoPayload> {
+        match self {
+            Some(this) => Ok(HasPayload(this)),
+            None => Err(NoPayload),
+        }
+    }
+    fn try_into_payload(self) -> Option<T> {
+        self
+    }
+}
+
+impl<E> From<E> for ErrorWithPayload<E, NoPayload> {
+    fn from(error: E) -> Self {
+        Self {
+            error,
+            payload: NoPayload,
+        }
+    }
+}
+
+/// Expects eof.
+impl<T: for<'a> Parse<&'a mut ParsingTokenStream>> Parse<ParsingTokenStream> for T {
+    type ErrorPayload = Option<T>;
+    type Error = ParseError;
+    type ErrorWithPayload = ErrorWithPayload<Self::Error, Self::ErrorPayload>;
+
+    fn parse(mut input: ParsingTokenStream) -> Result<Self, Self::ErrorWithPayload> {
+        let payload = T::parse(&mut input).map_err(|error| {
+            let ErrorWithPayload { error, payload } = error.into();
+            ErrorWithPayload {
+                error: error.into(),
+                payload: payload.try_into_payload(),
+            }
+        })?;
+
+        match input.expect_eof() {
+            Ok(()) => Ok(payload),
+            Err(error) => Err(ErrorWithPayload {
+                error,
+                payload: Some(payload),
+            }),
+        }
+    }
+}
+
+/// Expects eof.
+impl<T: for<'a> Parse<&'a mut ParsingTokenStream>> Parse<Vec<TokenTree>> for T {
+    type ErrorPayload = <Self as Parse<ParsingTokenStream>>::ErrorPayload;
+    type Error = <Self as Parse<ParsingTokenStream>>::Error;
+    type ErrorWithPayload = <Self as Parse<ParsingTokenStream>>::ErrorWithPayload;
+
+    fn parse(input: Vec<TokenTree>) -> Result<Self, Self::ErrorWithPayload> {
+        <Self as Parse<ParsingTokenStream>>::parse(input.into())
+    }
+}
+
+/// Expects eof.
+impl<T: for<'a> Parse<&'a mut ParsingTokenStream>> Parse<TokenStream> for T {
+    type ErrorPayload = <Self as Parse<ParsingTokenStream>>::ErrorPayload;
+    type Error = <Self as Parse<ParsingTokenStream>>::Error;
+    type ErrorWithPayload = <Self as Parse<ParsingTokenStream>>::ErrorWithPayload;
+
+    fn parse(input: TokenStream) -> Result<Self, Self::ErrorWithPayload> {
+        <Self as Parse<ParsingTokenStream>>::parse(input.into())
+    }
+}
 
 mod token_tree_ext {
     pub trait Sealed {}
@@ -147,15 +313,58 @@ macro_rules! __next_if_parse_pats {
 }
 //
 
-pub struct ParsingTokenStream {
-    s: std::vec::IntoIter<TokenTree>,
+#[derive(Debug)]
+pub struct ParsingTokenStream<S = vec::IntoIter<TokenTree>> {
+    s: S,
     prev_span: Option<Span>,
 }
 
+pub type ParsingTokenStreamCow<'a> = ParsingTokenStream<TokenStreamCow<'a>>;
+
+pub enum TokenStreamCow<'a> {
+    Borrowed(&'a [TokenTree]),
+    Owned(vec::IntoIter<TokenTree>),
+}
+
+impl TokenStreamCow<'_> {
+    fn into_vec(self) -> Vec<TokenTree> {
+        match self {
+            TokenStreamCow::Borrowed(ts) => ts.into(),
+            TokenStreamCow::Owned(ts) => FromIterator::from_iter(ts),
+        }
+    }
+
+    pub fn as_slice(&self) -> &[TokenTree] {
+        match self {
+            TokenStreamCow::Borrowed(ts) => *ts,
+            TokenStreamCow::Owned(ts) => ts.as_slice(),
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.as_slice().len()
+    }
+
+    pub fn into_vec_iter(self) -> vec::IntoIter<TokenTree> {
+        match self {
+            TokenStreamCow::Borrowed(ts) => ts.to_vec().into_iter(),
+            TokenStreamCow::Owned(ts) => ts,
+        }
+    }
+}
+
+pub trait IterTokenTreeCow {}
+
 impl From<TokenStream> for ParsingTokenStream {
     fn from(value: TokenStream) -> Self {
+        value.into_iter().collect::<Vec<_>>().into()
+    }
+}
+
+impl From<Vec<TokenTree>> for ParsingTokenStream {
+    fn from(value: Vec<TokenTree>) -> Self {
         Self {
-            s: value.into_iter().collect::<Vec<_>>().into_iter(),
+            s: value.into_iter(),
             prev_span: None,
         }
     }
@@ -235,43 +444,27 @@ impl ParsingTokenStream {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.s.len() == 0
+    fn len(&self) -> usize {
+        self.s.len()
     }
 
-    fn consume_before_comma_or_eof(&mut self) -> Self {
-        let pos = self
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    fn take_all(&mut self) -> vec::IntoIter<TokenTree> {
+        if let Some(prev_span) = self
             .s
             .as_slice()
-            .iter()
-            .position(|tt| matches!(tt, TokenTree::Punct(p) if *p == ','));
-
-        if let Some(pos) = pos {
-            if pos == 0 {
-                Self {
-                    s: Default::default(),
-                    prev_span: self.prev_span,
-                }
-            } else {
-                self.prev_span = Some(self.s.as_slice()[pos - 1].span_close_or_entire());
-
-                Self {
-                    s: self.s.by_ref().take(pos).collect::<Vec<_>>().into_iter(),
-                    prev_span: self.prev_span,
-                }
-            }
-        } else {
-            if let Some(span) = self.s.as_slice().last().map(|v| v.span_close_or_entire()) {
-                self.prev_span = Some(span);
-            }
-
-            let s = core::mem::take(&mut self.s);
-
-            Self {
-                s,
-                prev_span: self.prev_span,
-            }
+            .last()
+            .map(TokenTreeExt::span_close_or_entire)
+        {
+            self.prev_span = Some(prev_span);
         }
+
+        let ts = std::mem::take(&mut self.s);
+
+        ts
     }
 
     pub fn parse_generics(&mut self) -> Result<ParseGenericsOutput, ParseError> {
@@ -336,30 +529,20 @@ impl ParsingTokenStream {
             }
 
             'bounds: {
-                let colon = next_if!(match self {
-                    #[next]
-                    Some(TokenTree::Punct(p)) if *p == ':' => PunctColon(p),
-                    #[skip]
+                match self.first() {
+                    Some(TokenTree::Punct(p)) if *p == ':' => {}
                     _ => break 'bounds,
-                });
+                }
 
-                () = self.parse_in_generics_before_punct(
-                    |ch| matches!(ch, '=' | ','),
-                    |ts| {
-                        if ts.len() > 0 {
-                            out.impl_generics
-                                .extend(iter::once(TokenTree::from(colon.0)).chain(ts.to_vec()));
-                        }
-                    },
-                );
+                let bounds = self.parse_in_generics_before_punct(|ch| matches!(ch, '=' | ','));
+
+                if bounds.len() > 0 {
+                    out.impl_generics.extend(bounds.into_vec_iter());
+                }
             }
 
-            () = self.parse_in_generics_before_punct(
-                |ch| matches!(ch, ','),
-                |_eq_default| {
-                    //
-                },
-            );
+            let eq_default = self.parse_in_generics_before_punct(|ch| matches!(ch, ','));
+            drop(eq_default);
 
             let comma = next_if!(match self {
                 #[next]
@@ -381,8 +564,8 @@ impl ParsingTokenStream {
 
     pub fn parse_struct_after_generics(
         &mut self,
-    ) -> Result<(Option<WhereClause>, StructData), ParseError> {
-        let where_clause = self.parse_where_clause()?;
+    ) -> Result<(Option<WhereClause<ConsumedTokens<'_>>>, StructData), ParseError> {
+        let (mut r#where, predicates) = self.parse_where_clause_impl()?;
 
         enum Out {
             Paren(GroupParen),
@@ -390,10 +573,12 @@ impl ParsingTokenStream {
             Semi(PunctSemi),
         }
 
-        let out = next_if!(match self {
+        let mut parsing_after_where_clause = ParsingAfterConsumedTokens(predicates);
+
+        let out = next_if!(match parsing_after_where_clause {
             #[next]
             Some(TokenTree::Group(g))
-                if g.delimiter() == Delimiter::Parenthesis && where_clause.is_none() =>
+                if g.delimiter() == Delimiter::Parenthesis && r#where.is_none() =>
             {
                 Out::Paren(GroupParen(g))
             }
@@ -406,51 +591,105 @@ impl ParsingTokenStream {
                 Out::Semi(PunctSemi(p))
             }
             #[skip]
-            tt => return Err(self.make_expect_err(tt, "unexpected token")),
+            _ =>
+                return Err(ParseError::custom(
+                    "unexpected token",
+                    parsing_after_where_clause.span_open_or_prev()
+                )),
         });
 
-        match out {
+        let data = match out {
             Out::Paren(paren) => {
-                let where_clause = self.parse_where_clause()?;
+                let this = parsing_after_where_clause
+                    .0
+                    .try_unwrap_rest()
+                    .ok()
+                    .expect("no where clause");
 
-                let semi = next_if!(match self {
+                let predicates;
+                (r#where, predicates) = this.parse_where_clause_impl()?;
+                parsing_after_where_clause = ParsingAfterConsumedTokens(predicates);
+
+                let semi = next_if!(match parsing_after_where_clause {
                     #[next]
                     Some(TokenTree::Punct(p)) if *p == ';' => PunctSemi(p),
                     #[skip]
-                    tt => return Err(self.make_expect_err(tt, "expect `;`")),
+                    _ =>
+                        return Err(ParseError::custom(
+                            "expect `;`",
+                            parsing_after_where_clause.span_open_or_prev()
+                        )),
                 });
 
-                Ok((where_clause, StructData::Paren { paren, semi }))
+                StructData::Paren { paren, semi }
             }
-            Out::Brace(g) => Ok((where_clause, StructData::Brace(g))),
-            Out::Semi(semi) => Ok((where_clause, StructData::Semi(semi))),
-        }
+            Out::Brace(g) => StructData::Brace(g),
+            Out::Semi(semi) => StructData::Semi(semi),
+        };
+
+        let where_clause = match r#where {
+            Some(r#where) => Some(WhereClause {
+                r#where,
+                predicates: parsing_after_where_clause.0,
+            }),
+            None => None,
+        };
+
+        Ok((where_clause, data))
     }
 
     pub fn parse_enum_after_generics(
         &mut self,
-    ) -> Result<(Option<WhereClause>, GroupBrace), ParseError> {
-        let where_clause = self.parse_where_clause()?;
+    ) -> Result<(Option<WhereClause<ConsumedTokens<'_>>>, GroupBrace), ParseError> {
+        let (r#where, predicates) = self.parse_where_clause_impl()?;
 
-        let out = next_if!(match self {
+        let mut parsing_after_where_clause = ParsingAfterConsumedTokens(predicates);
+
+        let out = next_if!(match parsing_after_where_clause {
             #[next]
             Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Brace => GroupBrace(g),
             #[skip]
-            tt => return Err(self.make_expect_err(tt, "expect `{...}`")),
+            _ =>
+                return Err(ParseError::custom(
+                    "expect `{...}`",
+                    parsing_after_where_clause.span_open_or_prev()
+                )),
         });
+
+        let where_clause = match r#where {
+            Some(r#where) => Some(WhereClause {
+                r#where,
+                predicates: parsing_after_where_clause.0,
+            }),
+            None => None,
+        };
 
         Ok((where_clause, out))
     }
 
-    /// Predicates will have an trailing comma if not empty.
-    pub fn parse_where_clause(&mut self) -> Result<Option<WhereClause>, ParseError> {
+    pub fn parse_where_clause(
+        &mut self,
+    ) -> Result<Option<WhereClause<ConsumedTokens<'_>>>, ParseError> {
+        let (r#where, predicates) = self.parse_where_clause_impl()?;
+        Ok(match r#where {
+            Some(r#where) => Some(WhereClause {
+                r#where,
+                predicates,
+            }),
+            None => None,
+        })
+    }
+
+    fn parse_where_clause_impl(
+        &mut self,
+    ) -> Result<(Option<IdentWhere>, ConsumedTokens<'_>), ParseError> {
         let r#where = next_if!(match self {
             #[next]
             Some(TokenTree::Ident(id)) if ident_matches!(id, b"where") => {
                 IdentWhere(id)
             }
             #[skip]
-            _ => return Ok(None),
+            _ => return Ok((None, ConsumedTokens::from(self))),
         });
 
         let mut nested = 0usize;
@@ -460,47 +699,40 @@ impl ParsingTokenStream {
             UnexpectedSemiInNested,
         }
 
-        let predicates = self.consume_before_or_all(
-            |tt, error: &mut _| {
-                match tt {
-                    TokenTree::Group(group)
-                        if nested == 0 && group.delimiter() == Delimiter::Brace =>
-                    {
+        let mut error = None::<(Error, Span)>;
+        let predicates = self.consume_before_or_all(|tt| {
+            match tt {
+                TokenTree::Group(group) if nested == 0 && group.delimiter() == Delimiter::Brace => {
+                    return true;
+                }
+                TokenTree::Punct(p) => match p.as_char() {
+                    '<' => nested += 1,
+                    '>' => {
+                        if nested == 0 {
+                            error = Some((Error::UnexpectedGt, p.span()));
+                            return true;
+                        } else {
+                            nested -= 1;
+                        }
+                    }
+                    ';' => {
+                        if nested > 0 {
+                            error = Some((Error::UnexpectedSemiInNested, p.span()));
+                        }
                         return true;
                     }
-                    TokenTree::Punct(p) => match p.as_char() {
-                        '<' => nested += 1,
-                        '>' => {
-                            if nested == 0 {
-                                *error = Some((Error::UnexpectedGt, p.span()));
-                                return true;
-                            } else {
-                                nested -= 1;
-                            }
-                        }
-                        ';' => {
-                            if nested > 0 {
-                                *error = Some((Error::UnexpectedSemiInNested, p.span()));
-                            }
-                            return true;
-                        }
-                        _ => {}
-                    },
                     _ => {}
-                }
-                false
-            },
-            |ts, error| {
-                if let Some(error) = error {
-                    return Err(error);
-                }
+                },
+                _ => {}
+            }
+            false
+        });
 
-                let ts = with_trailing_punct_if_not_empty(ts.to_vec(), ',');
-
-                Ok(ts)
-            },
-            None::<(Error, Span)>,
-        );
+        let predicates = if let Some(error) = error {
+            Err(error)
+        } else {
+            Ok(predicates)
+        };
 
         let predicates = match predicates {
             Ok(predicates) => predicates,
@@ -515,19 +747,15 @@ impl ParsingTokenStream {
             }
         };
 
-        Ok(Some(WhereClause {
-            r#where,
-            predicates,
-        }))
+        Ok((Some(r#where), predicates))
     }
 
-    fn parse_in_generics_before_punct<T>(
+    fn parse_in_generics_before_punct(
         &mut self,
         mut f: impl FnMut(char) -> bool,
-        output: impl FnOnce(&[TokenTree]) -> T,
-    ) -> T {
+    ) -> ConsumedTokens<'_> {
         let mut nested = 0usize;
-        let check = |tt: &_, (): &mut ()| {
+        let check = |tt: &_| {
             if let TokenTree::Punct(p) = tt {
                 match p.as_char() {
                     '<' => nested += 1,
@@ -546,50 +774,155 @@ impl ParsingTokenStream {
             false
         };
 
-        self.consume_before_or_all(check, |ts, ()| output(ts), ())
+        self.consume_before_or_all(check)
     }
 
-    fn consume_before_or_all<T, R>(
+    fn consume_before_or_all(
         &mut self,
-        mut f: impl FnMut(&TokenTree, &mut R) -> bool,
-        output: impl FnOnce(&[TokenTree], R) -> T,
-        mut resource: R,
-    ) -> T {
-        let pos = self.s.as_slice().iter().position(|tt| f(tt, &mut resource));
+        mut f: impl FnMut(&TokenTree) -> bool,
+    ) -> ConsumedTokens<'_> {
+        let pos = self.s.as_slice().iter().position(|tt| f(tt));
 
-        match pos {
-            Some(pos) => {
-                if pos == 0 {
-                    output(&[], resource)
-                } else {
-                    let out = output(&self.s.as_slice()[..pos], resource);
-
-                    let prev_span = self.s.as_slice()[pos - 1].span_close_or_entire();
-
-                    self.prev_span = Some(prev_span);
-
-                    () = self.s.by_ref().take(pos).for_each(drop);
-
-                    out
+        ConsumedTokens {
+            prev_span: self.prev_span,
+            pos: match pos {
+                Some(pos) => {
+                    if pos > 0 {
+                        let span = self.s.as_slice()[pos - 1].span_close_or_entire();
+                        self.prev_span = Some(span);
+                    }
+                    ConsumedTokensPos::Partial {
+                        consumed_len: pos,
+                        rest_start_from: pos,
+                    }
                 }
-            }
-            None => {
-                let out = output(self.s.as_slice(), resource);
-
-                if let Some(prev_span) = self
-                    .s
-                    .as_slice()
-                    .last()
-                    .map(TokenTreeExt::span_close_or_entire)
-                {
-                    self.prev_span = Some(prev_span);
+                None => {
+                    if let Some(last) = self
+                        .s
+                        .as_slice()
+                        .last()
+                        .map(TokenTreeExt::span_close_or_entire)
+                    {
+                        self.prev_span = Some(last);
+                    }
+                    ConsumedTokensPos::All
                 }
-
-                self.s = Default::default();
-
-                out
-            }
+            },
+            ts: Some(self),
         }
+    }
+
+    pub fn parse_into_unnamed_fields<Attrs, R>(
+        self,
+        resource: &mut R,
+        new_attrs: impl FnMut(&mut R) -> Attrs,
+        push_outer_attr: impl FnMut(&mut Attrs, &mut R, PunctPound, TokenTree),
+        mut push_field: impl FnMut(&mut R, Attrs, TokenStreamCow<'_>, Option<PunctComma>),
+    ) -> Result<(), ParseError> {
+        self.parse_into_field(
+            resource,
+            new_attrs,
+            push_outer_attr,
+            |_, _| Ok(()),
+            |resource, attrs, (), ty, comma| push_field(resource, attrs, ty, comma),
+        )
+    }
+
+    pub fn parse_into_named_fields<Attrs, R>(
+        self,
+        resource: &mut R,
+        new_attrs: impl FnMut(&mut R) -> Attrs,
+        push_outer_attr: impl FnMut(&mut Attrs, &mut R, PunctPound, TokenTree),
+        mut push_field: impl FnMut(
+            &mut R,
+            Attrs,
+            Ident,
+            PunctColon,
+            TokenStreamCow<'_>,
+            Option<PunctComma>,
+        ),
+    ) -> Result<(), ParseError> {
+        self.parse_into_field(
+            resource,
+            new_attrs,
+            push_outer_attr,
+            |input, _| {
+                let name = input.parse_ident()?;
+
+                let colon = match input.next() {
+                    Some(TokenTree::Punct(p)) if p.spacing() == Spacing::Alone && p == ':' => {
+                        PunctColon(p)
+                    }
+                    tt => {
+                        return Err(ParseError::custom(
+                            "expect `:`",
+                            tt.map(|tt| tt.span_open_or_entire()).unwrap_or(name.span()),
+                        ));
+                    }
+                };
+
+                Ok((name, colon))
+            },
+            |resource, attrs, (name, colon), ty, comma| {
+                push_field(resource, attrs, name, colon, ty, comma)
+            },
+        )
+    }
+
+    fn parse_into_field<Attrs, T, R>(
+        self,
+        mut resource: &mut R,
+        mut new_attrs: impl FnMut(&mut R) -> Attrs,
+        mut push_outer_attr: impl FnMut(&mut Attrs, &mut R, PunctPound, TokenTree),
+        mut parse_after_attrs: impl FnMut(&mut Self, &mut R) -> Result<T, ParseError>,
+        mut push: impl FnMut(&mut R, Attrs, T, TokenStreamCow<'_>, Option<PunctComma>),
+    ) -> Result<(), ParseError> {
+        let mut input = self;
+
+        while !input.is_empty() {
+            let mut attrs = new_attrs(&mut resource);
+            loop {
+                let pound = next_if!(match input {
+                    #[next]
+                    Some(TokenTree::Punct(punct)) if *punct == '#' => PunctPound(punct),
+                    #[skip]
+                    _ => break,
+                });
+
+                let bracket_meta = input.next_or_error()?;
+
+                push_outer_attr(&mut attrs, &mut resource, pound, bracket_meta);
+            }
+
+            let after_attrs = parse_after_attrs(&mut input, &mut resource)?;
+
+            let ty = input.parse_in_generics_before_punct(|ch| matches!(ch, ','));
+
+            let mut after_ty = ParsingAfterConsumedTokens(ty);
+            let mut res = Ok(());
+            let comma = next_if!(match after_ty {
+                #[next]
+                Some(TokenTree::Punct(punct)) if *punct == ',' => Some(PunctComma(punct)),
+                #[skip]
+                Some(tt) => {
+                    res = Err(ParseError::custom(
+                        "expect eof or `,`",
+                        tt.span_open_or_entire(),
+                    ));
+                    None
+                }
+                #[next]
+                None::<_> => None,
+            });
+
+            let ty = after_ty.0;
+
+            () = ty.use_tokens(|ty| push(resource, attrs, after_attrs, ty, comma));
+
+            res?;
+        }
+
+        input.expect_eof()
     }
 }
 
@@ -658,7 +991,9 @@ pub struct ParseItemStart {
     pub first_ident: Ident,
 }
 
-pub fn parse_meta_simple(input: &mut ParsingTokenStream) -> Result<MetaSimple, ParseError> {
+pub fn parse_meta_simple(
+    input: &mut ParsingTokenStream,
+) -> Result<MetaSimple<ConsumedTokens<'_>>, ParseError> {
     let path = input.parse_ident()?;
 
     let after_path = parse_meta_after_path(input);
@@ -666,12 +1001,12 @@ pub fn parse_meta_simple(input: &mut ParsingTokenStream) -> Result<MetaSimple, P
     Ok(MetaSimple { path, after_path })
 }
 
-pub struct MetaSimple {
+pub struct MetaSimple<AfterEq> {
     pub path: Ident,
-    pub after_path: MetaAfterPath,
+    pub after_path: MetaAfterPath<AfterEq>,
 }
 
-pub fn parse_meta_after_path(input: &mut ParsingTokenStream) -> MetaAfterPath {
+pub fn parse_meta_after_path(input: &mut ParsingTokenStream) -> MetaAfterPath<ConsumedTokens<'_>> {
     next_if!(match input {
         #[next]
         Some(TokenTree::Group(g)) => MetaAfterPath::Group(g),
@@ -679,7 +1014,8 @@ pub fn parse_meta_after_path(input: &mut ParsingTokenStream) -> MetaAfterPath {
         Some(TokenTree::Punct(p)) if *p == '=' => {
             MetaAfterPath::Eq {
                 eq: PunctEq(p),
-                before_comma_or_eof: input.consume_before_comma_or_eof(),
+                before_comma_or_eof: input
+                    .consume_before_or_all(|tt| matches!(tt, TokenTree::Punct(p) if *p == ',')),
             }
         }
         #[skip]
@@ -687,12 +1023,12 @@ pub fn parse_meta_after_path(input: &mut ParsingTokenStream) -> MetaAfterPath {
     })
 }
 
-pub enum MetaAfterPath {
+pub enum MetaAfterPath<AfterEq> {
     Empty,
     Group(Group),
     Eq {
         eq: PunctEq,
-        before_comma_or_eof: ParsingTokenStream,
+        before_comma_or_eof: AfterEq,
     },
 }
 
@@ -703,6 +1039,16 @@ pub trait CollectSeparated<T, P> {
 
     fn collect_with_last(self, last: T) -> Self::Collect;
     fn collect(self) -> Self::Collect;
+}
+
+impl<P> CollectSeparated<(), P> for () {
+    fn push_pair(&mut self, (): (), _: P) {}
+
+    type Collect = ();
+
+    fn collect_with_last(self, (): ()) -> Self::Collect {}
+
+    fn collect(self) -> Self::Collect {}
 }
 
 pub fn parse_comma_separated<T, R>(
@@ -738,6 +1084,7 @@ pub struct SomeVisibility {
     paren: Option<Group>,
 }
 
+#[derive(Clone)]
 pub struct ParseError(ParseErrorKind, Vec<ParseErrorKind>);
 
 impl ParseError {
@@ -800,6 +1147,7 @@ impl From<ParseErrorKind> for ParseError {
     }
 }
 
+#[derive(Clone)]
 enum ParseErrorKind {
     UnexpectedToken {
         span: Span,
@@ -849,11 +1197,70 @@ impl ParseError {
 }
 
 pub struct GroupParen(Group);
+impl GroupParen {
+    pub fn new(stream: TokenStream) -> Self {
+        Self(Group::new(Delimiter::Parenthesis, stream))
+    }
+    pub fn with_delimiter_span(mut self, span: Span) -> Self {
+        self.0.set_span(span);
+        self
+    }
+}
+
+impl Deref for GroupParen {
+    type Target = Group;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl TryFrom<Group> for GroupParen {
+    type Error = Group;
+
+    fn try_from(g: Group) -> Result<Self, Self::Error> {
+        if g.delimiter() == Delimiter::Parenthesis {
+            Ok(Self(g))
+        } else {
+            Err(g)
+        }
+    }
+}
 pub struct GroupBrace(Group);
+
+impl Deref for GroupBrace {
+    type Target = Group;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 impl From<GroupBrace> for Group {
     fn from(value: GroupBrace) -> Self {
         value.0
+    }
+}
+
+pub struct GroupBracket(Group);
+
+impl Deref for GroupBracket {
+    type Target = Group;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl GroupBracket {
+    pub fn parse_from_token_tree(tt: TokenTree) -> Result<Self, ParseError> {
+        match tt {
+            TokenTree::Group(group) if group.delimiter() == Delimiter::Bracket => Ok(Self(group)),
+            _ => Err(syn_generic::ParseError::custom(
+                "expect `[`",
+                tt.span_open_or_entire(),
+            )),
+        }
     }
 }
 
@@ -867,6 +1274,12 @@ pub struct PunctEq(Punct);
 pub struct PunctColon(Punct);
 /// `;`
 pub struct PunctSemi(Punct);
+
+impl PunctSemi {
+    pub fn span(&self) -> Span {
+        self.0.span()
+    }
+}
 /// `<`
 pub struct PunctLt(Punct);
 /// `>`
@@ -875,6 +1288,14 @@ pub struct PunctGt(Punct);
 impl PunctEq {
     pub fn span(&self) -> Span {
         self.0.span()
+    }
+}
+
+impl Deref for PunctComma {
+    type Target = Punct;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -896,7 +1317,7 @@ impl From<IdentWhere> for Ident {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ErrorCollector(Option<ParseError>);
 
 impl ErrorCollector {
@@ -907,6 +1328,14 @@ impl ErrorCollector {
         }
     }
 
+    pub fn push_custom(
+        &mut self,
+        msg: impl Into<std::borrow::Cow<'static, str>>,
+        span: impl Into<Option<Span>>,
+    ) {
+        self.push(ParseError::custom(msg, span));
+    }
+
     pub fn ok(self) -> Result<(), ParseError> {
         match self.0 {
             Some(err) => Err(err),
@@ -915,9 +1344,9 @@ impl ErrorCollector {
     }
 }
 
-pub struct WhereClause {
+pub struct WhereClause<Predicates> {
     pub r#where: IdentWhere,
-    pub predicates: Vec<TokenTree>,
+    pub predicates: Predicates,
 }
 
 pub enum StructData {
@@ -938,3 +1367,375 @@ impl StructData {
         }
     }
 }
+
+#[derive(Debug)]
+pub struct ConsumedTokens<'a> {
+    // ts.s is mutated when `ConsumedTokens` is dropped
+    // ts.prev_span is always up-to-date
+    ts: Option<&'a mut ParsingTokenStream>,
+    prev_span: Option<Span>,
+    pos: ConsumedTokensPos,
+}
+
+impl<'a> From<&'a mut ParsingTokenStream> for ConsumedTokens<'a> {
+    fn from(ts: &'a mut ParsingTokenStream) -> Self {
+        Self {
+            prev_span: ts.prev_span,
+            ts: Some(ts),
+            pos: ConsumedTokensPos::Partial {
+                consumed_len: 0,
+                rest_start_from: 0,
+            },
+        }
+    }
+}
+
+#[derive(Debug)]
+enum ConsumedTokensPos {
+    All,
+    Partial {
+        consumed_len: usize,
+        rest_start_from: usize,
+    },
+}
+
+fn dummy_tt() -> TokenTree {
+    TokenTree::Group(Group::new(Delimiter::None, TokenStream::new()))
+}
+
+impl<'a> ConsumedTokens<'a> {
+    pub fn into_vec_iter(self) -> vec::IntoIter<TokenTree> {
+        self.use_tokens(|v| v.into_vec_iter())
+    }
+
+    pub fn into_vec(self) -> Vec<TokenTree> {
+        self.use_tokens(|v| v.into_vec())
+    }
+
+    pub fn use_tokens<T>(self, output: impl FnOnce(TokenStreamCow<'_>) -> T) -> T {
+        match self.pos {
+            ConsumedTokensPos::Partial {
+                consumed_len,
+                rest_start_from: _,
+            } => {
+                if consumed_len == 0 {
+                    output(TokenStreamCow::Owned(Default::default()))
+                } else {
+                    output(TokenStreamCow::Borrowed(
+                        &self.ts.as_ref().unwrap().s.as_slice()[..consumed_len],
+                    ))
+                }
+            }
+            ConsumedTokensPos::All => {
+                let mut this = self;
+                let ts = this.ts.take().unwrap();
+                this.pos = ConsumedTokensPos::Partial {
+                    consumed_len: 0,
+                    rest_start_from: 0,
+                };
+
+                // ts.prev_span is already kept updated
+                let ts = std::mem::take(&mut ts.s);
+                output(TokenStreamCow::Owned(ts))
+            }
+        }
+    }
+
+    fn rest_as_slice(&self) -> &[TokenTree] {
+        match self.pos {
+            ConsumedTokensPos::All => &[],
+            ConsumedTokensPos::Partial {
+                consumed_len: _,
+                rest_start_from,
+            } => {
+                self.ts
+                    .as_ref()
+                    .unwrap()
+                    .s
+                    .as_slice()
+                    .split_at(rest_start_from)
+                    .1
+            }
+        }
+    }
+
+    fn rest_next(&mut self) -> Option<TokenTree> {
+        let ts = self.ts.as_mut().unwrap();
+        match &mut self.pos {
+            ConsumedTokensPos::All => None,
+            ConsumedTokensPos::Partial {
+                consumed_len,
+                rest_start_from: 0,
+            } => {
+                debug_assert_eq!(*consumed_len, 0);
+                ts.next()
+            }
+            ConsumedTokensPos::Partial {
+                consumed_len,
+                rest_start_from,
+            } => {
+                debug_assert!(*consumed_len <= *rest_start_from);
+
+                let tt = ts.s.as_mut_slice().get_mut(*rest_start_from);
+
+                match tt {
+                    Some(tt) => Some({
+                        *rest_start_from += 1;
+                        ts.prev_span = Some(tt.span_close_or_entire());
+                        let tt = std::mem::replace(tt, dummy_tt());
+                        tt
+                    }),
+                    None => None,
+                }
+            }
+        }
+    }
+
+    /// Returns Ok(_) if self is empty
+    pub fn try_unwrap_rest(mut self) -> Result<&'a mut ParsingTokenStream, Self> {
+        match self.pos {
+            ConsumedTokensPos::All if self.ts.as_ref().unwrap().is_empty() => {
+                self.pos = ConsumedTokensPos::Partial {
+                    consumed_len: 0,
+                    rest_start_from: 0,
+                };
+
+                Ok(self.ts.take().unwrap())
+            }
+            ConsumedTokensPos::Partial {
+                consumed_len,
+                rest_start_from: 0,
+            } => {
+                debug_assert_eq!(consumed_len, 0);
+                Ok(self.ts.take().unwrap())
+            }
+            _ => Err(self),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        match self.pos {
+            ConsumedTokensPos::All => self.ts.as_ref().unwrap().len(),
+            ConsumedTokensPos::Partial {
+                consumed_len,
+                rest_start_from,
+            } => {
+                debug_assert!(consumed_len <= rest_start_from);
+                consumed_len
+            }
+        }
+    }
+
+    pub fn parse(self) -> ParsingConsumedTokens<'a> {
+        ParsingConsumedTokens(match self.pos {
+            ConsumedTokensPos::Partial {
+                consumed_len,
+                rest_start_from,
+            } => {
+                debug_assert!(consumed_len <= rest_start_from);
+
+                let mut this = self;
+
+                let ts = std::mem::take(&mut this.ts).unwrap();
+
+                this.pos = ConsumedTokensPos::Partial {
+                    consumed_len: 0,
+                    rest_start_from: 0,
+                };
+
+                ParsingConsumedTokensInner::Partial {
+                    ts,
+                    prev_span: this.prev_span,
+                    start_from: 0,
+                    len: consumed_len,
+                    rest_start_from,
+                }
+            }
+            ConsumedTokensPos::All => {
+                let mut this = self;
+
+                let ts = std::mem::take(&mut this.ts).unwrap();
+
+                ts.prev_span = this.prev_span;
+
+                this.pos = ConsumedTokensPos::Partial {
+                    consumed_len: 0,
+                    rest_start_from: 0,
+                };
+
+                ParsingConsumedTokensInner::All(ts)
+            }
+        })
+    }
+}
+
+impl<'a> Drop for ConsumedTokens<'a> {
+    fn drop(&mut self) {
+        match self.pos {
+            ConsumedTokensPos::Partial {
+                consumed_len,
+                rest_start_from: 0,
+            } => {
+                debug_assert_eq!(consumed_len, 0);
+            }
+            ConsumedTokensPos::Partial {
+                consumed_len,
+                rest_start_from,
+            } => {
+                let ts = self.ts.as_mut().unwrap();
+                debug_assert!(consumed_len <= rest_start_from);
+
+                let _: TokenTree = ts.s.nth(rest_start_from - 1).unwrap();
+            }
+            ConsumedTokensPos::All => {
+                _ = {
+                    let ts = self.ts.as_mut().unwrap();
+                    ts.take_all()
+                }
+            }
+        }
+    }
+}
+
+pub struct ParsingAfterConsumedTokens<'a>(pub ConsumedTokens<'a>);
+
+impl<'a> ParsingAfterConsumedTokens<'a> {
+    pub fn first(&self) -> Option<&TokenTree> {
+        self.0.rest_as_slice().first()
+    }
+
+    pub fn next(&mut self) -> Option<TokenTree> {
+        self.0.rest_next()
+    }
+
+    pub fn span_open_or_prev(&self) -> Option<Span> {
+        match self.first().map(TokenTreeExt::span_open_or_entire) {
+            Some(v) => Some(v),
+            None => self.prev_span(),
+        }
+    }
+
+    fn prev_span(&self) -> Option<Span> {
+        self.0.ts.as_ref().unwrap().prev_span
+    }
+
+    pub fn expect_eof(&self) -> Result<(), ParseError> {
+        if self.first().is_none() {
+            Ok(())
+        } else {
+            Err(ParseError::custom("expect eof", self.prev_span()))
+        }
+    }
+}
+
+pub struct ParsingConsumedTokens<'a>(ParsingConsumedTokensInner<'a>);
+
+enum ParsingConsumedTokensInner<'a> {
+    All(&'a mut ParsingTokenStream),
+    Partial {
+        ts: &'a mut ParsingTokenStream,
+
+        prev_span: Option<Span>,
+        start_from: usize,
+        len: usize,
+
+        rest_start_from: usize,
+    },
+}
+
+impl<'a> Drop for ParsingConsumedTokensInner<'a> {
+    fn drop(&mut self) {
+        match self {
+            ParsingConsumedTokensInner::All(ts) => _ = ts.take_all(),
+            ParsingConsumedTokensInner::Partial {
+                ts,
+                prev_span: _,
+                start_from: _,
+                len: _,
+                rest_start_from,
+            } => {
+                let rest_start_from = *rest_start_from;
+                if rest_start_from > 0 {
+                    _ = ts.s.nth(rest_start_from - 1);
+                }
+            }
+        }
+    }
+}
+
+impl<'a> ParsingConsumedTokens<'a> {
+    pub fn next(&mut self) -> Option<TokenTree> {
+        match &mut self.0 {
+            ParsingConsumedTokensInner::All(ts) => ts.next(),
+            ParsingConsumedTokensInner::Partial {
+                ts,
+                prev_span,
+                start_from,
+                len,
+                rest_start_from: _,
+            } => {
+                let all = ts.s.as_mut_slice().split_at_mut(*len).0;
+
+                match all.get_mut(*start_from) {
+                    Some(tt) => Some({
+                        *start_from += 1;
+                        *prev_span = Some(tt.span_close_or_entire());
+
+                        std::mem::replace(tt, dummy_tt())
+                    }),
+                    None => None,
+                }
+            }
+        }
+    }
+
+    pub fn first(&self) -> Option<&TokenTree> {
+        match self.0 {
+            ParsingConsumedTokensInner::All(ref ts) => ts.first(),
+            ParsingConsumedTokensInner::Partial {
+                ref ts,
+                prev_span: _,
+                start_from,
+                len,
+                rest_start_from: _,
+            } => {
+                let all = ts.s.as_slice().split_at(len).0;
+                all.get(start_from)
+            }
+        }
+    }
+
+    pub fn prev_span(&self) -> Option<Span> {
+        match self.0 {
+            ParsingConsumedTokensInner::All(ref ts) => ts.prev_span,
+            ParsingConsumedTokensInner::Partial { prev_span, .. } => prev_span,
+        }
+    }
+
+    pub fn expect_eof(&self) -> Result<(), ParseError> {
+        if self.first().is_none() {
+            Ok(())
+        } else {
+            Err(ParseError::custom("expect eof", self.prev_span()))
+        }
+    }
+}
+
+impl Parseable for vec::IntoIter<TokenTree> {}
+impl Parse<ConsumedTokens<'_>> for vec::IntoIter<TokenTree> {
+    type ErrorPayload = NoPayload;
+    type Error = Infallible;
+    type ErrorWithPayload = Infallible;
+
+    fn parse(input: ConsumedTokens<'_>) -> Result<Self, Self::ErrorWithPayload> {
+        Ok(input.into_vec_iter())
+    }
+}
+
+impl From<Infallible> for ParseError {
+    fn from(value: Infallible) -> Self {
+        match value {}
+    }
+}
+
+pub struct Type();
