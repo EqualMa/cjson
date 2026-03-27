@@ -1247,6 +1247,7 @@ impl ContextOfStruct {
             Name,
             Self_,
             Field,
+            Tag,
             To,
         }
         let first_ident_type = 'first: {
@@ -1257,6 +1258,7 @@ impl ContextOfStruct {
                         b"name" => break 'first FirstIdentType::Name,
                         b"self" => break 'first FirstIdentType::Self_,
                         b"field" => break 'first FirstIdentType::Field,
+                        b"tag" => break 'first FirstIdentType::Tag,
                         b"to" => break 'first FirstIdentType::To,
                         _ => ident.span(),
                     })
@@ -1277,6 +1279,12 @@ impl ContextOfStruct {
             }
             FirstIdentType::Self_ => self.expand_self(first_ident_span, rest_prop, out, errors),
             FirstIdentType::Field => expand_field(self, first_ident_span, rest_prop, out, errors),
+            FirstIdentType::Tag => {
+                if let Some(rest_prop) = rest_prop.first() {
+                    errors.push_custom("property not defined on struct @tag", rest_prop.span());
+                }
+                self.expand_tag(out, first_ident_span, errors)
+            }
             FirstIdentType::To => {
                 enum AfterTo {
                     None,
