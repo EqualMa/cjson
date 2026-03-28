@@ -15,6 +15,8 @@ use crate::{
 
 use super::item::Rename;
 
+mod field;
+
 mod bracket_star;
 
 type EqValue = EqValueGeneric<vec::IntoIter<TokenTree>>;
@@ -120,45 +122,12 @@ impl From<Option<MetaPathSpanWith<EqValue>>> for ContextOfStructTag {
     }
 }
 
-pub struct ContextOfStructField<'a> {
-    ctx_struct: &'a mut ContextOfStruct,
-    index_field: usize,
-    span: Span,
-    span_self: Option<Span>,
-}
+type ContextOfStructField<'a> = field::ContextOfField<&'a mut ContextOfStruct>;
 
 macro_rules! ctx_struct_field {
     ($this:expr) => {
         $this.ctx_struct.fields[$this.index_field]
     };
-}
-
-fn match_ident_default(
-    mut rest_prop: std::vec::IntoIter<expand_props::Prop>,
-    errors: &mut ErrorCollector,
-) -> Option<Span> {
-    let res = match rest_prop.next() {
-        Some(expand_props::Prop::Ident(ident)) => ident_match!(match ident {
-            b"default" => Ok(ident.span()),
-            _ => Err(ident.span()),
-        }),
-        Some(expand_props::Prop::Literal(lit)) => Err(lit.span()),
-        None => return None,
-    };
-
-    let span_of_default = match res {
-        Ok(span_of_default) => span_of_default,
-        Err(err_span) => {
-            errors.push_custom("property not defined", err_span);
-            return None;
-        }
-    };
-
-    if let Some(prop) = rest_prop.as_slice().first() {
-        errors.push_custom("property not defined", prop.span());
-    }
-
-    Some(span_of_default)
 }
 
 trait TryWithOutSpan {
@@ -179,143 +148,46 @@ trait TryWithOutSpan {
 
 impl<T> TryWithOutSpan for T {}
 
-impl ContextOfStructField<'_> {
-    fn expand_field_props_maybe_empty(
+pub struct FieldHelper<'a> {
+    ctx_struct: &'a mut ContextOfStruct,
+    index_field: usize,
+}
+
+impl field::ContextSupportsField for &mut ContextOfStruct {
+    type FieldHelper<'a>
+        = FieldHelper<'a>
+    where
+        Self: 'a;
+
+    fn field_helper(&mut self, index_field: usize) -> Self::FieldHelper<'_> {
+        FieldHelper {
+            ctx_struct: self,
+            index_field,
+        }
+    }
+
+    fn field(&self, index_field: usize) -> &StructField {
+        &self.fields[index_field]
+    }
+
+    fn field_mut(&mut self, index_field: usize) -> &mut StructField {
+        &mut self.fields[index_field]
+    }
+
+    fn try_expand_prop_at_field(
         &mut self,
-        mut rest_prop: std::vec::IntoIter<expand_props::Prop>,
+        prop: expand_props::PropPath,
         out: TokensCollector<'_>,
         errors: &mut ErrorCollector,
-    ) {
-        let Some(first_prop) = rest_prop.next() else {
-            errors.push_custom("this property cannot expand to tokens", self.span);
-            return;
-        };
-        self.expand_field_prop((first_prop, rest_prop), out, errors)
+    ) -> Result<(), expand_props::PropPath> {
+        self.impl_try_expand_at_field(prop, out, errors)
     }
+}
 
-    fn expand_field_prop(
-        &mut self,
-        (first_prop, rest_prop): (expand_props::Prop, std::vec::IntoIter<expand_props::Prop>),
-        out: TokensCollector<'_>,
-        errors: &mut ErrorCollector,
-    ) {
-        let first_ident_span;
-
-        enum FirstIdentType {
-            Name,
-            To,
-            IndexToStr,
-            NameOrIndexToStr,
-            Expr,
-            Type,
-            ToKvs,
-            ToItems,
-        }
-        let first_ident_type = 'first: {
-            let err_span = match first_prop {
-                expand_props::Prop::Ident(ident) => {
-                    first_ident_span = ident.span();
-                    ident_match!(match ident {
-                        b"name" => break 'first FirstIdentType::Name,
-                        b"to" => break 'first FirstIdentType::To,
-                        b"index_to_str" => break 'first FirstIdentType::IndexToStr,
-                        b"name_or_index_to_str" => break 'first FirstIdentType::NameOrIndexToStr,
-                        b"expr" => break 'first FirstIdentType::Expr,
-                        b"type" => break 'first FirstIdentType::Type,
-                        b"to_kvs" => break 'first FirstIdentType::ToKvs,
-                        b"to_items" => break 'first FirstIdentType::ToItems,
-                        _ => ident.span(),
-                    })
-                }
-                expand_props::Prop::Literal(literal) => literal.span(),
-            };
-            errors.push_custom("property not defined on field of struct", err_span);
-            return;
-        };
-
-        let mut forbid_rest_prop = || {
-            if let Some(prop) = rest_prop.as_slice().first() {
-                errors.push_custom("property not defined", prop.span());
-            }
-        };
-
-        match first_ident_type {
-            FirstIdentType::Name => {
-                forbid_rest_prop();
-                self.expand_name(out, first_ident_span, errors)
-            }
-            FirstIdentType::To => match match_ident_default(rest_prop, errors) {
-                Some(span) => self.expand_default_to(span, out),
-                None => self.expand_to(out, first_ident_span, errors),
-            },
-            FirstIdentType::IndexToStr => {
-                forbid_rest_prop();
-                self.expand_index_to_str(out, first_ident_span, errors)
-            }
-            FirstIdentType::NameOrIndexToStr => {
-                forbid_rest_prop();
-                self.expand_name_or_index_to_str(out, first_ident_span)
-            }
-            FirstIdentType::Expr => {
-                forbid_rest_prop();
-                self.expand_expr(out, self.span, self.span_self)
-            }
-            FirstIdentType::Type => {
-                forbid_rest_prop();
-                self.expand_type(out)
-            }
-            FirstIdentType::ToKvs => match match_ident_default(rest_prop, errors) {
-                Some(span) => self.expand_to_kvs_default(out, span, errors),
-                None => self.expand_to_kvs(out, first_ident_span, errors),
-            },
-            FirstIdentType::ToItems => match match_ident_default(rest_prop, errors) {
-                Some(span) => self.expand_to_items_default(out, span, errors),
-                None => self.expand_to_items(out, first_ident_span, errors),
-            },
-        }
-    }
-
-    fn expand_name(
-        &mut self,
-        out: expand_props::TokensCollector<'_>,
-        span: Span,
-        errors: &mut ErrorCollector,
-    ) {
-        let res = self.try_expand_name(out, span);
-
-        if let Err(e) = res {
-            errors.push_custom(e.to_msg(), span);
-        }
-    }
-
-    fn try_expand_name(
-        &mut self,
-        mut out: expand_props::TokensCollector<'_>,
-        span: Span,
-    ) -> Result<(), StructFieldExpandNameError> {
-        let mut this = &mut ctx_struct_field!(self);
-
-        let (expanded_name, res) = match &mut this.expanded_name {
-            Some(expanded_name) => expanded_name,
-            None => {
-                let ts = self.calc_expand_name();
-
-                this = &mut ctx_struct_field!(self);
-                this.expanded_name.insert(ts)
-            }
-        };
-
-        out.extend(expanded_name.iter().map(make_fn_clone_and_set_span(span)));
-
-        *res
-    }
-
-    fn calc_expand_name(&mut self) -> (Vec<TokenTree>, Result<(), StructFieldExpandNameError>) {
-        let options = &self.ctx_struct.options;
+impl<'a> field::FieldHelper for FieldHelper<'a> {
+    fn to_calc_name(&mut self) -> field::CalcName<'_> {
         let this = &mut ctx_struct_field!(self);
         this.accessed_rename = true;
-
-        let res;
 
         let rename = match &this.rename {
             Some(v) => Some(v),
@@ -325,365 +197,21 @@ impl ContextOfStructField<'_> {
             }
         };
 
-        let ts = if let Some(MetaPathSpanWith(rename_span, rename)) = rename {
-            res = Ok(());
-            rename.to_tokens_as_json_object_key(
-                //
-                &options.crate_path,
-                *rename_span,
-                &this.name,
-            )
-        } else {
-            let name = &this.name;
-
-            let lit = match name {
-                typed_quote::Either::A(name) => {
-                    res = Ok(());
-                    crate::utils::ident_to_literal_string(name)
-                }
-                typed_quote::Either::B(index) => {
-                    res = Err(StructFieldExpandNameError);
-                    Literal::string("").with_replaced_span(index.span())
-                }
-            };
-
-            vec![lit.into()]
-        };
-
-        (ts, res)
+        field::CalcName {
+            options: &self.ctx_struct.options,
+            rename,
+            name: &this.name,
+        }
     }
 
-    fn expand_expr(&mut self, mut out: TokensCollector<'_>, span: Span, span_self: Option<Span>) {
+    fn to_calc_expr(&mut self) -> field::CalcExpr<'_> {
+        let name = ctx_struct_field!(self).name.clone();
         let ref_self_dot = self.ctx_struct.self_dot();
-
-        let ref_self_dot: TokenStream = if let Some(span_self) = span_self {
-            ref_self_dot
-                .iter()
-                .map(make_fn_clone_and_set_span(span_self))
-                .collect()
-        } else {
-            ref_self_dot.iter().cloned().collect()
-        };
-        let field_name = ctx_struct_field!(self)
-            .name
-            .clone()
-            .with_replaced_span(span);
-
-        let paren = quote!( (#ref_self_dot #field_name) ).with_default_span(span);
-        out.push(paren.into_token_tree());
-    }
-
-    fn expand_type(&self, mut out: TokensCollector<'_>) {
-        out.extend_from_slice(ctx_struct_field!(self).type_.as_slice());
-    }
-
-    fn expand_index_to_str(
-        &mut self,
-        out: TokensCollector<'_>,
-        span: Span,
-        errors: &mut ErrorCollector,
-    ) {
-        let res = self.try_expand_index_to_str(out, span);
-        if let Err(error) = res {
-            errors.push_custom(error.to_msg(), span);
-        }
-    }
-    fn try_expand_index_to_str(
-        &mut self,
-        mut out: TokensCollector<'_>,
-        span: Span,
-    ) -> Result<(), StructFieldExpandIndexToStrError> {
-        let mut this = &mut ctx_struct_field!(self);
-
-        let (expanded_index_to_str, res) = match &mut this.expanded_index_to_str {
-            Some(v) => v,
-            None => {
-                let ts = self.calc_expand_index_to_str();
-
-                this = &mut ctx_struct_field!(self);
-                this.expanded_index_to_str.insert(ts)
-            }
-        };
-
-        out.extend(
-            expanded_index_to_str
-                .iter()
-                .map(|tt| tt.clone().with_replaced_span(span)),
-        );
-
-        *res
-    }
-
-    fn calc_expand_index_to_str(
-        &self,
-    ) -> (Vec<TokenTree>, Result<(), StructFieldExpandIndexToStrError>) {
-        let res = match &ctx_struct_field!(self).name {
-            typed_quote::Either::A(_) => Err(StructFieldExpandIndexToStrError),
-            typed_quote::Either::B(index) => {
-                let _: &Literal = index;
-                Ok(())
-            }
-        };
-
-        let lit = Literal::string(&self.index_field.to_string());
-
-        (vec![lit.into()], res)
-    }
-
-    fn expand_name_or_index_to_str(&mut self, mut out: TokensCollector<'_>, span: Span) {
-        match self.try_expand_name(out.as_mut(), span) {
-            Ok(()) => {}
-            Err(_) => {
-                self.try_expand_index_to_str(out, span)
-                    .expect("unnamed field");
-            }
-        }
-    }
-
-    fn expand_to(&mut self, out: TokensCollector<'_>, span: Span, errors: &mut ErrorCollector) {
-        self.try_with_out_span(out, span, errors, Self::try_expand_to);
-    }
-
-    fn try_expand_to(
-        &mut self,
-        out: TokensCollector<'_>,
-        _span: Span, // TODO: link @to
-    ) -> Result<(), StructFieldExpandToError> {
-        PropExpanded::try_expand(
-            self,
-            |this| &mut ctx_struct_field!(this).to,
-            Self::calc_expand_to,
-            out,
-        )
-    }
-
-    fn calc_expand_to(&mut self) -> (Vec<TokenTree>, Result<(), StructFieldExpandToError>) {
-        let (ts, res) = CustomTokens::take_and_expand::<_, StructFieldExpandToDefaultError>(
-            self,
-            |ctx| &mut ctx_struct_field!(ctx).to.value,
-            |ctx, out| {
-                let span = ctx_struct_field!(ctx).name_span();
-                ctx.expand_default_to(span, out);
-                Ok(())
-            },
-        );
-
-        let res = match res {
-            Ok(()) => Ok(()),
-            Err(e) => match e {
-                CustomTokensExpandErrorOr::Custom(e) => Err(e.into()),
-                CustomTokensExpandErrorOr::Other(e) => match e {},
-            },
-        };
-
-        (ts, res)
-    }
-
-    fn expand_default_to(&mut self, span: Span, mut out: TokensCollector<'_>) {
-        self.expand_expr(out.as_mut(), span, None);
-        out.extend(
-            quote!(as &'cjson_lt_to_json)
-                .with_replaced_span(span)
-                .into_token_stream(),
-        );
-        self.expand_type(out);
-    }
-
-    fn expand_to_kvs_default(
-        &mut self,
-        out: TokensCollector<'_>,
-        span: Span,
-        errors: &mut ErrorCollector,
-    ) {
-        self.try_with_out_span(out, span, errors, |this, out, span| {
-            this.try_expand_to_kvs_default(out, Some(span))
-        })
-    }
-
-    fn try_expand_to_kvs_default(
-        &mut self,
-        out: TokensCollector<'_>,
-        _span: Option<Span>, // TODO: link @to_kvs.default
-    ) -> Result<(), StructFieldExpandToKvsDefaultError> {
-        PropExpanded::try_expand(
-            self,
-            |this| &mut ctx_struct_field!(this).to_kvs.default,
-            Self::calc_expand_to_kvs_default,
-            out,
-        )
-    }
-
-    fn calc_expand_to_kvs_default(
-        &mut self,
-    ) -> (
-        Vec<TokenTree>,
-        Result<(), StructFieldExpandToKvsDefaultError>,
-    ) {
-        let this = &mut ctx_struct_field!(self);
-
-        match this.to_kvs.default.value {
-            StructFieldToKvsDefault::BracedNameEqTo => {
-                let mut inner = Vec::new();
-                let mut out = TokensCollector::from(&mut inner);
-                let span = this.name_span();
-                let expand_name = self.try_expand_name(out.as_mut(), span).err();
-                out.push(quote!(=).with_replaced_span(span).into_token_tree());
-                let expand_to = self.try_expand_to(out.as_mut(), span).err();
-
-                let inner = TokenStream::from_iter(inner);
-                let tt = quote!({ #inner }).with_default_span(span).into_token_tree();
-                let res = match (expand_name, expand_to) {
-                    (None::<_>, None::<_>) => Ok(()),
-                    (expand_name, expand_to) => Err(StructFieldExpandToKvsDefaultError::NameEqTo {
-                        expand_name,
-                        expand_to,
-                    }),
-                };
-                (vec![tt], res)
-            }
-            StructFieldToKvsDefault::Flatten { span } => {
-                match &this.name {
-                    typed_quote::Either::A(ident) => {
-                        let _: &Ident = ident;
-                    }
-                    typed_quote::Either::B(lit) => {
-                        let _: &Literal = lit;
-                        return (
-                            vec![quote!({}).with_default_span(span).into_token_tree()],
-                            Err(StructFieldExpandToKvsDefaultError::FlattenOnUnnamedField),
-                        );
-                    }
-                }
-                let mut ts = Vec::new();
-                self.expand_default_to(span, From::from(&mut ts));
-                (ts, Ok(()))
-            }
-        }
-    }
-
-    fn expand_to_kvs(&mut self, out: TokensCollector<'_>, span: Span, errors: &mut ErrorCollector) {
-        self.try_with_out_span(out, span, errors, Self::try_expand_to_kvs)
-    }
-
-    fn try_expand_to_kvs(
-        &mut self,
-        out: TokensCollector<'_>,
-        _span: Span, // TODO: link @to_kvs
-    ) -> Result<(), StructFieldExpandToKvsError> {
-        PropExpanded::try_expand(
-            self,
-            |this| &mut ctx_struct_field!(this).to_kvs.custom,
-            Self::calc_expand_to_kvs,
-            out,
-        )
-    }
-
-    fn calc_expand_to_kvs(&mut self) -> (Vec<TokenTree>, Result<(), StructFieldExpandToKvsError>) {
-        CustomTokens::take_and_expand(
-            self,
-            |this| &mut ctx_struct_field!(this).to_kvs.custom.value,
-            |this, out| this.try_expand_to_kvs_default(out, None),
-        )
-    }
-
-    fn expand_to_items_default(
-        &mut self,
-        out: TokensCollector<'_>,
-        span: Span, // TODO: link @to_items.default
-        errors: &mut ErrorCollector,
-    ) {
-        self.try_with_out_span(out, span, errors, |this, out, span| {
-            this.try_expand_to_items_default(out, Some(span))
-        })
-    }
-
-    fn try_expand_to_items_default(
-        &mut self,
-        out: TokensCollector<'_>,
-        _span: Option<Span>,
-    ) -> Result<(), StructFieldExpandToItemsDefaultError> {
-        PropExpanded::try_expand(
-            self,
-            |this| &mut ctx_struct_field!(this).to_items.default,
-            Self::calc_expand_to_items_default,
-            out,
-        )
-    }
-
-    fn calc_expand_to_items_default(
-        &mut self,
-    ) -> (
-        Vec<TokenTree>,
-        Result<(), StructFieldExpandToItemsDefaultError>,
-    ) {
-        let this = &mut ctx_struct_field!(self);
-
-        match this.to_items.default.value {
-            StructFieldToItemsDefault::BracketedTo => {
-                let mut inner = Vec::new();
-                let span = this.name_span();
-                let expand_to = self.try_expand_to(From::from(&mut inner), span).err();
-
-                let inner = TokenStream::from_iter(inner);
-                let tt = quote!( [#inner] ).with_default_span(span).into_token_tree();
-                let res = match expand_to {
-                    Some(e) => Err(StructFieldExpandToItemsDefaultError::To(e)),
-                    None => Ok(()),
-                };
-                (vec![tt], res)
-            }
-            StructFieldToItemsDefault::Flatten { span } => {
-                match &this.name {
-                    typed_quote::Either::A(ident) => {
-                        let _: &Ident = ident;
-                        return (
-                            vec![quote!([]).with_default_span(span).into_token_tree()],
-                            Err(StructFieldExpandToItemsDefaultError::FlattenOnNamedField),
-                        );
-                    }
-                    typed_quote::Either::B(lit) => {
-                        let _: &Literal = lit;
-                    }
-                }
-                let mut ts = Vec::new();
-                self.expand_default_to(span, From::from(&mut ts));
-                (ts, Ok(()))
-            }
-        }
-    }
-
-    fn expand_to_items(
-        &mut self,
-        out: TokensCollector<'_>,
-        span: Span,
-        errors: &mut ErrorCollector,
-    ) {
-        self.try_with_out_span(out, span, errors, Self::try_expand_to_items)
-    }
-
-    fn try_expand_to_items(
-        &mut self,
-        out: TokensCollector<'_>,
-        _span: Span, // TODO: link @to_items
-    ) -> Result<(), StructFieldExpandToItemsError> {
-        PropExpanded::try_expand(
-            self,
-            |this| &mut ctx_struct_field!(this).to_items.custom,
-            Self::calc_expand_to_items,
-            out,
-        )
-    }
-
-    fn calc_expand_to_items(
-        &mut self,
-    ) -> (Vec<TokenTree>, Result<(), StructFieldExpandToItemsError>) {
-        CustomTokens::take_and_expand(
-            self,
-            |ctx| &mut ctx_struct_field!(ctx).to_items.custom.value,
-            |ctx, out| ctx.try_expand_to_items_default(out, None),
-        )
+        field::CalcExpr::RefSelfDot { ref_self_dot, name }
     }
 }
+
+impl ContextOfStructField<'_> {}
 
 pub struct MakeStructField {
     pub skip: Option<FlagPresent>,
@@ -718,6 +246,7 @@ impl From<MakeStructField> for StructField {
             accessed_rename: false,
             expanded_name: None,
             expanded_index_to_str: None,
+            calc_index_to_str: None,
             to: PropExpanded::new(to),
             to_kvs: PropDefaultCustom::new(to_kvs_default, to_kvs_custom),
             to_items: PropDefaultCustom::new(to_items_default, to_items_custom),
@@ -738,6 +267,8 @@ pub struct StructField {
     expanded_name: Option<(Vec<TokenTree>, Result<(), StructFieldExpandNameError>)>,
 
     expanded_index_to_str: Option<(Vec<TokenTree>, Result<(), StructFieldExpandIndexToStrError>)>,
+
+    calc_index_to_str: Option<String>,
 
     /// The custom `to`
     to: PropExpandedWithErr<Option<CustomTokens>, CustomTokensExpandError>,
@@ -950,6 +481,12 @@ impl StructFieldExpandNameError {
 
 #[derive(Debug, Clone, Copy)]
 struct StructFieldExpandIndexToStrError;
+
+impl IntoParseErrorWithSpan for StructFieldExpandIndexToStrError {
+    fn into_parse_error_with_span(self, span: Span) -> ParseError {
+        ParseError::custom(self.to_msg(), span)
+    }
+}
 
 impl StructFieldExpandIndexToStrError {
     fn to_msg(&self) -> impl Into<std::borrow::Cow<'static, str>> {
@@ -1882,51 +1419,35 @@ impl IntoParseErrorWithSpan for OnlyFieldError {
     }
 }
 
-impl<'this> Context for ContextOfStructField<'this> {
-    fn at_bracket_star<'a>(
-        &'a mut self,
-        star_span: Span,
-        errors: &mut ErrorCollector,
-    ) -> impl use<'a, 'this> + ContextAtBracketStar {
-        errors.push_custom("struct field doesn't support `@[...]*`", star_span);
-
-        expand_props::ErroredContext
-    }
-
-    fn at_bracket_question<'a>(
-        &'a mut self,
-        question_span: Span,
-        errors: &mut ErrorCollector,
-    ) -> Option<impl use<'a, 'this> + Context> {
-        errors.push_custom("struct field doesn't support `@[...]?`", question_span);
-
-        None::<expand_props::NeverContext>
-    }
-
-    fn expand_prop(
+impl ContextOfStruct {
+    fn impl_try_expand_at_field(
         &mut self,
-        expand_props::PropPath(first_prop, rest_prop): expand_props::PropPath,
+        prop: expand_props::PropPath,
         out: TokensCollector<'_>,
         errors: &mut ErrorCollector,
-    ) {
+    ) -> Result<(), expand_props::PropPath> {
         enum FirstProp {
             Self_(Span),
             Item(Span),
-            Other,
         }
-        let first_prop_type = match &first_prop {
-            expand_props::Prop::Ident(ident) => ident_match!(match ident {
-                b"self" => FirstProp::Self_(ident.span()),
-                b"item" => FirstProp::Item(ident.span()),
-                _ => FirstProp::Other,
-            }),
-            expand_props::Prop::Literal(_) => FirstProp::Other,
+        let first_prop_type = 'first: {
+            match &prop.0 {
+                expand_props::Prop::Ident(ident) => ident_match!(match ident {
+                    b"self" => break 'first FirstProp::Self_(ident.span()),
+                    b"item" => break 'first FirstProp::Item(ident.span()),
+                    _ => {}
+                }),
+                expand_props::Prop::Literal(_) => {}
+            }
+
+            return Err(prop);
         };
+
+        let expand_props::PropPath(_first_prop, rest_prop) = prop;
 
         match first_prop_type {
             FirstProp::Self_(span_self) => {
-                self.ctx_struct
-                    .expand_self(span_self, rest_prop, out, errors);
+                self.expand_self(span_self, rest_prop, out, errors);
             }
             FirstProp::Item(span) => 'ret: {
                 let mut rest_prop = rest_prop.into_iter();
@@ -1936,16 +1457,15 @@ impl<'this> Context for ContextOfStructField<'this> {
                     break 'ret;
                 };
 
-                self.ctx_struct.expand_prop(
+                self.expand_prop(
                     expand_props::PropPath(first_prop, Vec::from_iter(rest_prop)),
                     out,
                     errors,
                 )
             }
-            FirstProp::Other => {
-                self.expand_field_prop((first_prop, rest_prop.into_iter()), out, errors)
-            }
         }
+
+        Ok(())
     }
 }
 
