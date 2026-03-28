@@ -15,6 +15,8 @@ use crate::{
 
 use super::item::Rename;
 
+mod bracket_star;
+
 type EqValue = EqValueGeneric<vec::IntoIter<TokenTree>>;
 
 pub struct MakeContextOfStruct {
@@ -1091,110 +1093,52 @@ pub struct Options {
     pub crate_path: TokenStream,
 }
 
-pub struct ContextAtBracketStarOfStruct<'a> {
-    ctx_struct: &'a mut ContextOfStruct,
-    star_span: Span,
+type ContextAtBracketStarOfStruct<'a> =
+    bracket_star::ContextAtBracketStarOf<&'a mut ContextOfStruct>;
 
-    // asserts `ctx_struct.fields[index].skip.is_none()` or `index == ctx_struct.fields.len()`
-    index: usize,
-}
-
-impl<'a> Drop for ContextAtBracketStarOfStruct<'a> {
-    fn drop(&mut self) {
-        if self.index != self.ctx_struct.fields.len() {
-            panic!("ContextAtBracketStarOfStruct not fully expanded")
-        }
+impl bracket_star::Field for StructField {
+    fn not_skipped(&self) -> bool {
+        self.skip.is_none()
     }
 }
 
-impl<'a> ContextAtBracketStarOfStruct<'a> {
-    fn new(ctx_struct: &'a mut ContextOfStruct, star_span: Span) -> Self {
-        Self {
-            index: ctx_struct
-                .fields
-                .iter()
-                .position(|f| f.skip.is_none())
-                .unwrap_or(ctx_struct.fields.len()),
-            ctx_struct,
-            star_span,
-        }
-    }
-}
+impl bracket_star::ContextSupportsAtBracketStar for &mut ContextOfStruct {
+    const MSG_CANNOT_NEST_BRACKET_STAR: &'static str = "struct `@[...]*` cannot be nested";
 
-impl<'this> Context for ContextAtBracketStarOfStruct<'this> {
-    fn at_bracket_star<'a>(
-        &'a mut self,
-        star_span: Span,
-        errors: &mut ErrorCollector,
-    ) -> impl use<'a, 'this> + ContextAtBracketStar {
-        errors.push_custom("struct `@[...]*` cannot be nested", star_span);
-        expand_props::ErroredContext
+    type Field = StructField;
+
+    fn fields(&self) -> &[Self::Field] {
+        &self.fields
     }
 
-    fn at_bracket_question<'a>(
-        &'a mut self,
-        question_span: Span,
-        errors: &mut ErrorCollector,
-    ) -> Option<impl use<'a, 'this> + Context> {
-        errors.push_custom("struct doesn't support `@[...]?`", question_span);
-        None::<expand_props::NeverContext>
+    fn should_expand_bracket_question(_: &Self::Field) -> Result<bool, &'static str> {
+        Err("struct doesn't support `@[...]?`")
     }
 
-    fn expand_prop(
+    fn expand_field_prop(
         &mut self,
-        prop: expand_props::PropPath,
-        out: expand_props::TokensCollector<'_>,
+        field_index: usize,
+        field_ident: bracket_star::IdentField,
+        rest_prop: Vec<expand_props::Prop>,
+        out: TokensCollector<'_>,
         errors: &mut ErrorCollector,
     ) {
-        let index = self.index;
-        if index < self.ctx_struct.fields.len() {
-            // continue
-        } else {
-            errors.push_custom(
-                "ContextAtBracketStarOfStruct overflowed. \
-                    Make sure to check has_current() before expand_prop().",
-                prop.0.span(),
-            );
-            return;
+        ContextOfStructField {
+            ctx_struct: self,
+            index_field: field_index,
+            span: field_ident.span(),
+            span_self: None,
         }
-
-        self.ctx_struct.expand_prop_impl(
-            prop,
-            out,
-            errors,
-            |ctx_struct, span, rest_prop, out, errors| {
-                ContextOfStructField {
-                    ctx_struct,
-                    index_field: self.index,
-                    span,
-                    span_self: None,
-                }
-                .expand_field_props_maybe_empty(rest_prop.into_iter(), out, errors)
-            },
-        )
-    }
-}
-
-impl<'this> ContextAtBracketStar for ContextAtBracketStarOfStruct<'this> {
-    fn has_current(&self) -> bool {
-        self.index < self.ctx_struct.fields.len()
+        .expand_field_props_maybe_empty(rest_prop.into_iter(), out, errors)
     }
 
-    fn next(&mut self) {
-        if self.index < self.ctx_struct.fields.len() {
-            self.index += 1;
-            match self
-                .ctx_struct
-                .fields
-                .split_at(self.index)
-                .1
-                .iter()
-                .position(|f| f.skip.is_none())
-            {
-                Some(pos) => self.index += pos,
-                None => self.index = self.ctx_struct.fields.len(),
-            }
-        }
+    fn expand_non_field_prop(
+        &mut self,
+        prop: expand_props::PropPath,
+        out: TokensCollector<'_>,
+        errors: &mut ErrorCollector,
+    ) {
+        ContextOfStruct::expand_non_field_prop(self, prop, out, errors)
     }
 }
 
@@ -1230,7 +1174,7 @@ impl Context for ContextOfStruct {
 impl ContextOfStruct {
     fn expand_prop_impl<'a>(
         &'a mut self,
-        expand_props::PropPath(first_prop, rest_prop): expand_props::PropPath,
+        prop: expand_props::PropPath,
         out: expand_props::TokensCollector<'_>,
         errors: &mut ErrorCollector,
         expand_field: impl FnOnce(
@@ -1241,12 +1185,24 @@ impl ContextOfStruct {
             &mut ErrorCollector,
         ),
     ) {
+        match bracket_star::field_or(prop) {
+            Ok((field_ident, rest_prop)) => {
+                expand_field(self, field_ident.span(), rest_prop, out, errors)
+            }
+            Err(prop) => self.expand_non_field_prop(prop, out, errors),
+        }
+    }
+    fn expand_non_field_prop<'a>(
+        &'a mut self,
+        expand_props::PropPath(first_prop, rest_prop): expand_props::PropPath,
+        out: expand_props::TokensCollector<'_>,
+        errors: &mut ErrorCollector,
+    ) {
         let first_ident_span;
 
         enum FirstIdentType {
             Name,
             Self_,
-            Field,
             Tag,
             To,
         }
@@ -1257,7 +1213,6 @@ impl ContextOfStruct {
                     ident_match!(match ident {
                         b"name" => break 'first FirstIdentType::Name,
                         b"self" => break 'first FirstIdentType::Self_,
-                        b"field" => break 'first FirstIdentType::Field,
                         b"tag" => break 'first FirstIdentType::Tag,
                         b"to" => break 'first FirstIdentType::To,
                         _ => ident.span(),
@@ -1278,7 +1233,6 @@ impl ContextOfStruct {
                 return;
             }
             FirstIdentType::Self_ => self.expand_self(first_ident_span, rest_prop, out, errors),
-            FirstIdentType::Field => expand_field(self, first_ident_span, rest_prop, out, errors),
             FirstIdentType::Tag => {
                 if let Some(rest_prop) = rest_prop.first() {
                     errors.push_custom("property not defined on struct @tag", rest_prop.span());
