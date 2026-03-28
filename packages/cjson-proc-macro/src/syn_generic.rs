@@ -11,7 +11,7 @@ use std::{
 use proc_macro::{Delimiter, Group, Ident, Literal, Punct, Spacing, Span, TokenStream, TokenTree};
 use typed_quote::{Either, IntoTokens, ToTokens, WithSpan, quote};
 
-use crate::syn_generic;
+use crate::{ident_match, syn_generic};
 
 use self::ident_eq::ident_matches;
 
@@ -817,14 +817,20 @@ impl ParsingTokenStream {
         resource: &mut R,
         new_attrs: impl FnMut(&mut R) -> Attrs,
         push_outer_attr: impl FnMut(&mut Attrs, &mut R, PunctPound, TokenTree),
-        mut push_field: impl FnMut(&mut R, Attrs, TokenStreamCow<'_>, Option<PunctComma>),
+        mut push_field: impl FnMut(
+            &mut R,
+            Attrs,
+            Option<SomeVisibility>,
+            TokenStreamCow<'_>,
+            Option<PunctComma>,
+        ),
     ) -> Result<(), ParseError> {
         self.parse_into_field(
             resource,
             new_attrs,
             push_outer_attr,
             |_, _| Ok(()),
-            |resource, attrs, (), ty, comma| push_field(resource, attrs, ty, comma),
+            |resource, attrs, vis, (), ty, comma| push_field(resource, attrs, vis, ty, comma),
         )
     }
 
@@ -836,6 +842,7 @@ impl ParsingTokenStream {
         mut push_field: impl FnMut(
             &mut R,
             Attrs,
+            Option<SomeVisibility>,
             Ident,
             PunctColon,
             TokenStreamCow<'_>,
@@ -863,8 +870,8 @@ impl ParsingTokenStream {
 
                 Ok((name, colon))
             },
-            |resource, attrs, (name, colon), ty, comma| {
-                push_field(resource, attrs, name, colon, ty, comma)
+            |resource, attrs, vis, (name, colon), ty, comma| {
+                push_field(resource, attrs, vis, name, colon, ty, comma)
             },
         )
     }
@@ -874,8 +881,15 @@ impl ParsingTokenStream {
         mut resource: &mut R,
         mut new_attrs: impl FnMut(&mut R) -> Attrs,
         mut push_outer_attr: impl FnMut(&mut Attrs, &mut R, PunctPound, TokenTree),
-        mut parse_after_attrs: impl FnMut(&mut Self, &mut R) -> Result<T, ParseError>,
-        mut push: impl FnMut(&mut R, Attrs, T, TokenStreamCow<'_>, Option<PunctComma>),
+        mut parse_after_vis: impl FnMut(&mut Self, &mut R) -> Result<T, ParseError>,
+        mut push: impl FnMut(
+            &mut R,
+            Attrs,
+            Option<SomeVisibility>,
+            T,
+            TokenStreamCow<'_>,
+            Option<PunctComma>,
+        ),
     ) -> Result<(), ParseError> {
         let mut input = self;
 
@@ -894,7 +908,9 @@ impl ParsingTokenStream {
                 push_outer_attr(&mut attrs, &mut resource, pound, bracket_meta);
             }
 
-            let after_attrs = parse_after_attrs(&mut input, &mut resource)?;
+            let vis = input.parse_vis();
+
+            let after_vis = parse_after_vis(&mut input, &mut resource)?;
 
             let ty = input.parse_in_generics_before_punct(|ch| matches!(ch, ','));
 
@@ -917,12 +933,40 @@ impl ParsingTokenStream {
 
             let ty = after_ty.0;
 
-            () = ty.use_tokens(|ty| push(resource, attrs, after_attrs, ty, comma));
+            () = ty.use_tokens(|ty| push(resource, attrs, vis, after_vis, ty, comma));
 
             res?;
         }
 
         input.expect_eof()
+    }
+
+    fn parse_vis(&mut self) -> Option<SomeVisibility> {
+        let r#pub = next_if!(match self {
+            #[next]
+            Some(TokenTree::Ident(ident)) if ident_matches!(ident, b"pub") => IdentPub(ident),
+            #[skip]
+            _ => return None,
+        });
+
+        let kind;
+        let paren = next_if!(match self {
+            #[next]
+            Some(TokenTree::Group(g))
+                if {
+                    kind = SomeVisibilityParenKind::try_parse(g);
+                    kind.is_some()
+                } =>
+                Some({
+                    let group = GroupParen(g);
+                    let kind = kind.unwrap();
+                    SomeVisibilityParen { group, kind: kind }
+                }),
+            #[skip]
+            _ => None,
+        });
+
+        Some(SomeVisibility { r#pub, paren })
     }
 }
 
@@ -956,30 +1000,7 @@ pub fn parse_item_start(
         parse_attr(pound, bracket_meta);
     }
 
-    let vis = 'vis: {
-        let ident_pub = next_if!(match input {
-            #[next]
-            Some(TokenTree::Ident(ident)) if ident_matches!(ident, b"pub") => IdentPub(ident),
-            #[skip]
-            _ => break 'vis None,
-        });
-
-        let paren = match input.first() {
-            Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Parenthesis => {
-                let g = match input.next() {
-                    Some(TokenTree::Group(g)) => g,
-                    _ => unreachable!(),
-                };
-                Some(g)
-            }
-            _ => None,
-        };
-
-        Some(SomeVisibility {
-            r#pub: ident_pub,
-            paren,
-        })
-    };
+    let vis = input.parse_vis();
 
     let first_ident = input.parse_ident()?;
 
@@ -1081,7 +1102,47 @@ pub fn parse_comma_separated<T, R>(
 
 pub struct SomeVisibility {
     r#pub: IdentPub,
-    paren: Option<Group>,
+    paren: Option<SomeVisibilityParen>,
+}
+
+pub struct SomeVisibilityParen {
+    group: GroupParen,
+    kind: SomeVisibilityParenKind,
+}
+
+impl SomeVisibilityParenKind {
+    fn try_parse(g: &Group) -> Option<Self> {
+        if g.delimiter() != Delimiter::Parenthesis {
+            return None;
+        }
+
+        let mut ts = g.stream().into_iter();
+
+        let Some(TokenTree::Ident(ident)) = ts.next() else {
+            return None;
+        };
+
+        let kind = ident_match!(match ident {
+            b"crate" => Self::Crate(IdentCrate(ident)),
+            b"self" => Self::Self_(IdentSelf(ident)),
+            b"super" => Self::Super(IdentSuper(ident)),
+            b"in" => return Some(Self::In(IdentIn(ident), ts)),
+            _ => return None,
+        });
+
+        if ts.next().is_some() {
+            return None;
+        }
+
+        Some(kind)
+    }
+}
+
+enum SomeVisibilityParenKind {
+    Crate(IdentCrate),
+    Self_(IdentSelf),
+    Super(IdentSuper),
+    In(IdentIn, proc_macro::token_stream::IntoIter),
 }
 
 #[derive(Clone)]
@@ -1301,6 +1362,14 @@ impl Deref for PunctComma {
 
 /// `pub`
 pub struct IdentPub(Ident);
+/// `crate`
+pub struct IdentCrate(Ident);
+/// `self`
+pub struct IdentSelf(Ident);
+/// `super`
+pub struct IdentSuper(Ident);
+/// `in`
+pub struct IdentIn(Ident);
 
 /// `where`
 pub struct IdentWhere(Ident);

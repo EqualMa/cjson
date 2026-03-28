@@ -396,7 +396,7 @@ impl StructAttrs {
                     errors,
                     |_| StructFieldAttrsParser::default(),
                     make_push_outer_attr(ident_trees),
-                    |_, attrs, ty, comma| {
+                    |_, attrs, _vis, ty, comma| {
                         if attrs.skip.is_none() {
                             non_skip_field_len += 1;
                         }
@@ -447,7 +447,7 @@ impl StructAttrs {
                     errors,
                     |_| StructFieldAttrsParser::default(),
                     make_push_outer_attr(ident_trees),
-                    |_, attrs, name, _colon, ty, _comma| {
+                    |_, attrs, _vis, name, _colon, ty, _comma| {
                         if attrs.skip.is_none() {
                             non_skip_field_len += 1;
                         }
