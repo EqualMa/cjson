@@ -118,6 +118,10 @@ impl<Ctx: ContextSupportsField> ContextOfField<Ctx> {
     fn field_mut(&mut self) -> &mut StructField {
         self.ctx_struct.field_mut(self.index_field)
     }
+
+    pub(super) fn field_name_span(&self) -> Span {
+        self.field().name_span()
+    }
 }
 
 impl<Ctx: ContextSupportsField> ContextOfField<Ctx> {
