@@ -11,13 +11,15 @@ use crate::{
         GroupParen, ParseError,
         parse_meta_utils::{EqValue as EqValueGeneric, FlagPresent, MetaPathSpanWith},
     },
-    to_json::ctx::non_field::ContextSupportsNonFieldProp,
 };
 
 use super::item::Rename;
 
 use self::{
-    context_with_fields::ContextWithFields as _, only_field::ContextSupportsOnlyField as _,
+    context_with_fields::ContextWithFields as _,
+    context_with_prop_tag::{ContextPropTagMut, ContextWithPropTag},
+    non_field::ContextSupportsNonFieldProp,
+    only_field::ContextSupportsOnlyField as _,
 };
 
 mod field;
@@ -29,6 +31,8 @@ mod context_with_fields;
 mod non_field;
 
 mod only_field;
+
+mod context_with_prop_tag;
 
 type EqValue = EqValueGeneric<vec::IntoIter<TokenTree>>;
 
@@ -157,7 +161,7 @@ trait TryWithOutSpan {
     }
 }
 
-impl<T> TryWithOutSpan for T {}
+impl<T: ?Sized> TryWithOutSpan for T {}
 
 pub struct FieldHelper<'a> {
     ctx_struct: &'a mut ContextOfStruct,
@@ -1064,35 +1068,27 @@ impl ContextOfStruct {
 
         (vec![tt], res)
     }
+}
 
-    fn expand_tag(&mut self, out: TokensCollector<'_>, span: Span, errors: &mut ErrorCollector) {
-        self.try_with_out_span(out, span, errors, |ctx, out, _span| ctx.try_expand_tag(out));
-    }
+impl ContextWithPropTag for ContextOfStruct {
+    const MSG_PROP_TAG_NOT_DEFINED: &'static str = "@tag not defined on struct";
 
-    fn try_expand_tag(&mut self, mut out: TokensCollector<'_>) -> Result<(), StructTagExpandError> {
-        let res;
-        let ts = match &mut self.tag {
-            ContextOfStructTag::Untagged { dummy } => {
-                res = Err(StructTagExpandError);
-                dummy.get_or_insert_with(|| {
-                    let tt = Literal::string("")
-                        .with_replaced_span(self.name.span())
-                        .into();
-                    vec![tt]
-                })
-            }
+    fn prop_tag_mut(&mut self) -> ContextPropTagMut<'_> {
+        match &mut self.tag {
+            ContextOfStructTag::Untagged { dummy } => ContextPropTagMut::Untagged {
+                default_span: self.name.span(),
+                cache_for_dummy: dummy,
+            },
             ContextOfStructTag::Tagged {
-                span_tag: _,
+                span_tag,
                 ts,
                 accessed,
-            } => {
-                *accessed = true;
-                res = Ok(());
-                ts.as_slice()
-            }
-        };
-        out.extend_from_slice(ts);
-        res
+            } => ContextPropTagMut::Tagged {
+                span_tag: *span_tag,
+                ts: ts.as_slice(),
+                accessed,
+            },
+        }
     }
 }
 
@@ -1168,11 +1164,11 @@ impl IntoParseErrorWithSpan for StructToTaggedDefaultExpandError {
 }
 
 #[derive(Clone, Copy)]
-struct StructTagExpandError;
+struct StructTagExpandError(&'static str);
 
 impl IntoParseErrorWithSpan for StructTagExpandError {
     fn into_parse_error_with_span(self, span: Span) -> ParseError {
-        ParseError::custom("@tag not defined on struct", span)
+        ParseError::custom(self.0, span)
     }
 }
 
