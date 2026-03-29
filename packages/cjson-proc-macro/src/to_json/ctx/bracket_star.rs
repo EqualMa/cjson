@@ -6,47 +6,22 @@ use crate::{
     ident_matches,
 };
 
-use super::field::ContextSupportsField;
+use super::{
+    context_with_fields::ContextWithFields, field::ContextSupportsField,
+    non_field::ContextSupportsNonFieldProp,
+};
 
-pub trait Field {
-    fn not_skipped(&self) -> bool;
-    fn skipped(&self) -> bool;
-}
-
-pub trait ContextSupportsAtBracketStar: ContextSupportsField {
+pub trait ContextSupportsAtBracketStar: ContextWithFields + ContextSupportsNonFieldProp {
     const MSG_CANNOT_NEST_BRACKET_STAR: &'static str;
-    type Field: Field;
-    fn fields(&self) -> &[Self::Field];
 
     fn should_expand_bracket_question(&self, field_index: usize) -> Result<bool, &'static str>;
-
-    fn expand_non_field_prop(
-        &mut self,
-        prop: PropPath,
-        out: TokensCollector<'_>,
-        errors: &mut ErrorCollector,
-    );
 }
 
 impl<Ctx: ContextSupportsAtBracketStar> ContextSupportsAtBracketStar for &mut Ctx {
     const MSG_CANNOT_NEST_BRACKET_STAR: &'static str = Ctx::MSG_CANNOT_NEST_BRACKET_STAR;
-    type Field = Ctx::Field;
-
-    fn fields(&self) -> &[Self::Field] {
-        Ctx::fields(self)
-    }
 
     fn should_expand_bracket_question(&self, field_index: usize) -> Result<bool, &'static str> {
         Ctx::should_expand_bracket_question(self, field_index)
-    }
-
-    fn expand_non_field_prop(
-        &mut self,
-        prop: PropPath,
-        out: TokensCollector<'_>,
-        errors: &mut ErrorCollector,
-    ) {
-        Ctx::expand_non_field_prop(self, prop, out, errors)
     }
 }
 

@@ -11,6 +11,7 @@ use crate::{
         GroupParen, ParseError,
         parse_meta_utils::{EqValue as EqValueGeneric, FlagPresent, MetaPathSpanWith},
     },
+    to_json::ctx::non_field::ContextSupportsNonFieldProp,
 };
 
 use super::item::Rename;
@@ -24,6 +25,8 @@ mod field;
 mod bracket_star;
 
 mod context_with_fields;
+
+mod non_field;
 
 mod only_field;
 
@@ -652,7 +655,7 @@ pub struct Options {
 type ContextAtBracketStarOfStruct<'a> =
     bracket_star::ContextAtBracketStarOf<&'a mut ContextOfStruct>;
 
-impl bracket_star::Field for StructField {
+impl StructField {
     fn not_skipped(&self) -> bool {
         self.skip.is_none()
     }
@@ -661,30 +664,19 @@ impl bracket_star::Field for StructField {
     }
 }
 
-impl bracket_star::ContextSupportsAtBracketStar for ContextOfStruct {
-    const MSG_CANNOT_NEST_BRACKET_STAR: &'static str = "struct `@[...]*` cannot be nested";
-
-    type Field = StructField;
-
-    fn fields(&self) -> &[Self::Field] {
+impl context_with_fields::ContextWithFields for ContextOfStruct {
+    fn fields(&self) -> &[StructField] {
         &self.fields
     }
+}
+
+impl bracket_star::ContextSupportsAtBracketStar for ContextOfStruct {
+    const MSG_CANNOT_NEST_BRACKET_STAR: &'static str = "struct `@[...]*` cannot be nested";
 
     fn should_expand_bracket_question(&self, _field_index: usize) -> Result<bool, &'static str> {
         Err("struct doesn't support `@[...]?`")
     }
-
-    fn expand_non_field_prop(
-        &mut self,
-        prop: expand_props::PropPath,
-        out: TokensCollector<'_>,
-        errors: &mut ErrorCollector,
-    ) {
-        self.impl_expand_non_field_prop(prop, out, errors)
-    }
 }
-
-impl context_with_fields::ContextWithFields for ContextOfStruct {}
 
 impl only_field::ContextSupportsOnlyField for ContextOfStruct {
     fn cache_for_only_field_index(&mut self) -> &mut Option<OnlyFieldResult<usize>> {
@@ -721,8 +713,8 @@ impl Context for ContextOfStruct {
     }
 }
 
-impl ContextOfStruct {
-    fn impl_expand_non_field_prop<'a>(
+impl ContextSupportsNonFieldProp for ContextOfStruct {
+    fn expand_non_field_prop<'a>(
         &'a mut self,
         expand_props::PropPath(first_prop, rest_prop): expand_props::PropPath,
         out: expand_props::TokensCollector<'_>,
@@ -818,7 +810,9 @@ impl ContextOfStruct {
             }
         }
     }
+}
 
+impl ContextOfStruct {
     pub fn into_to_json(mut self, errors: &mut ErrorCollector) -> Vec<TokenTree> {
         let mut ts = Vec::new();
         let span = self.name.span();

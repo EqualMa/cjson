@@ -1,10 +1,12 @@
 use proc_macro::Span;
 
-use crate::to_json::ctx::{bracket_star::Field, field::ContextSupportsField};
+use crate::to_json::ctx::field::ContextSupportsField;
 
-use super::{bracket_star::ContextSupportsAtBracketStar, field::ContextOfField};
+use super::{StructField, field::ContextOfField};
 
-pub trait ContextWithFields: ContextSupportsAtBracketStar + ContextSupportsField {
+pub trait ContextWithFields: ContextSupportsField {
+    fn fields(&self) -> &[StructField];
+
     fn for_each_non_skip_field(
         &mut self,
         span: Span,
@@ -27,5 +29,11 @@ pub trait ContextWithFields: ContextSupportsAtBracketStar + ContextSupportsField
                 None => None,
             };
         }
+    }
+}
+
+impl<Ctx: ?Sized + ContextWithFields> ContextWithFields for &mut Ctx {
+    fn fields(&self) -> &[StructField] {
+        Ctx::fields(self)
     }
 }

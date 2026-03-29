@@ -74,7 +74,39 @@ pub struct ContextOfField<Ctx: ContextSupportsField> {
     pub(super) span_self: Option<Span>,
 }
 
+impl<'a, Ctx: ?Sized + ContextSupportsField> ContextOfField<&'a mut &mut Ctx> {
+    pub(super) fn mut_deref(self) -> ContextOfField<&'a mut Ctx> {
+        let Self {
+            ctx_struct,
+            index_field,
+            span,
+            span_self,
+        } = self;
+        ContextOfField {
+            ctx_struct,
+            index_field,
+            span,
+            span_self,
+        }
+    }
+}
+
 impl<Ctx: ContextSupportsField> ContextOfField<Ctx> {
+    pub(super) fn as_mut(&mut self) -> ContextOfField<&mut Ctx> {
+        let Self {
+            ref mut ctx_struct,
+            index_field,
+            span,
+            span_self,
+        } = *self;
+        ContextOfField {
+            ctx_struct,
+            index_field,
+            span,
+            span_self,
+        }
+    }
+
     fn field_helper(&mut self) -> Ctx::FieldHelper<'_> {
         self.ctx_struct.field_helper(self.index_field)
     }

@@ -3,12 +3,11 @@ use proc_macro::Span;
 use crate::{ErrorCollector, expand_props};
 
 use super::{
-    OnlyFieldError, OnlyFieldResult,
-    bracket_star::{self, ContextSupportsAtBracketStar},
-    field::ContextOfField,
+    OnlyFieldError, OnlyFieldResult, StructField, bracket_star,
+    context_with_fields::ContextWithFields, field::ContextOfField,
 };
 
-pub trait ContextSupportsOnlyField: ContextSupportsAtBracketStar {
+pub trait ContextSupportsOnlyField: ContextWithFields {
     fn cache_for_only_field_index(&mut self) -> &mut Option<OnlyFieldResult<usize>>;
 
     fn only_field_index(&mut self) -> OnlyFieldResult<usize> {
@@ -63,7 +62,7 @@ pub trait ContextSupportsOnlyField: ContextSupportsAtBracketStar {
         out: expand_props::TokensCollector<'_>,
         errors: &mut ErrorCollector,
     ) where
-        Self: super::field::ContextSupportsField,
+        Self: super::non_field::ContextSupportsNonFieldProp,
     {
         match bracket_star::field_or(prop) {
             Ok((field_ident, rest_prop)) => {
@@ -74,7 +73,7 @@ pub trait ContextSupportsOnlyField: ContextSupportsAtBracketStar {
     }
 }
 
-fn calc_only_field_index<F: bracket_star::Field>(fields: &[F]) -> OnlyFieldResult<usize> {
+fn calc_only_field_index(fields: &[StructField]) -> OnlyFieldResult<usize> {
     let mut idx = None;
     let mut too_many = false;
     fields.iter().enumerate().for_each(|(i, field)| {
