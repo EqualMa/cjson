@@ -674,23 +674,6 @@ impl bracket_star::ContextSupportsAtBracketStar for ContextOfStruct {
         Err("struct doesn't support `@[...]?`")
     }
 
-    fn expand_field_prop(
-        &mut self,
-        field_index: usize,
-        field_ident: bracket_star::IdentField,
-        rest_prop: Vec<expand_props::Prop>,
-        out: TokensCollector<'_>,
-        errors: &mut ErrorCollector,
-    ) {
-        ContextOfStructField {
-            ctx_struct: self,
-            index_field: field_index,
-            span: field_ident.span(),
-            span_self: None,
-        }
-        .expand_field_props_maybe_empty(rest_prop.into_iter(), out, errors)
-    }
-
     fn expand_non_field_prop(
         &mut self,
         prop: expand_props::PropPath,

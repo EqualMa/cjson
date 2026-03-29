@@ -6,24 +6,20 @@ use crate::{
     ident_matches,
 };
 
+use super::field::ContextSupportsField;
+
 pub trait Field {
     fn not_skipped(&self) -> bool;
     fn skipped(&self) -> bool;
 }
-pub trait ContextSupportsAtBracketStar {
+
+pub trait ContextSupportsAtBracketStar: ContextSupportsField {
     const MSG_CANNOT_NEST_BRACKET_STAR: &'static str;
     type Field: Field;
     fn fields(&self) -> &[Self::Field];
 
     fn should_expand_bracket_question(&self, field_index: usize) -> Result<bool, &'static str>;
-    fn expand_field_prop(
-        &mut self,
-        field_index: usize,
-        field_ident: IdentField,
-        rest_prop: Vec<Prop>,
-        out: TokensCollector<'_>,
-        errors: &mut ErrorCollector,
-    );
+
     fn expand_non_field_prop(
         &mut self,
         prop: PropPath,
@@ -42,17 +38,6 @@ impl<Ctx: ContextSupportsAtBracketStar> ContextSupportsAtBracketStar for &mut Ct
 
     fn should_expand_bracket_question(&self, field_index: usize) -> Result<bool, &'static str> {
         Ctx::should_expand_bracket_question(self, field_index)
-    }
-
-    fn expand_field_prop(
-        &mut self,
-        field_index: usize,
-        field_ident: IdentField,
-        rest_prop: Vec<Prop>,
-        out: TokensCollector<'_>,
-        errors: &mut ErrorCollector,
-    ) {
-        Ctx::expand_field_prop(self, field_index, field_ident, rest_prop, out, errors)
     }
 
     fn expand_non_field_prop(
@@ -153,12 +138,35 @@ impl<Ctx: ContextSupportsAtBracketStar> Context for ContextAtBracketStarOf<Ctx> 
 
         match field_or(prop) {
             Ok((field_ident, rest_prop)) => {
-                self.ctx
-                    .expand_field_prop(self.index, field_ident, rest_prop, out, errors);
+                expand_field_prop(
+                    &mut self.ctx,
+                    self.index,
+                    field_ident,
+                    rest_prop,
+                    out,
+                    errors,
+                );
             }
             Err(prop) => self.ctx.expand_non_field_prop(prop, out, errors),
         }
     }
+}
+
+fn expand_field_prop(
+    ctx: impl ContextSupportsField,
+    field_index: usize,
+    field_ident: IdentField,
+    rest_prop: Vec<Prop>,
+    out: TokensCollector<'_>,
+    errors: &mut ErrorCollector,
+) {
+    super::field::ContextOfField {
+        ctx_struct: ctx,
+        index_field: field_index,
+        span: field_ident.span(),
+        span_self: None,
+    }
+    .expand_field_props_maybe_empty(rest_prop.into_iter(), out, errors)
 }
 
 impl<Ctx: ContextSupportsAtBracketStar> ContextAtBracketStar for ContextAtBracketStarOf<Ctx> {
