@@ -15,11 +15,15 @@ use crate::{
 
 use super::item::Rename;
 
-use self::only_field::ContextSupportsOnlyField as _;
+use self::{
+    context_with_fields::ContextWithFields as _, only_field::ContextSupportsOnlyField as _,
+};
 
 mod field;
 
 mod bracket_star;
+
+mod context_with_fields;
 
 mod only_field;
 
@@ -697,6 +701,8 @@ impl bracket_star::ContextSupportsAtBracketStar for ContextOfStruct {
     }
 }
 
+impl context_with_fields::ContextWithFields for ContextOfStruct {}
+
 impl only_field::ContextSupportsOnlyField for ContextOfStruct {
     fn cache_for_only_field_index(&mut self) -> &mut Option<OnlyFieldResult<usize>> {
         &mut self.only_field_index
@@ -979,26 +985,6 @@ impl ContextOfStruct {
                         .map_err(StructToDefaultExpandError::ObjectOrArray),
                 )
             }
-        }
-    }
-
-    fn for_each_non_skip_field(&mut self, span: Span, mut f: impl FnMut(ContextOfStructField<'_>)) {
-        let mut cur = self.fields.iter().position(|f| f.skip.is_none());
-
-        while let Some(index_field) = cur {
-            let ctx = ContextOfStructField {
-                ctx_struct: self,
-                index_field,
-                span,
-                span_self: None,
-            };
-            f(ctx);
-
-            let next = index_field + 1;
-            cur = match self.fields[next..].iter().position(|f| f.skip.is_none()) {
-                Some(pos) => Some(next + pos),
-                None => None,
-            };
         }
     }
 
