@@ -17,10 +17,13 @@ use super::item::Rename;
 
 use self::{
     context_with_fields::ContextWithFields as _,
+    context_with_prop_name::ContextWithPropName,
     context_with_prop_tag::{ContextPropTagMut, ContextWithPropTag},
     non_field::ContextSupportsNonFieldProp,
     only_field::ContextSupportsOnlyField as _,
 };
+
+mod context_as_mut;
 
 mod field;
 
@@ -1074,6 +1077,21 @@ impl ContextOfStruct {
     }
 }
 
+impl ContextWithPropName for ContextOfStruct {
+    fn cache_for_name(&mut self) -> &mut Option<Vec<TokenTree>> {
+        &mut self.expanded_name
+    }
+
+    fn to_calc_name(&mut self) -> context_with_prop_name::CalcName<'_> {
+        self.accessed_rename = true;
+        context_with_prop_name::CalcName {
+            options: &self.options,
+            rename: self.rename.as_ref(),
+            name: &self.name,
+        }
+    }
+}
+
 impl ContextWithPropTag for ContextOfStruct {
     const MSG_PROP_TAG_NOT_DEFINED: &'static str = "@tag not defined on struct";
 
@@ -1185,36 +1203,6 @@ fn make_fn_clone_and_set_span(span: Span) -> impl Fn(&TokenTree) -> TokenTree {
 }
 
 impl ContextOfStruct {
-    fn expand_name(&mut self, mut out: expand_props::TokensCollector<'_>, span: Span) {
-        let expanded_name = match &mut self.expanded_name {
-            Some(expanded_name) => expanded_name,
-            None => {
-                let ts = self.calc_expand_name();
-                self.expanded_name.insert(ts)
-            }
-        };
-
-        out.extend(expanded_name.iter().map(make_fn_clone_and_set_span(span)));
-    }
-
-    fn calc_expand_name(&mut self) -> Vec<TokenTree> {
-        self.accessed_rename = true;
-        if let Some(MetaPathSpanWith(rename_span, ref rename)) = self.rename {
-            rename.to_tokens_as_json_object_key(
-                //
-                &self.options.crate_path,
-                rename_span,
-                &self.name,
-            )
-        } else {
-            let name = &self.name;
-
-            let lit = crate::utils::ident_to_literal_string(name);
-
-            vec![lit.into()]
-        }
-    }
-
     fn self_dot(&mut self) -> &[TokenTree] {
         self.self_dot.get_or_insert_with(|| {
             let span = self.name.span();
