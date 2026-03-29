@@ -19,6 +19,7 @@ use self::{
     context_with_fields::ContextWithFields as _,
     context_with_prop_name::ContextWithPropName,
     context_with_prop_tag::{ContextPropTagMut, ContextWithPropTag},
+    context_with_prop_to::ContextWithPropTo,
     context_with_prop_to_default::ContextWithPropToDefault,
     context_with_prop_to_tagged_default::ContextWithPropToTaggedDefault,
     non_field::ContextSupportsNonFieldProp,
@@ -39,7 +40,10 @@ mod only_field;
 
 mod context_with_prop_name;
 mod context_with_prop_tag;
+
+mod context_with_prop_to;
 mod context_with_prop_to_default;
+
 mod context_with_prop_to_tagged_default;
 
 type EqValue = EqValueGeneric<vec::IntoIter<TokenTree>>;
@@ -839,35 +843,6 @@ impl ContextOfStruct {
         // TODO: report unused
         ts
     }
-
-    fn expand_to(&mut self, out: TokensCollector<'_>, span: Span, errors: &mut ErrorCollector) {
-        self.try_with_out_span(out, span, errors, Self::try_expand_to)
-    }
-
-    fn try_expand_to(
-        &mut self,
-        out: TokensCollector<'_>,
-        _span: Span, // TODO: link @to
-    ) -> Result<(), StructToExpandError> {
-        PropExpanded::try_expand(
-            //
-            self,
-            |this| &mut this.to.custom,
-            Self::calc_expand_to,
-            out,
-        )
-    }
-
-    fn calc_expand_to(&mut self) -> (Vec<TokenTree>, Result<(), StructToExpandError>) {
-        CustomTokens::take_and_expand::<_, StructToDefaultExpandError>(
-            self,
-            |ctx| &mut ctx.to.custom.value,
-            |ctx, out| {
-                let span = ctx.name.span();
-                ctx.try_expand_to_default(out, span)
-            },
-        )
-    }
 }
 
 impl ContextWithPropName for ContextOfStruct {
@@ -935,6 +910,27 @@ impl ContextWithPropToTaggedDefault for ContextOfStruct {
     }
 }
 
+impl ContextWithPropTo for ContextOfStruct {
+    fn prop_custom_to(
+        &mut self,
+    ) -> &mut PropExpandedWithErr<Option<CustomTokens>, StructToExpandError> {
+        &mut self.to.custom
+    }
+
+    fn calc_to_no_custom(
+        &mut self,
+        out: TokensCollector<'_>,
+    ) -> Result<(), StructToDefaultExpandError> {
+        let span = self.name.span();
+        match &self.tag {
+            ContextOfStructTag::Untagged { .. } => self.try_expand_to_default(out, span),
+            ContextOfStructTag::Tagged { .. } => self
+                .try_expand_to_tagged_default(out, span)
+                .map_err(|error| error.assert_tag_is_defined()),
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub enum StructToDefault {
     Transparent {
@@ -992,6 +988,13 @@ impl IntoParseErrorWithSpan for StructToDefaultExpandError {
 struct StructToTaggedDefaultExpandError {
     expand_tag: Option<StructTagExpandError>,
     after_tag: Option<StructToDefaultExpandError>,
+}
+
+impl StructToTaggedDefaultExpandError {
+    fn assert_tag_is_defined(self) -> StructToDefaultExpandError {
+        assert!(self.expand_tag.is_none());
+        self.after_tag.unwrap()
+    }
 }
 
 impl IntoParseErrorWithSpan for StructToTaggedDefaultExpandError {
