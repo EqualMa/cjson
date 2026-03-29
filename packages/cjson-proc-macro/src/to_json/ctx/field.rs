@@ -34,6 +34,34 @@ pub trait ContextSupportsField {
     ) -> Result<(), PropPath>;
 }
 
+impl<Ctx: ?Sized + ContextSupportsField> ContextSupportsField for &mut Ctx {
+    type FieldHelper<'a>
+        = Ctx::FieldHelper<'a>
+    where
+        Self: 'a;
+
+    fn field_helper(&mut self, index_field: usize) -> Self::FieldHelper<'_> {
+        Ctx::field_helper(self, index_field)
+    }
+
+    fn field(&self, index_field: usize) -> &StructField {
+        Ctx::field(self, index_field)
+    }
+
+    fn field_mut(&mut self, index_field: usize) -> &mut StructField {
+        Ctx::field_mut(self, index_field)
+    }
+
+    fn try_expand_prop_at_field(
+        &mut self,
+        prop: PropPath,
+        out: TokensCollector<'_>,
+        errors: &mut ErrorCollector,
+    ) -> Result<(), PropPath> {
+        Ctx::try_expand_prop_at_field(self, prop, out, errors)
+    }
+}
+
 pub trait FieldHelper {
     fn to_calc_name(&mut self) -> CalcName<'_>;
     fn to_calc_expr(&mut self) -> CalcExpr<'_>;
@@ -252,7 +280,7 @@ impl<Ctx: ContextSupportsField> ContextOfField<Ctx> {
         let index_field = self.index_field;
         self.field_mut()
             .calc_index_to_str
-            .get_or_insert_with(|| index_field.to_string())
+            .get_or_insert(index_field)
     }
 
     fn expand_name_or_index_to_str(&mut self, mut out: TokensCollector<'_>, span: Span) {

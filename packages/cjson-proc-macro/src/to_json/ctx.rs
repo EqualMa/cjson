@@ -15,9 +15,13 @@ use crate::{
 
 use super::item::Rename;
 
+use self::only_field::ContextSupportsOnlyField as _;
+
 mod field;
 
 mod bracket_star;
+
+mod only_field;
 
 type EqValue = EqValueGeneric<vec::IntoIter<TokenTree>>;
 
@@ -153,7 +157,7 @@ pub struct FieldHelper<'a> {
     index_field: usize,
 }
 
-impl field::ContextSupportsField for &mut ContextOfStruct {
+impl field::ContextSupportsField for ContextOfStruct {
     type FieldHelper<'a>
         = FieldHelper<'a>
     where
@@ -246,7 +250,8 @@ impl From<MakeStructField> for StructField {
             accessed_rename: false,
             expanded_name: None,
             expanded_index_to_str: None,
-            calc_index_to_str: None,
+            calc_index_to_str: Default::default(),
+            calc_pattern_destruct_unnamed: None,
             to: PropExpanded::new(to),
             to_kvs: PropDefaultCustom::new(to_kvs_default, to_kvs_custom),
             to_items: PropDefaultCustom::new(to_items_default, to_items_custom),
@@ -268,7 +273,8 @@ pub struct StructField {
 
     expanded_index_to_str: Option<(Vec<TokenTree>, Result<(), StructFieldExpandIndexToStrError>)>,
 
-    calc_index_to_str: Option<String>,
+    calc_index_to_str: CacheIndexToString,
+    calc_pattern_destruct_unnamed: Option<Ident>,
 
     /// The custom `to`
     to: PropExpandedWithErr<Option<CustomTokens>, CustomTokensExpandError>,
@@ -276,6 +282,15 @@ pub struct StructField {
     to_kvs: PropDefaultCustom<StructFieldToKvsDefault, StructFieldExpandToKvsDefaultError>,
 
     to_items: PropDefaultCustom<StructFieldToItemsDefault, StructFieldExpandToItemsDefaultError>,
+}
+
+#[derive(Default)]
+struct CacheIndexToString(Option<String>);
+
+impl CacheIndexToString {
+    fn get_or_insert(&mut self, index_field: usize) -> &str {
+        self.0.get_or_insert_with(|| index_field.to_string())
+    }
 }
 
 struct PropDefaultCustom<D, DE> {
@@ -637,9 +652,12 @@ impl bracket_star::Field for StructField {
     fn not_skipped(&self) -> bool {
         self.skip.is_none()
     }
+    fn skipped(&self) -> bool {
+        self.skip.is_some()
+    }
 }
 
-impl bracket_star::ContextSupportsAtBracketStar for &mut ContextOfStruct {
+impl bracket_star::ContextSupportsAtBracketStar for ContextOfStruct {
     const MSG_CANNOT_NEST_BRACKET_STAR: &'static str = "struct `@[...]*` cannot be nested";
 
     type Field = StructField;
@@ -648,7 +666,7 @@ impl bracket_star::ContextSupportsAtBracketStar for &mut ContextOfStruct {
         &self.fields
     }
 
-    fn should_expand_bracket_question(_: &Self::Field) -> Result<bool, &'static str> {
+    fn should_expand_bracket_question(&self, _field_index: usize) -> Result<bool, &'static str> {
         Err("struct doesn't support `@[...]?`")
     }
 
@@ -675,7 +693,13 @@ impl bracket_star::ContextSupportsAtBracketStar for &mut ContextOfStruct {
         out: TokensCollector<'_>,
         errors: &mut ErrorCollector,
     ) {
-        ContextOfStruct::expand_non_field_prop(self, prop, out, errors)
+        self.impl_expand_non_field_prop(prop, out, errors)
+    }
+}
+
+impl only_field::ContextSupportsOnlyField for ContextOfStruct {
+    fn cache_for_only_field_index(&mut self) -> &mut Option<OnlyFieldResult<usize>> {
+        &mut self.only_field_index
     }
 }
 
@@ -704,32 +728,12 @@ impl Context for ContextOfStruct {
         out: expand_props::TokensCollector<'_>,
         errors: &mut ErrorCollector,
     ) {
-        self.expand_prop_impl(prop, out, errors, Self::expand_only_field)
+        self.expand_only_field_or_non_field(prop, out, errors)
     }
 }
 
 impl ContextOfStruct {
-    fn expand_prop_impl<'a>(
-        &'a mut self,
-        prop: expand_props::PropPath,
-        out: expand_props::TokensCollector<'_>,
-        errors: &mut ErrorCollector,
-        expand_field: impl FnOnce(
-            &'a mut Self,
-            Span,
-            Vec<expand_props::Prop>,
-            expand_props::TokensCollector<'_>,
-            &mut ErrorCollector,
-        ),
-    ) {
-        match bracket_star::field_or(prop) {
-            Ok((field_ident, rest_prop)) => {
-                expand_field(self, field_ident.span(), rest_prop, out, errors)
-            }
-            Err(prop) => self.expand_non_field_prop(prop, out, errors),
-        }
-    }
-    fn expand_non_field_prop<'a>(
+    fn impl_expand_non_field_prop<'a>(
         &'a mut self,
         expand_props::PropPath(first_prop, rest_prop): expand_props::PropPath,
         out: expand_props::TokensCollector<'_>,
@@ -824,35 +828,6 @@ impl ContextOfStruct {
                 }
             }
         }
-    }
-
-    fn context_of_only_field(
-        &mut self,
-        span: Span,
-        span_self: Option<Span>,
-    ) -> OnlyFieldResult<ContextOfStructField<'_>> {
-        self.only_field_index().map(|index| ContextOfStructField {
-            ctx_struct: self,
-            index_field: index,
-            span,
-            span_self,
-        })
-    }
-
-    fn expand_only_field(
-        &mut self,
-        first_ident_span: Span,
-        rest_prop: Vec<expand_props::Prop>,
-        out: expand_props::TokensCollector<'_>,
-        errors: &mut ErrorCollector,
-    ) {
-        let Some(mut ctx) = self
-            .context_of_only_field(first_ident_span, None)
-            .report(errors, first_ident_span)
-        else {
-            return;
-        };
-        ctx.expand_field_props_maybe_empty(rest_prop.into_iter(), out, errors)
     }
 
     pub fn into_to_json(mut self, errors: &mut ErrorCollector) -> Vec<TokenTree> {
@@ -1274,57 +1249,6 @@ impl ContextOfStruct {
             let lit = crate::utils::ident_to_literal_string(name);
 
             vec![lit.into()]
-        }
-    }
-
-    fn only_field_index(&mut self) -> OnlyFieldResult<usize> {
-        let out = match &mut self.only_field_index {
-            Some(v) => v,
-            None => {
-                let v = self.calc_only_field_index();
-                self.only_field_index.insert(v)
-            }
-        };
-
-        *out
-    }
-
-    fn calc_only_field_index(&mut self) -> OnlyFieldResult<usize> {
-        let mut idx = None;
-        let mut too_many = false;
-        self.fields.iter().enumerate().for_each(|(i, field)| {
-            if field.skip.is_some() {
-                return;
-            }
-
-            if idx.is_none() {
-                idx = Some(i)
-            } else {
-                too_many = true;
-            }
-        });
-
-        match idx {
-            Some(idx) => OnlyFieldResult::Existing(
-                idx,
-                if too_many {
-                    Some(OnlyFieldError(
-                        "`@field` is ambiguous on struct with more than one fields without `#[cjson(skip)]`",
-                    ))
-                } else {
-                    None
-                },
-            ),
-            None => {
-                let error = OnlyFieldError(
-                    "`@field` on struct requires exactly one field without `#[cjson(skip)]`",
-                );
-                if self.fields.len() == 0 {
-                    OnlyFieldResult::EmptyFields(error)
-                } else {
-                    OnlyFieldResult::Existing(0, Some(error))
-                }
-            }
         }
     }
 
