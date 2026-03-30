@@ -797,7 +797,7 @@ impl ContextSupportsNonFieldProp for ContextOfStruct {
             FirstIdentType::To => {
                 enum AfterTo {
                     None,
-                    Default(Span),
+                    UntaggedDefault(Span),
                     TaggedDefault(Span),
                 }
                 let mut rest_prop = rest_prop.into_iter();
@@ -805,19 +805,19 @@ impl ContextSupportsNonFieldProp for ContextOfStruct {
                     Some(v) => 'ok: {
                         let err_span = match v {
                             expand_props::Prop::Ident(ident) => ident_match!(match ident {
-                                b"default" => {
+                                b"untagged_default" => {
                                     if let Some(p) = rest_prop.as_slice().first() {
                                         errors.push_custom(
-                                            "property not defined on struct @to.default",
+                                            "property not defined on struct @(to.untagged_default)",
                                             p.span(),
                                         );
                                     }
-                                    break 'ok AfterTo::Default(ident.span());
+                                    break 'ok AfterTo::UntaggedDefault(ident.span());
                                 }
                                 b"tagged_default" => {
                                     if let Some(p) = rest_prop.as_slice().first() {
                                         errors.push_custom(
-                                            "property not defined on struct @to.tagged_default",
+                                            "property not defined on struct @(to.tagged_default)",
                                             p.span(),
                                         );
                                     }
@@ -835,7 +835,7 @@ impl ContextSupportsNonFieldProp for ContextOfStruct {
 
                 match after_to {
                     AfterTo::None => self.expand_to(out, first_ident_span, errors),
-                    AfterTo::Default(span) => self.expand_to_default(out, span, errors),
+                    AfterTo::UntaggedDefault(span) => self.expand_to_default(out, span, errors),
                     AfterTo::TaggedDefault(span) => {
                         self.expand_to_tagged_default(out, span, errors)
                     }
