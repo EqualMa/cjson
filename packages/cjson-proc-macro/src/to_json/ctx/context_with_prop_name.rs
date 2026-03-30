@@ -9,8 +9,8 @@ pub trait ContextWithPropName {
 
     fn to_calc_name(&mut self) -> CalcName<'_>;
 
-    fn expand_name(&mut self, mut out: expand_props::TokensCollector<'_>, span: Span) {
-        let expanded_name = match self.cache_for_name() {
+    fn use_expanded_name<R>(&mut self, f: impl FnOnce(&[TokenTree]) -> R) -> R {
+        let v = match self.cache_for_name() {
             Some(expanded_name) => expanded_name,
             None => {
                 let ts = self.to_calc_name().calc();
@@ -18,7 +18,13 @@ pub trait ContextWithPropName {
             }
         };
 
-        out.extend(expanded_name.iter().map(make_fn_clone_and_set_span(span)));
+        f(v)
+    }
+
+    fn expand_name(&mut self, mut out: expand_props::TokensCollector<'_>, span: Span) {
+        self.use_expanded_name(|expanded_name| {
+            out.extend(expanded_name.iter().map(make_fn_clone_and_set_span(span)))
+        })
     }
 }
 

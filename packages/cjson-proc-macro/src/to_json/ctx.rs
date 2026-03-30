@@ -431,12 +431,12 @@ impl CustomTokens {
         (ts, res.map_err(CustomTokensExpandErrorOr::Custom))
     }
 
-    fn expand(
+    fn expand<Msg>(
         self,
         ctx: &mut impl Context,
         default: impl FnOnce(Span) -> Vec<TokenTree>,
-        get_cir_ref_msg: impl FnOnce() -> &'static str,
-    ) -> (Vec<TokenTree>, Result<(), CustomTokensExpandError>) {
+        get_cir_ref_msg: impl FnOnce() -> Msg,
+    ) -> (Vec<TokenTree>, Result<(), CustomTokensExpandError<Msg>>) {
         let CustomTokens { span, tokens } = self;
 
         let tokens = match tokens {
@@ -567,9 +567,20 @@ impl HasConstCircularRefMsg for StructFieldExpandToKvsDefaultError {
 type StructFieldExpandToKvsError = CustomTokensExpandErrorOr<StructFieldExpandToKvsDefaultError>;
 
 #[derive(Clone)]
-enum CustomTokensExpandError {
-    CircularRef { msg: &'static str },
+enum CustomTokensExpandError<CircularRefMsg = &'static str> {
+    CircularRef { msg: CircularRefMsg },
     Other(ParseError),
+}
+
+impl<Msg> CustomTokensExpandError<Msg> {
+    fn map_circular_ref<R>(self, f: impl FnOnce(Msg) -> R) -> CustomTokensExpandError<R> {
+        match self {
+            CustomTokensExpandError::CircularRef { msg } => {
+                CustomTokensExpandError::CircularRef { msg: f(msg) }
+            }
+            CustomTokensExpandError::Other(e) => CustomTokensExpandError::Other(e),
+        }
+    }
 }
 
 impl IntoParseErrorWithSpan for CustomTokensExpandError {
