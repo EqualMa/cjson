@@ -26,8 +26,6 @@ use self::{
     only_field::ContextSupportsOnlyField as _,
 };
 
-mod context_as_mut;
-
 mod field;
 
 mod bracket_star;
@@ -705,10 +703,7 @@ impl context_with_fields::ContextWithFields for ContextOfStruct {
 
 impl bracket_star::ContextSupportsAtBracketStar for ContextOfStruct {
     const MSG_CANNOT_NEST_BRACKET_STAR: &'static str = "struct `@[...]*` cannot be nested";
-
-    fn should_expand_bracket_question(&self, _field_index: usize) -> Result<bool, &'static str> {
-        Err("struct doesn't support `@[...]?`")
-    }
+    const MSG_NOT_SUPPORT_BRACKET_QUESTION: &'static str = "struct doesn't support `@[...]?`";
 }
 
 impl only_field::ContextSupportsOnlyField for ContextOfStruct {

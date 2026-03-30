@@ -13,16 +13,12 @@ use super::{
 
 pub trait ContextSupportsAtBracketStar: ContextWithFields + ContextSupportsNonFieldProp {
     const MSG_CANNOT_NEST_BRACKET_STAR: &'static str;
-
-    fn should_expand_bracket_question(&self, field_index: usize) -> Result<bool, &'static str>;
+    const MSG_NOT_SUPPORT_BRACKET_QUESTION: &'static str;
 }
 
 impl<Ctx: ContextSupportsAtBracketStar> ContextSupportsAtBracketStar for &mut Ctx {
     const MSG_CANNOT_NEST_BRACKET_STAR: &'static str = Ctx::MSG_CANNOT_NEST_BRACKET_STAR;
-
-    fn should_expand_bracket_question(&self, field_index: usize) -> Result<bool, &'static str> {
-        Ctx::should_expand_bracket_question(self, field_index)
-    }
+    const MSG_NOT_SUPPORT_BRACKET_QUESTION: &'static str = Ctx::MSG_NOT_SUPPORT_BRACKET_QUESTION;
 }
 
 pub struct ContextAtBracketStarOf<Ctx: ContextSupportsAtBracketStar> {
@@ -32,12 +28,6 @@ pub struct ContextAtBracketStarOf<Ctx: ContextSupportsAtBracketStar> {
 
     // asserts `ctx.fields()[index].not_skipped()` or `index == ctx.fields().len()`
     index: usize,
-}
-
-pub struct ContextAtBracketQuestionInsideStarOf<'a, Ctx: ContextSupportsAtBracketStar> {
-    ctx_star: &'a mut ContextAtBracketStarOf<Ctx>,
-    #[expect(unused)]
-    question_span: Span,
 }
 
 impl<Ctx: ContextSupportsAtBracketStar> Drop for ContextAtBracketStarOf<Ctx> {
@@ -80,17 +70,8 @@ impl<Ctx: ContextSupportsAtBracketStar> Context for ContextAtBracketStarOf<Ctx> 
         question_span: Span,
         errors: &mut ErrorCollector,
     ) -> Option<impl use<'a, Ctx> + Context> {
-        match Ctx::should_expand_bracket_question(&self.ctx, self.index) {
-            Ok(true) => Some(ContextAtBracketQuestionInsideStarOf {
-                ctx_star: self,
-                question_span,
-            }),
-            Ok(false) => None,
-            Err(msg) => {
-                errors.push_custom(msg, question_span);
-                None
-            }
-        }
+        errors.push_custom(Ctx::MSG_NOT_SUPPORT_BRACKET_QUESTION, question_span);
+        None::<expand_props::NeverContext>
     }
 
     fn expand_prop(
@@ -164,37 +145,6 @@ impl<Ctx: ContextSupportsAtBracketStar> ContextAtBracketStar for ContextAtBracke
                 None => self.index = self.ctx.fields().len(),
             }
         }
-    }
-}
-
-impl<'this, Ctx: ContextSupportsAtBracketStar> Context
-    for ContextAtBracketQuestionInsideStarOf<'this, Ctx>
-{
-    fn at_bracket_star<'a>(
-        &'a mut self,
-        star_span: Span,
-        errors: &mut ErrorCollector,
-    ) -> impl use<'a, 'this, Ctx> + ContextAtBracketStar {
-        errors.push_custom("`@[...]*` cannot be nested", star_span);
-        expand_props::ErroredContext
-    }
-
-    fn at_bracket_question<'a>(
-        &'a mut self,
-        question_span: Span,
-        errors: &mut ErrorCollector,
-    ) -> Option<impl use<'a, 'this, Ctx> + Context> {
-        errors.push_custom("`@[...]?` cannot be nested", question_span);
-        None::<expand_props::NeverContext>
-    }
-
-    fn expand_prop(
-        &mut self,
-        prop: PropPath,
-        out: TokensCollector<'_>,
-        errors: &mut ErrorCollector,
-    ) {
-        self.ctx_star.expand_prop(prop, out, errors)
     }
 }
 
