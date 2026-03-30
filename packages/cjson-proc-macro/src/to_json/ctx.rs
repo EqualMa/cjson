@@ -19,9 +19,11 @@ use self::{
     context_with_fields::ContextWithFields as _,
     context_with_prop_name::ContextWithPropName,
     context_with_prop_tag::{ContextPropTagMut, ContextWithPropTag},
-    context_with_prop_to::ContextWithPropTo,
+    context_with_prop_to::{ContextWithPropTo, StructToUnspecifiedExpandError},
     context_with_prop_to_default::ContextWithPropToDefault,
-    context_with_prop_to_tagged_default::ContextWithPropToTaggedDefault,
+    context_with_prop_to_tagged_default::{
+        ContextWithPropToTaggedDefault, StructToTaggedKvsExpandError,
+    },
     non_field::ContextSupportsNonFieldProp,
     only_field::ContextSupportsOnlyField as _,
 };
@@ -44,6 +46,8 @@ mod context_with_prop_to_default;
 
 mod context_with_prop_to_tagged_default;
 
+mod custom;
+
 type EqValue = EqValueGeneric<vec::IntoIter<TokenTree>>;
 
 pub struct MakeContextOfStruct {
@@ -56,6 +60,7 @@ pub struct MakeContextOfStruct {
 
     pub to_default: StructToDefault,
     pub to_custom: Option<CustomTokens>,
+    pub to_tagged_kvs: Option<CustomTokens>,
 
     pub tag: ContextOfStructTag,
 }
@@ -71,6 +76,7 @@ impl From<MakeContextOfStruct> for ContextOfStruct {
             fields_ident_to_index,
             to_default,
             to_custom,
+            to_tagged_kvs,
             tag,
         } = value;
         ContextOfStruct {
@@ -86,7 +92,10 @@ impl From<MakeContextOfStruct> for ContextOfStruct {
             fields,
             fields_ident_to_index,
             self_dot: None,
-            to: PropDefaultCustom::new(to_default, to_custom),
+            to_untagged_default: to_default,
+            cache_for_to_untagged_default: None,
+            to: to_custom.map(custom::PropCustom::new),
+            to_tagged_kvs: custom::PropDefaultCustom::new(to_tagged_kvs),
             cache_for_to_tagged_default: None,
             tag,
         }
@@ -116,7 +125,15 @@ pub struct ContextOfStruct {
 
     self_dot: Option<Vec<TokenTree>>,
 
-    to: PropDefaultCustom<StructToDefault, StructToDefaultExpandError>,
+    to_untagged_default: StructToDefault,
+    cache_for_to_untagged_default: Option<custom::TokensExpanded<StructToDefaultExpandError>>,
+
+    to: Option<custom::PropCustom>,
+
+    to_tagged_kvs: custom::PropDefaultCustom<(
+        Vec<TokenTree>,
+        Result<(), context_with_prop_to_tagged_default::StructToTaggedKvsDefaultExpandError>,
+    )>,
 
     cache_for_to_tagged_default:
         Option<(Vec<TokenTree>, Result<(), StructToTaggedDefaultExpandError>)>,
@@ -889,14 +906,14 @@ impl ContextWithPropTag for ContextOfStruct {
 }
 
 impl ContextWithPropToDefault for ContextOfStruct {
-    fn prop_to_default(
+    fn cache_for_to_untagged_default(
         &mut self,
-    ) -> &mut PropExpandedWithErr<StructToDefault, StructToDefaultExpandError> {
-        &mut self.to.default
+    ) -> &mut Option<custom::TokensExpanded<StructToDefaultExpandError>> {
+        &mut self.cache_for_to_untagged_default
     }
 
     fn get_to_default(&self) -> StructToDefault {
-        self.to.default.value
+        self.to_untagged_default
     }
 
     fn span_to_calc_to_default(&self) -> Span {
@@ -911,28 +928,38 @@ impl ContextWithPropToTaggedDefault for ContextOfStruct {
         &mut self.cache_for_to_tagged_default
     }
 
+    fn prop_to_tagged_kvs(
+        &mut self,
+    ) -> &mut custom::PropDefaultCustom<(
+        Vec<TokenTree>,
+        Result<(), context_with_prop_to_tagged_default::StructToTaggedKvsDefaultExpandError>,
+    )> {
+        &mut self.to_tagged_kvs
+    }
+
     fn span_to_calc_to_tagged_default(&self) -> Span {
         self.name.span()
     }
 }
 
 impl ContextWithPropTo for ContextOfStruct {
-    fn prop_custom_to(
-        &mut self,
-    ) -> &mut PropExpandedWithErr<Option<CustomTokens>, StructToExpandError> {
-        &mut self.to.custom
+    fn prop_custom_to(&mut self) -> Option<&mut custom::PropCustom> {
+        self.to.as_mut()
     }
 
-    fn calc_to_no_custom(
+    fn try_expand_to_unspecified(
         &mut self,
         out: TokensCollector<'_>,
-    ) -> Result<(), StructToDefaultExpandError> {
+    ) -> Result<(), StructToUnspecifiedExpandError> {
         let span = self.name.span();
         match &self.tag {
-            ContextOfStructTag::Untagged { .. } => self.try_expand_to_default(out, span),
+            ContextOfStructTag::Untagged { .. } => self
+                .try_expand_to_default(out, span)
+                .map_err(StructToUnspecifiedExpandError::Untagged),
             ContextOfStructTag::Tagged { .. } => self
                 .try_expand_to_tagged_default(out, span)
-                .map_err(|error| error.assert_tag_is_defined()),
+                .map_err(|error| error.assert_tag_is_defined())
+                .map_err(StructToUnspecifiedExpandError::Tagged),
         }
     }
 }
@@ -956,8 +983,6 @@ enum StructToDefaultExpandError {
     },
     ObjectOrArray(ParseError),
 }
-
-type StructToExpandError = CustomTokensExpandErrorOr<StructToDefaultExpandError>;
 
 impl HasConstCircularRefMsg for StructToDefaultExpandError {
     const CIRCULAR_REF_MSG: &str = "@to on struct circularly references itself";
@@ -993,11 +1018,11 @@ impl IntoParseErrorWithSpan for StructToDefaultExpandError {
 #[derive(Clone)]
 struct StructToTaggedDefaultExpandError {
     expand_tag: Option<StructTagExpandError>,
-    after_tag: Option<StructToDefaultExpandError>,
+    after_tag: Option<StructToTaggedKvsExpandError>,
 }
 
 impl StructToTaggedDefaultExpandError {
-    fn assert_tag_is_defined(self) -> StructToDefaultExpandError {
+    fn assert_tag_is_defined(self) -> StructToTaggedKvsExpandError {
         assert!(self.expand_tag.is_none());
         self.after_tag.unwrap()
     }

@@ -98,6 +98,7 @@ impl_parse_attrs!(
     #[derive(Default)]
     pub struct ItemAttrsParser {
         to: MetaPathSpanWith<ItemTo>,
+        to_tagged_kvs: MetaPathSpanWith<StructToTaggedKvs>,
         transparent: FlagPresent,
         rename: MetaPathSpanWith<Rename>,
         tag: MetaPathSpanWith<EqValue>,
@@ -166,6 +167,7 @@ fn make_push_outer_attr<Attrs: PushMetaSimple>(
 }
 
 pub struct ItemTo(GroupParen);
+pub struct StructToTaggedKvs(GroupParen);
 pub struct StructFieldTo(GroupParen);
 pub struct StructFieldToKvs(GroupParen);
 pub struct StructFieldToItems(GroupParen);
@@ -175,6 +177,10 @@ crate::utils::impl_many!({
         {
             use ItemTo as To;
             macro_rules! dummy {[] => { quote!( null ) }}
+        }
+        {
+            use StructToTaggedKvs as To;
+            macro_rules! dummy {[] => { quote!( {} ) }}
         }
         {
             use StructFieldTo as To;
@@ -344,6 +350,7 @@ impl ParseMeta<'_> for Rename {
 
 pub struct StructAttrs {
     to: Option<MetaPathSpanWith<ItemTo>>,
+    to_tagged_kvs: Option<MetaPathSpanWith<StructToTaggedKvs>>,
     transparent: Option<FlagPresent>,
     rename: Option<MetaPathSpanWith<Rename>>,
     tag: Option<MetaPathSpanWith<EqValue>>,
@@ -361,6 +368,7 @@ impl StructAttrs {
     ) -> ContextOfStruct {
         let Self {
             to,
+            to_tagged_kvs,
             transparent,
             rename,
             tag,
@@ -496,6 +504,7 @@ impl StructAttrs {
             fields_ident_to_index,
             to_default,
             to_custom: to.map(CustomTokens::from),
+            to_tagged_kvs: to_tagged_kvs.map(CustomTokens::from),
             tag: From::from(tag),
         }
         .into()
@@ -506,6 +515,7 @@ impl ItemAttrsParser {
     pub fn r#struct(self, errors: &mut ErrorCollector) -> StructAttrs {
         let Self {
             to,
+            to_tagged_kvs,
             transparent,
             rename,
             tag,
@@ -526,6 +536,7 @@ impl ItemAttrsParser {
 
         StructAttrs {
             to,
+            to_tagged_kvs,
             transparent,
             rename,
             tag,

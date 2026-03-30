@@ -2,18 +2,18 @@ use proc_macro::{Span, TokenStream, TokenTree};
 
 use typed_quote::{IntoTokenTree as _, IntoTokens as _, WithSpan as _, quote};
 
-use crate::{ErrorCollector, expand_props::TokensCollector};
+use crate::{ErrorCollector, expand_props::TokensCollector, to_json::ctx::custom::TokensExpanded};
 
 use super::{
     IntoParseErrorWithSpan as _, OnlyFieldResult, PropExpanded, PropExpandedWithErr,
-    StructToDefault, StructToDefaultExpandError, TryWithOutSpan as _,
+    StructToDefault, StructToDefaultExpandError, TryWithOutSpan as _, custom,
     only_field::ContextSupportsOnlyField,
 };
 
 pub trait ContextWithPropToDefault: Sized + ContextSupportsOnlyField {
-    fn prop_to_default(
+    fn cache_for_to_untagged_default(
         &mut self,
-    ) -> &mut PropExpandedWithErr<StructToDefault, StructToDefaultExpandError>;
+    ) -> &mut Option<TokensExpanded<StructToDefaultExpandError>>;
 
     fn get_to_default(&self) -> StructToDefault;
 
@@ -30,15 +30,19 @@ pub trait ContextWithPropToDefault: Sized + ContextSupportsOnlyField {
 
     fn try_expand_to_default(
         &mut self,
-        out: TokensCollector<'_>,
+        mut out: TokensCollector<'_>,
         _span: Span, // TODO: link @to.default
     ) -> Result<(), StructToDefaultExpandError> {
-        PropExpanded::try_expand(
-            self,
-            Self::prop_to_default,
-            Self::calc_expand_to_default,
-            out,
-        )
+        let (ts, res) = match self.cache_for_to_untagged_default() {
+            Some(v) => v,
+            None => {
+                let v = self.calc_expand_to_default();
+                self.cache_for_to_untagged_default().insert(v)
+            }
+        };
+
+        out.extend_from_slice(ts);
+        res.clone()
     }
 
     fn calc_expand_to_default(
