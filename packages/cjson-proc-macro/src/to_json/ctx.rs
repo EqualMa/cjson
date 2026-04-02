@@ -11,6 +11,14 @@ use crate::{
         GroupParen, ParseError,
         parse_meta_utils::{EqValue as EqValueGeneric, FlagPresent, MetaPathSpanWith},
     },
+    to_json::ctx::{
+        context_with_prop_tag::CacheForDummyTag,
+        context_with_prop_to_default::CalcToUntaggedDefault,
+        context_with_prop_to_tagged_default::{
+            CacheForToInternallyTaggedDefault, CalcToTaggedKvsDefault,
+            ToInternallyTaggedDefaultWith,
+        },
+    },
 };
 
 use super::item::Rename;
@@ -47,6 +55,8 @@ mod context_with_prop_to_default;
 mod context_with_prop_to_tagged_default;
 
 mod custom;
+
+pub mod r#enum;
 
 type EqValue = EqValueGeneric<vec::IntoIter<TokenTree>>;
 
@@ -96,7 +106,7 @@ impl From<MakeContextOfStruct> for ContextOfStruct {
             cache_for_to_untagged_default: None,
             to: to_custom.map(custom::PropCustom::new),
             to_tagged_kvs: custom::PropDefaultCustom::new(to_tagged_kvs),
-            cache_for_to_tagged_default: None,
+            cache_for_to_tagged_default: Default::default(),
             tag,
         }
     }
@@ -135,15 +145,14 @@ pub struct ContextOfStruct {
         Result<(), context_with_prop_to_tagged_default::StructToTaggedKvsDefaultExpandError>,
     )>,
 
-    cache_for_to_tagged_default:
-        Option<(Vec<TokenTree>, Result<(), StructToTaggedDefaultExpandError>)>,
+    cache_for_to_tagged_default: CacheForToInternallyTaggedDefault,
 
     tag: ContextOfStructTag,
 }
 
 pub enum ContextOfStructTag {
     Untagged {
-        dummy: Option<Vec<TokenTree>>,
+        dummy: CacheForDummyTag,
     },
     Tagged {
         span_tag: Span,
@@ -160,7 +169,9 @@ impl From<Option<MetaPathSpanWith<EqValue>>> for ContextOfStructTag {
                 ts: eq_value.value,
                 accessed: false,
             },
-            None => ContextOfStructTag::Untagged { dummy: None },
+            None => ContextOfStructTag::Untagged {
+                dummy: Default::default(),
+            },
         }
     }
 }
@@ -284,6 +295,7 @@ impl From<MakeStructField> for StructField {
         StructField {
             skip,
             name,
+            accessed_expr: false,
             type_,
             rename,
             accessed_rename: false,
@@ -302,6 +314,7 @@ pub struct StructField {
     skip: Option<FlagPresent>,
 
     name: typed_quote::Either<Ident, Literal>,
+    accessed_expr: bool,
 
     type_: std::vec::IntoIter<TokenTree>,
 
@@ -896,11 +909,13 @@ impl ContextWithPropTag for ContextOfStruct {
                 span_tag,
                 ts,
                 accessed,
-            } => ContextPropTagMut::Tagged {
-                span_tag: *span_tag,
-                ts: ts.as_slice(),
-                accessed,
-            },
+            } => {
+                *accessed = true;
+                ContextPropTagMut::Tagged {
+                    span_tag: *span_tag,
+                    ts: ts.as_slice(),
+                }
+            }
         }
     }
 }
@@ -911,7 +926,9 @@ impl ContextWithPropToDefault for ContextOfStruct {
     ) -> &mut Option<custom::TokensExpanded<StructToDefaultExpandError>> {
         &mut self.cache_for_to_untagged_default
     }
+}
 
+impl CalcToUntaggedDefault for ContextOfStruct {
     fn get_to_default(&self) -> StructToDefault {
         self.to_untagged_default
     }
@@ -921,13 +938,19 @@ impl ContextWithPropToDefault for ContextOfStruct {
     }
 }
 
-impl ContextWithPropToTaggedDefault for ContextOfStruct {
-    fn cache_for_to_tagged_default(
-        &mut self,
-    ) -> &mut Option<(Vec<TokenTree>, Result<(), StructToTaggedDefaultExpandError>)> {
+impl CalcToTaggedKvsDefault for ContextOfStruct {
+    fn span_to_calc_to_tagged_kvs_default(&self) -> Span {
+        self.name.span()
+    }
+}
+
+impl ToInternallyTaggedDefaultWith for ContextOfStruct {
+    fn cache_for_to_internally_tagged_default(&mut self) -> &mut CacheForToInternallyTaggedDefault {
         &mut self.cache_for_to_tagged_default
     }
+}
 
+impl ContextWithPropToTaggedDefault for ContextOfStruct {
     fn prop_to_tagged_kvs(
         &mut self,
     ) -> &mut custom::PropDefaultCustom<(

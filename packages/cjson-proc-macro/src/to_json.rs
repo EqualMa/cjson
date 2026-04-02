@@ -1,11 +1,10 @@
-use proc_macro::{Ident, Punct, Span, TokenStream, TokenTree};
-use typed_quote::{Either, IntoTokens, quote, tokens::IterTokens};
+use proc_macro::{Ident, Span, TokenStream, TokenTree};
+use typed_quote::{IntoTokens, quote, tokens::IterTokens};
 
 use crate::{
     ErrorCollector, IdentTree, ident_match,
     syn_generic::{
-        self, GroupBrace, ParseError, ParseGenericsOutput, SomeVisibility, StructData, WhereClause,
-        with_trailing_punct_if_not_empty,
+        self, ParseError, ParseGenericsOutput, WhereClause, with_trailing_punct_if_not_empty,
     },
     to_json::ctx::Options,
 };
@@ -90,7 +89,23 @@ impl<'a> ToJson<'a> {
             Kind::Enum => {
                 let enum_brace;
                 (where_clause, enum_brace) = input.parse_enum_after_generics()?;
-                ToJsonItemData::Enum(enum_brace)
+
+                let mut variant_ident_trees = vec![];
+                let ctx = item_attrs.r#enum(errors).parse(
+                    item_name.clone(),
+                    enum_brace,
+                    errors,
+                    &mut variant_ident_trees,
+                    Options { crate_path },
+                );
+
+                ident_trees.push(IdentTree {
+                    ident: Ident::new("variant", Span::call_site()),
+                    mod_name: "",
+                    children: variant_ident_trees,
+                });
+
+                ToJsonItemData::Enum(ctx.into_to_json(errors))
             }
         };
 
@@ -191,20 +206,15 @@ impl ToJsonItem {
 
 enum ToJsonItemData {
     Struct(Vec<TokenTree>),
-    Enum(GroupBrace),
+    Enum(Vec<TokenTree>),
 }
 
 impl ToJsonItemData {
     fn into_tokens(self) -> impl IntoTokens {
-        match self {
-            ToJsonItemData::Struct(ts) => Either::A({
-                let ts = TokenStream::from_iter(ts);
-                ts
-            }),
-            ToJsonItemData::Enum(group_brace) => Either::B({
-                let group_brace: proc_macro::Group = group_brace.into();
-                quote!(enum #group_brace)
-            }),
-        }
+        let ts = match self {
+            ToJsonItemData::Struct(ts) => ts,
+            ToJsonItemData::Enum(ts) => ts,
+        };
+        TokenStream::from_iter(ts)
     }
 }

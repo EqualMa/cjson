@@ -49,6 +49,9 @@ pub mod attrs {
         pub mod cjson {
             pub use super::super::common::cjson::{crate_, r#where};
         }
+        pub mod variant {
+            pub mod field {}
+        }
     }
 
     pub mod common {

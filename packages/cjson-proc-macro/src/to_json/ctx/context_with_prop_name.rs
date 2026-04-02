@@ -9,22 +9,18 @@ pub trait ContextWithPropName {
 
     fn to_calc_name(&mut self) -> CalcName<'_>;
 
-    fn use_expanded_name<R>(&mut self, f: impl FnOnce(&[TokenTree]) -> R) -> R {
-        let v = match self.cache_for_name() {
-            Some(expanded_name) => expanded_name,
-            None => {
-                let ts = self.to_calc_name().calc();
-                self.cache_for_name().insert(ts)
-            }
-        };
+    fn name_as_json_value(&mut self) -> &[TokenTree] {
+        if self.cache_for_name().is_none() {
+            let ts = self.to_calc_name().calc();
+            *self.cache_for_name() = Some(ts);
+        }
 
-        f(v)
+        self.cache_for_name().as_mut().unwrap()
     }
 
     fn expand_name(&mut self, mut out: expand_props::TokensCollector<'_>, span: Span) {
-        self.use_expanded_name(|expanded_name| {
-            out.extend(expanded_name.iter().map(make_fn_clone_and_set_span(span)))
-        })
+        let expanded_name = self.name_as_json_value();
+        out.extend(expanded_name.iter().map(make_fn_clone_and_set_span(span)))
     }
 }
 

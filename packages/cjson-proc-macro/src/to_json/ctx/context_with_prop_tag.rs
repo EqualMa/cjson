@@ -15,44 +15,43 @@ pub trait ContextWithPropTag {
     }
 
     fn try_expand_tag(&mut self, mut out: TokensCollector<'_>) -> Result<(), StructTagExpandError> {
-        let (ts, res) = self.prop_tag_mut().expand(Self::MSG_PROP_TAG_NOT_DEFINED);
+        let (ts, res) = self.prop_tag_mut().try_into_tokens();
         out.extend_from_slice(ts);
-        res
+        res.map_err(|()| StructTagExpandError(Self::MSG_PROP_TAG_NOT_DEFINED))
     }
 }
+
+#[derive(Default)]
+pub struct CacheForDummyTag(Option<TokenTree>);
 
 pub enum ContextPropTagMut<'a> {
     Untagged {
         default_span: Span,
-        cache_for_dummy: &'a mut Option<Vec<TokenTree>>,
+        cache_for_dummy: &'a mut CacheForDummyTag,
     },
     Tagged {
         span_tag: Span,
         ts: &'a [TokenTree],
-        accessed: &'a mut bool,
     },
 }
 
 impl<'a> ContextPropTagMut<'a> {
-    fn expand(self, msg: &'static str) -> (&'a [TokenTree], Result<(), StructTagExpandError>) {
+    pub fn try_into_tokens(self) -> (&'a [TokenTree], Result<(), ()>) {
         let res;
         let ts = match self {
             ContextPropTagMut::Untagged {
                 default_span,
-                cache_for_dummy,
+                cache_for_dummy: CacheForDummyTag(cache_for_dummy),
             } => {
-                res = Err(StructTagExpandError(msg));
-                cache_for_dummy.get_or_insert_with(|| {
+                res = Err(());
+                let tt = cache_for_dummy.get_or_insert_with(|| {
                     let tt = Literal::string("").with_replaced_span(default_span).into();
-                    vec![tt]
-                })
+                    tt
+                });
+
+                std::array::from_ref(tt)
             }
-            ContextPropTagMut::Tagged {
-                span_tag: _,
-                ts,
-                accessed,
-            } => {
-                *accessed = true;
+            ContextPropTagMut::Tagged { span_tag: _, ts } => {
                 res = Ok(());
                 ts
             }

@@ -5,45 +5,13 @@ use typed_quote::{IntoTokenTree as _, IntoTokens as _, WithSpan as _, quote};
 use crate::{ErrorCollector, expand_props::TokensCollector, to_json::ctx::custom::TokensExpanded};
 
 use super::{
-    IntoParseErrorWithSpan as _, OnlyFieldResult, PropExpanded, PropExpandedWithErr,
-    StructToDefault, StructToDefaultExpandError, TryWithOutSpan as _, custom,
-    only_field::ContextSupportsOnlyField,
+    IntoParseErrorWithSpan as _, OnlyFieldResult, StructToDefault, StructToDefaultExpandError,
+    TryWithOutSpan as _, only_field::ContextSupportsOnlyField,
 };
 
-pub trait ContextWithPropToDefault: Sized + ContextSupportsOnlyField {
-    fn cache_for_to_untagged_default(
-        &mut self,
-    ) -> &mut Option<TokensExpanded<StructToDefaultExpandError>>;
-
+pub trait CalcToUntaggedDefault: ContextSupportsOnlyField {
     fn get_to_default(&self) -> StructToDefault;
-
     fn span_to_calc_to_default(&self) -> Span;
-
-    fn expand_to_default(
-        &mut self,
-        out: TokensCollector<'_>,
-        span: Span,
-        errors: &mut ErrorCollector,
-    ) {
-        self.try_with_out_span(out, span, errors, Self::try_expand_to_default)
-    }
-
-    fn try_expand_to_default(
-        &mut self,
-        mut out: TokensCollector<'_>,
-        _span: Span, // TODO: link @to.default
-    ) -> Result<(), StructToDefaultExpandError> {
-        let (ts, res) = match self.cache_for_to_untagged_default() {
-            Some(v) => v,
-            None => {
-                let v = self.calc_expand_to_default();
-                self.cache_for_to_untagged_default().insert(v)
-            }
-        };
-
-        out.extend_from_slice(ts);
-        res.clone()
-    }
 
     fn calc_expand_to_default(
         &mut self,
@@ -135,5 +103,37 @@ pub trait ContextWithPropToDefault: Sized + ContextSupportsOnlyField {
                 )
             }
         }
+    }
+}
+
+pub trait ContextWithPropToDefault: Sized + CalcToUntaggedDefault {
+    fn cache_for_to_untagged_default(
+        &mut self,
+    ) -> &mut Option<TokensExpanded<StructToDefaultExpandError>>;
+
+    fn expand_to_default(
+        &mut self,
+        out: TokensCollector<'_>,
+        span: Span,
+        errors: &mut ErrorCollector,
+    ) {
+        self.try_with_out_span(out, span, errors, Self::try_expand_to_default)
+    }
+
+    fn try_expand_to_default(
+        &mut self,
+        mut out: TokensCollector<'_>,
+        _span: Span, // TODO: link @to.default
+    ) -> Result<(), StructToDefaultExpandError> {
+        let (ts, res) = match self.cache_for_to_untagged_default() {
+            Some(v) => v,
+            None => {
+                let v = self.calc_expand_to_default();
+                self.cache_for_to_untagged_default().insert(v)
+            }
+        };
+
+        out.extend_from_slice(ts);
+        res.clone()
     }
 }

@@ -941,6 +941,99 @@ impl ParsingTokenStream {
         input.expect_eof()
     }
 
+    pub fn parse_into_variants<Attrs, R>(
+        self,
+        mut resource: &mut R,
+        mut new_attrs: impl FnMut(&mut R) -> Attrs,
+        mut push_outer_attr: impl FnMut(&mut Attrs, &mut R, PunctPound, TokenTree),
+        mut push: impl FnMut(&mut R, Attrs, EnumVariant, Option<PunctComma>),
+    ) -> Result<(), ParseError> {
+        let mut input = self;
+
+        while !input.is_empty() {
+            let mut attrs = new_attrs(&mut resource);
+            loop {
+                let pound = next_if!(match input {
+                    #[next]
+                    Some(TokenTree::Punct(punct)) if *punct == '#' => PunctPound(punct),
+                    #[skip]
+                    _ => break,
+                });
+
+                let bracket_meta = input.next_or_error()?;
+
+                push_outer_attr(&mut attrs, &mut resource, pound, bracket_meta);
+            }
+
+            let vis = input.parse_vis();
+
+            let name = input.parse_ident()?;
+
+            let body = next_if!(match input {
+                #[next]
+                Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Parenthesis => {
+                    EnumVariantBody::Paren(GroupParen(g))
+                }
+                #[next]
+                Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Brace => {
+                    EnumVariantBody::Brace(GroupBrace(g))
+                }
+                #[skip]
+                _ => EnumVariantBody::Unit,
+            });
+
+            let discriminant = next_if!(match input {
+                #[next]
+                Some(TokenTree::Punct(eq)) if *eq == '=' => Some({
+                    let eq = PunctEq(eq);
+                    let discriminant = input
+                        .consume_before_or_all(|tt| matches!(tt,TokenTree::Punct(p) if *p == ','));
+
+                    let discriminant = discriminant.into_vec_iter();
+
+                    parse_meta_utils::EqValue {
+                        eq,
+                        value: discriminant,
+                    }
+                }),
+                #[skip]
+                _ => None,
+            });
+
+            let mut res = Ok(());
+            let comma = next_if!(match input {
+                #[next]
+                Some(TokenTree::Punct(punct)) if *punct == ',' => Some(PunctComma(punct)),
+                #[skip]
+                Some(tt) => {
+                    res = Err(ParseError::custom(
+                        "expect eof or `,`",
+                        tt.span_open_or_entire(),
+                    ));
+                    None
+                }
+                #[next]
+                None::<_> => None,
+            });
+
+            () = push(
+                resource,
+                attrs,
+                EnumVariant {
+                    vis,
+                    name,
+                    body,
+                    discriminant,
+                },
+                comma,
+            );
+
+            res?;
+        }
+
+        input.expect_eof()
+    }
+
     fn parse_vis(&mut self) -> Option<SomeVisibility> {
         let r#pub = next_if!(match self {
             #[next]
@@ -1153,7 +1246,7 @@ impl ParseError {
         iter::once(self.0).chain(self.1)
     }
 
-    fn push(&mut self, e: ParseError) {
+    pub fn push(&mut self, e: ParseError) {
         self.1.extend(e.into_iter());
     }
 
@@ -1416,6 +1509,19 @@ impl ErrorCollector {
 pub struct WhereClause<Predicates> {
     pub r#where: IdentWhere,
     pub predicates: Predicates,
+}
+
+pub struct EnumVariant {
+    pub vis: Option<SomeVisibility>,
+    pub name: Ident,
+    pub body: EnumVariantBody,
+    pub discriminant: Option<parse_meta_utils::EqValue<vec::IntoIter<TokenTree>>>,
+}
+
+pub enum EnumVariantBody {
+    Unit,
+    Paren(GroupParen),
+    Brace(GroupBrace),
 }
 
 pub enum StructData {

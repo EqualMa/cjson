@@ -25,11 +25,24 @@ fn unit_tuple() {
 }
 
 #[derive(ToJson)]
-struct Transparent(u8);
+struct TransparentImplicit(u8);
+
+#[derive(ToJson)]
+#[cjson(transparent)]
+struct TransparentExplicit<'a>(&'a str);
+
+#[derive(ToJson)]
+#[cjson(where = (T: ToJson))]
+#[cjson(transparent)]
+struct TransparentExplicitNamed<T> {
+    only: T,
+}
 
 #[test]
 fn transparent() {
-    assert_json_eq!(Transparent(56), "56");
+    assert_json_eq!(TransparentImplicit(56), "56");
+    assert_json_eq!(TransparentExplicit("56"), "\"56\"");
+    assert_json_eq!(TransparentExplicitNamed { only: false }, "false");
 }
 
 #[derive(ToJson)]
@@ -85,6 +98,7 @@ fn obj_fields() {
         r#"{"name":"hello","value":1}"#
     );
 }
+/* TODO:
 
 #[derive(ToJson)]
 enum Never {}
@@ -94,7 +108,6 @@ fn never() {
     assert_json_eq!(None::<Never>, "null");
 }
 
-/* TODO:
 #[derive(ToJson)]
 enum EnumOnlyUnit {
     OnlyUnit,

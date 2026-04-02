@@ -218,3 +218,8 @@ fn json_string_runtime() {
         r#""Dear Alice\nhello\nfrom Bob""#
     );
 }
+
+// struct JsonItemsRuntime<T>(T);
+// impl_to_json!(impl_generics![T], |self: JsonItemsRuntime<T>| [
+//     ..(&self.0) as &'cjson_lt_to_json T,
+// ]);

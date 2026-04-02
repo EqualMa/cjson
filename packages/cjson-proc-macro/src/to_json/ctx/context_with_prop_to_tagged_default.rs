@@ -13,17 +13,110 @@ use super::{
     StructToDefaultExpandError, StructToTaggedDefaultExpandError, TryWithOutSpan as _,
     context_with_prop_name::ContextWithPropName,
     context_with_prop_tag::ContextWithPropTag,
-    context_with_prop_to_default::ContextWithPropToDefault,
+    context_with_prop_to_default::CalcToUntaggedDefault,
     custom::{PropDefaultCustom, TokensExpanded},
 };
 
-pub trait ContextWithPropToTaggedDefault:
-    Sized + ContextWithPropTag + ContextWithPropName + ContextWithPropToDefault
-{
-    fn cache_for_to_tagged_default(
-        &mut self,
-    ) -> &mut Option<(Vec<TokenTree>, Result<(), StructToTaggedDefaultExpandError>)>;
+pub trait CalcToTaggedKvsDefault: CalcToUntaggedDefault {
+    fn span_to_calc_to_tagged_kvs_default(&self) -> Span;
 
+    fn calc_to_tagged_kvs_default(
+        &mut self,
+    ) -> TokensExpanded<StructToTaggedKvsDefaultExpandError> {
+        calc_to_tagged_kvs_default(self)
+    }
+}
+
+pub trait CalcToInternallyTaggedDefaultWith: ContextWithPropTag + ContextWithPropName {
+    fn calc_to_internally_tagged_default_with(
+        &mut self,
+        name_span: Span,
+        try_expand_to_tagged_kvs: impl FnOnce(
+            &mut Self,
+            TokensCollector<'_>,
+            Span,
+        ) -> Result<
+            (),
+            CustomTokensExpandErrorOr<StructToTaggedKvsDefaultExpandError>,
+        >,
+    ) -> (TokenTree, Result<(), StructToTaggedDefaultExpandError>)
+    where
+        Self: expand_props::Context,
+    {
+        let mut object_inner = vec![];
+        let mut out = TokensCollector::from(&mut object_inner);
+
+        let expand_tag = self.try_expand_tag(out.as_mut());
+
+        out.push(quote!(=).with_replaced_span(name_span).into_token_tree());
+
+        self.expand_name(out.as_mut(), name_span);
+
+        out.push(quote!(;).with_replaced_span(name_span).into_token_tree());
+
+        out.extend(quote!(..).with_replaced_span(name_span).into_token_stream());
+
+        let after_tag = try_expand_to_tagged_kvs(self, out, name_span);
+
+        let res = match (expand_tag, after_tag) {
+            (Ok(()), Ok(())) => Ok(()),
+            (expand_tag, after_tag) => Err(StructToTaggedDefaultExpandError {
+                expand_tag: expand_tag.err(),
+                after_tag: after_tag.err(),
+            }),
+        };
+
+        let object_inner = TokenStream::from_iter(object_inner);
+        let tt = quote!({ #object_inner })
+            .with_default_span(name_span)
+            .into_token_tree();
+
+        (tt, res)
+    }
+}
+
+impl<T: ?Sized + ContextWithPropTag + ContextWithPropName> CalcToInternallyTaggedDefaultWith for T {}
+
+#[derive(Default)]
+pub struct CacheForToInternallyTaggedDefault(
+    Option<(TokenTree, Result<(), StructToTaggedDefaultExpandError>)>,
+);
+
+pub trait ToInternallyTaggedDefaultWith:
+    CalcToInternallyTaggedDefaultWith + CalcToTaggedKvsDefault
+{
+    fn cache_for_to_internally_tagged_default(&mut self) -> &mut CacheForToInternallyTaggedDefault;
+
+    fn to_internally_tagged_default_with(
+        &mut self,
+        span: Span,
+        try_expand_to_tagged_kvs: impl FnOnce(
+            &mut Self,
+            TokensCollector<'_>,
+            Span,
+        ) -> Result<
+            (),
+            CustomTokensExpandErrorOr<StructToTaggedKvsDefaultExpandError>,
+        >,
+    ) -> (&TokenTree, Result<(), StructToTaggedDefaultExpandError>)
+    where
+        Self: expand_props::Context,
+    {
+        if self.cache_for_to_internally_tagged_default().0.is_none() {
+            let v = self.calc_to_internally_tagged_default_with(span, try_expand_to_tagged_kvs);
+            self.cache_for_to_internally_tagged_default().0 = Some(v);
+        }
+
+        let (expanded, res) = self
+            .cache_for_to_internally_tagged_default()
+            .0
+            .as_ref()
+            .unwrap();
+        (expanded, res.clone())
+    }
+}
+
+pub trait ContextWithPropToTaggedDefault: Sized + ToInternallyTaggedDefaultWith {
     fn prop_to_tagged_kvs(
         &mut self,
     ) -> &mut PropDefaultCustom<(
@@ -52,55 +145,13 @@ pub trait ContextWithPropToTaggedDefault:
     where
         Self: expand_props::Context,
     {
-        let (expanded, res) = match self.cache_for_to_tagged_default() {
-            Some(v) => v,
-            None => {
-                let v = self.calc_expand_to_tagged_default();
-                self.cache_for_to_tagged_default().insert(v)
-            }
-        };
+        let span = self.span_to_calc_to_tagged_default();
+        let (expanded, res) = self.to_internally_tagged_default_with(span, |this, out, span| {
+            this.try_expand_to_tagged_kvs(out, span)
+        });
 
-        out.extend_from_slice(expanded);
-
-        res.clone()
-    }
-
-    fn calc_expand_to_tagged_default(
-        &mut self,
-    ) -> (Vec<TokenTree>, Result<(), StructToTaggedDefaultExpandError>)
-    where
-        Self: expand_props::Context,
-    {
-        let name_span = self.span_to_calc_to_tagged_default();
-        let mut object_inner = vec![];
-        let mut out = TokensCollector::from(&mut object_inner);
-
-        let expand_tag = self.try_expand_tag(out.as_mut());
-
-        out.push(quote!(=).with_replaced_span(name_span).into_token_tree());
-
-        self.expand_name(out.as_mut(), name_span);
-
-        out.push(quote!(;).with_replaced_span(name_span).into_token_tree());
-
-        out.extend(quote!(..).with_replaced_span(name_span).into_token_stream());
-
-        let after_tag = self.try_expand_to_tagged_kvs(out, name_span);
-
-        let res = match (expand_tag, after_tag) {
-            (Ok(()), Ok(())) => Ok(()),
-            (expand_tag, after_tag) => Err(StructToTaggedDefaultExpandError {
-                expand_tag: expand_tag.err(),
-                after_tag: after_tag.err(),
-            }),
-        };
-
-        let object_inner = TokenStream::from_iter(object_inner);
-        let tt = quote!({ #object_inner })
-            .with_default_span(name_span)
-            .into_token_tree();
-
-        (vec![tt], res)
+        out.push(expanded.clone());
+        res
     }
 
     fn try_expand_to_tagged_kvs(
@@ -155,16 +206,16 @@ impl IntoParseErrorWithSpan for StructToTaggedKvsDefaultExpandError {
 }
 
 fn calc_to_tagged_kvs_default(
-    ctx: &mut impl ContextWithPropToTaggedDefault,
+    ctx: &mut (impl ?Sized + CalcToTaggedKvsDefault),
 ) -> TokensExpanded<StructToTaggedKvsDefaultExpandError> {
-    let name_span = ctx.span_to_calc_to_tagged_default();
+    let name_span = ctx.span_to_calc_to_tagged_kvs_default();
 
     let (object_inner, res) = match ctx.get_to_default() {
         StructToDefault::Transparent { span } => {
             let span = span.unwrap_or(name_span);
 
             let mut ts = Vec::new();
-            let mut out = TokensCollector::from(&mut ts);
+            let out = TokensCollector::from(&mut ts);
 
             let res = match ctx.context_of_only_field(span, None) {
                 OnlyFieldResult::Existing(mut ctx, only_field) => {
