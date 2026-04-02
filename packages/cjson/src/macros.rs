@@ -94,9 +94,10 @@ macro_rules! __private_json_const {
         $const_value:expr
     ) => {
         $crate::__private_impl_to_json_const! {
+            vis()
+            branch_name_or_empty()
             then_bang($crate::__private_json_const_then!)
             then_rest()
-            vis()
             $used_const_generics
             $const_value
         }
