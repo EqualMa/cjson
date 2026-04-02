@@ -106,7 +106,6 @@ enum Never {}
 fn never() {
     assert_json_eq!(None::<Never>, "null");
 }
-/* TODO:
 
 #[derive(ToJson)]
 enum EnumOnlyUnit {
@@ -118,8 +117,20 @@ enum EnumOne {
     Only(),
 }
 
-#[test]
-fn enum_one() {
-    assert_json_eq!(None::<Never>, "null");
+#[derive(ToJson)]
+enum EnumMany {
+    First(),
+    Second,
+    Third {},
+    Runtime { v: u8 },
 }
-*/
+
+#[test]
+fn enums() {
+    assert_json_eq!(EnumOnlyUnit::OnlyUnit, "\"OnlyUnit\"");
+    assert_json_eq!(EnumOne::Only(), r#"{"Only":[]}"#);
+    assert_json_eq!(EnumMany::First(), r#"{"First":[]}"#);
+    assert_json_eq!(EnumMany::Second, r#""Second""#);
+    assert_json_eq!(EnumMany::Third {}, r#"{"Third":{}}"#);
+    assert_json_eq!(EnumMany::Runtime { v: 1 }, r#"{"Runtime":{"v":1}}"#);
+}

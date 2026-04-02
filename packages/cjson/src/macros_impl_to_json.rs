@@ -1,6 +1,7 @@
 #[macro_export]
 macro_rules! impl_to_json {
     (
+        $(vis![$($vis:tt)*],)?
         $(impl_generics![$($impl_generics:tt)*],)?
         $(where_clause![$($where_clause:tt)*],)?
         $({$($used_const_generics:tt)*},)?
@@ -8,6 +9,7 @@ macro_rules! impl_to_json {
         match $matched:tt $match_body:tt
     ) => {
         $crate::__private_impl_to_json_match! {
+            ($($($vis)*)?)
             ($matched)
             $match_body
             {$($($used_const_generics)*)?}
@@ -323,6 +325,7 @@ macro_rules! __private_impl_to_json_impl {
         $compile_runtime:tt
         $last_compile_time:tt
         {$(const $CONST:ident : $ConstTy:ty $(= $const_value:expr)?;)*}
+        $(($($next_list:tt)*))?
     ) => {
         $crate::__private_impl_to_json_impl_resolve! {
             $compile_runtime
@@ -334,7 +337,7 @@ macro_rules! __private_impl_to_json_impl {
             // used_const_names
             ($($CONST,)*)
             // next_paths
-            ()
+            ( $($($next_list)*)? )
         }
     };
 }
@@ -409,13 +412,14 @@ macro_rules! __private_impl_to_json_type {
         $compile_runtime:tt
         $last_compile_time:tt
         {$(const $CONST:ident : $ConstTy:ty $(= $const_value:expr)?;)*} // used const generics
+        $(($($next_list:tt)*))?
     ) => {
         $crate::r#const::AssertJsonValueChunks<
             $crate::__private_impl_to_json_type_resolve! {
                 $compile_runtime
                 $last_compile_time
                 ($( $CONST, )*)
-                next_list()
+                next_list( $($($next_list)*)? )
             }
         >
     };
@@ -650,12 +654,26 @@ macro_rules! __private_impl_to_json_const {
             {
                 const JSON_VALUE: $crate::ser::texts::Value<&'static $crate::__private::str> = {
                     $crate::r#const::ConstAsJsonValueStr(
-                        $crate::r#const::ConstIntoJsonValueString(
-                            $crate::r#const::ConstIntoJson($const_block).const_into_json(),
-                        )
-                        .const_into_json_value_string_without_const_len()
-                        // TODO: rust limitation: generic parameters may not be used in const operations
-                        // .const_into_json_value_string::<LEN>()
+                        $crate::__private_impl_to_json_expand_if_else! {
+                            (
+                                $({$CONST})*
+                            ){
+                                $crate::r#const::ConstIntoJsonValueString(
+                                    $crate::r#const::ConstIntoJson($const_block).const_into_json(),
+                                ).const_into_json_value_string_without_const_len()
+                                // TODO: rust limitation: generic parameters may not be used in const operations
+                                // .const_into_json_value_string::<LEN>()
+                            }{
+                                $crate::r#const::ConstIntoJsonValueString(
+                                    $crate::r#const::ConstIntoJson($const_block).const_into_json(),
+                                ).const_into_json_value_string::<{
+                                    $crate::r#const::ConstIntoJsonValueString(
+                                        $crate::r#const::ConstIntoJson($const_block).const_into_json(),
+                                    )
+                                    .const_into_json_value_string_len()
+                                }>()
+                            }
+                        }
                     )
                     .const_as_json_value_str()
                 };
@@ -850,6 +868,50 @@ macro_rules! __private_impl_to_json_after_value_mixed_expand {
             $($expand_macro_rest)*
         }
     };
+    (
+        {
+            $compile_runtime:tt
+            $last_compile_time:tt
+            $used_const_generics:tt
+        }
+        {
+            vis $vis:tt
+            branch_name_or_empty($($branch_name:ident)+)
+            expand_macro_bang($($expand_macro_bang:tt)+)
+            expand_macro_rest($($expand_macro_rest:tt)*)
+        }
+    ) => {
+        $($expand_macro_bang)+ {
+            mod(
+                $crate::__private_impl_to_json_mod_resolve! {
+                    $compile_runtime
+                    $last_compile_time
+                }
+                $crate::__private_impl_to_json_impl! {
+                    $compile_runtime
+                    $last_compile_time
+                    $used_const_generics
+                    ($($branch_name)+)
+                }
+            )
+            type(
+                $crate::__private_impl_to_json_type! {
+                    $compile_runtime
+                    $last_compile_time
+                    $used_const_generics
+                    ($($branch_name)+)
+                }
+            )
+            value(
+                $crate::__private_impl_to_json_value! {
+                    $compile_runtime
+                    $last_compile_time
+                    $used_const_generics
+                }
+            )
+            $($expand_macro_rest)*
+        }
+    };
 }
 
 #[macro_export]
@@ -894,16 +956,18 @@ macro_rules! __private_impl_to_json_for_type {
 #[macro_export]
 macro_rules! __private_impl_to_json_match {
     (
+        $vis:tt
         ($matched:tt)
         // match only one
         { $(
             #[cjson(match_branch_name($match_branch_name:ident))]
-            $pat:pat $(if $pat_if:expr)? => json! $json:tt,
+            $pat:pat $(if $pat_if:expr)? => json! $json:tt
         ),+ $(,)? }
         $used_const_generics:tt
         $data:tt
     ) => {
         $crate::__private_impl_to_json_match_variants! {
+            // expanded
             {}
             [$({
                 match_branch_name { $match_branch_name }
@@ -913,24 +977,25 @@ macro_rules! __private_impl_to_json_match {
             })+]
             $used_const_generics
             {
+                vis $vis
                 matched { $matched }
                 data $data
             }
         }
     };
     (
+        $vis:tt
         ($matched:tt)
-        $empty:tt // match empty
+        {} // match empty
         $used_const_generics:tt
         $data:tt
     ) => {
         $crate::__private_impl_to_json_expand_verbatim! {
             mod(
-                $crate::__private_impl_to_json_expect_empty! $empty
                 $crate::__private_impl_to_json_expect_empty! $used_const_generics
             )
             type($crate::values::Never)
-            value(match $crate::__private_impl_to_json_expand_matched!($matched) $empty)
+            value(match $crate::__private_impl_to_json_expand_matched!($matched) {})
             $data
         }
     };
@@ -951,11 +1016,12 @@ macro_rules! __private_impl_to_json_expand_matched {
 macro_rules! __private_impl_to_json_match_variants {
     (
         $expanded:tt
+        // branches
         [
             {
                 match_branch_name { $match_branch_name:ident }
-                pat { $pat:pat }
-                pat_if { $(if $pat_if:expr)? }
+                pat $pat:tt
+                pat_if $pat_if:tt
                 json { $json:tt }
             }
             $($rest_var:tt)*
@@ -963,15 +1029,224 @@ macro_rules! __private_impl_to_json_match_variants {
         $used_const_generics:tt
         $then:tt
     ) => {
-        #[cfg(todo)]
-        $crate::__private_impl_to_json_parse! {
+        $crate::__private_impl_to_json_parse_with! {
             $json
             $used_const_generics
             {
-                expanded $expanded
-                rest_variants [$($rest_var)*]
-                then $then
+                vis(pub)
+                branch_name_or_empty($match_branch_name)
+                expand_macro_bang($crate::__private_impl_to_json_variant_expand!)
+                expand_macro_rest(
+                    expanded $expanded
+                    cur_variant {
+                        match_branch_name { $match_branch_name }
+                        pat $pat
+                        pat_if $pat_if
+                    }
+                    rest_variants [$($rest_var)*]
+                    used_const_generics $used_const_generics
+                    then $then
+                )
             }
         }
     };
+    (
+        {
+            mod $expanded_mod:tt
+            impl { $($expanded_impl:tt)* }
+            type {
+                [$($expanded_type_prefix:tt)*]
+                [$($expanded_type_postfix:tt)*]
+            }
+            match { $($expanded_match:tt)* }
+            prev_branch {
+                name($prev_branch_name:ident)
+                type($prev_branch_type:ty)
+                value($prev_branch_value:expr)
+                either_paths $prev_either_paths:tt
+            }
+        }
+        // branches
+        []
+        $used_const_generics:tt
+        {
+            vis($($vis:tt)*)
+            matched { $matched:tt }
+            data $data:tt
+        }
+    ) => {
+        // TODO: call to_json in either
+        $crate::__private_impl_to_json_expand! {
+            mod(
+                #[allow(non_snake_case)]
+                mod cjson_macro_generated_types $expanded_mod
+
+                $($vis)* struct CjsonMacroGeneratedChunk<T>(T);
+
+                $($expanded_impl)*
+            )
+            type(
+                $($expanded_type_prefix)*
+                $prev_branch_type
+                $($expanded_type_postfix)*
+            )
+            value(
+                match $crate::__private_impl_to_json_expand_matched!($matched) {
+                    $($expanded_match)*
+                    $crate::__private_impl_to_json_match_either_expr! {
+                        $prev_either_paths
+                        $prev_branch_value
+                    }
+                }
+            )
+            $data
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_impl_to_json_variant_expand {
+    (
+        mod($(
+            $define_item:item
+            $impl_item:item
+        )?)
+        type $type:tt
+        value $value:tt
+        expanded {}
+        cur_variant {
+            match_branch_name { $match_branch_name:ident }
+            pat { $pat:pat }
+            pat_if { $($pat_if:tt)* }
+        }
+        rest_variants $rest_variants:tt
+        used_const_generics $used_const_generics:tt
+        then $then:tt
+    ) => {
+        $crate::__private_impl_to_json_match_variants! {
+            // expanded
+            {
+                mod {
+                    $(
+                        pub mod $match_branch_name {
+                            $define_item
+                        }
+                    )?
+                }
+                impl {
+                    $($impl_item)?
+                }
+                type {
+                    []
+                    []
+                }
+                match {
+                    $pat $($pat_if)* =>
+                }
+                prev_branch {
+                    name ($match_branch_name)
+                    type $type
+                    value $value
+                    either_paths()
+                }
+            }
+            $rest_variants
+            $used_const_generics
+            $then
+        }
+    };
+    (
+        mod($(
+            $define_item:item
+            $impl_item:item
+        )?)
+        type $type:tt
+        value $value:tt
+        expanded {
+            mod { $($expanded_mod:tt)* }
+            impl { $($expanded_impl:tt)* }
+            type {
+                [$($expanded_type_prefix:tt)*]
+                [$($expanded_type_postfix:tt)*]
+            }
+            match { $($expanded_match:tt)* }
+            prev_branch {
+                name($prev_branch_name:ident)
+                type($prev_branch_type:ty)
+                value($prev_branch_value:expr)
+                either_paths $prev_either_paths:tt
+            }
+        }
+        cur_variant {
+            match_branch_name { $match_branch_name:ident }
+            pat { $pat:pat }
+            pat_if { $($pat_if:tt)* }
+        }
+        rest_variants $rest_variants:tt
+        used_const_generics $used_const_generics:tt
+        then $then:tt
+    ) => {
+        $crate::__private_impl_to_json_match_variants! {
+            // expanded
+            {
+                mod {
+                    $($expanded_mod)*
+                    $(
+                        pub mod $match_branch_name {
+                            $define_item
+                        }
+                    )?
+                }
+                impl {
+                    $($expanded_impl)*
+                    $($impl_item)?
+                }
+                type {
+                    [
+                        $($expanded_type_prefix)*
+                        $crate::values::Either<
+                            $prev_branch_type,
+                    ]
+                    [
+                        >
+                        $($expanded_type_postfix)*
+                    ]
+                }
+                match {
+                    $($expanded_match)*
+                        $crate::__private_impl_to_json_match_either_expr! {
+                            $prev_either_paths
+                            $crate::values::Either::A($prev_branch_value)
+                        },
+                    $pat $($pat_if)* =>
+                }
+                prev_branch {
+                    name ($match_branch_name)
+                    type $type
+                    value $value
+                    either_paths($prev_either_paths B)
+                }
+            }
+            $rest_variants
+            $used_const_generics
+            $then
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_impl_to_json_match_either_expr {
+    { () $e:expr } => { $e };
+    { ($prev:tt $Branch:ident) $e:expr } => {
+        $crate::__private_impl_to_json_match_either_expr! {
+            $prev
+            $crate::values::Either::$Branch($e)
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_impl_to_json_expand_if_else {
+    { ()       $then:tt {$($else:tt)*} } => { $($else)* };
+    { $pred:tt {$($then:tt)*} $else:tt } => { $($then)* };
 }
