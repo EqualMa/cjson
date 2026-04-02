@@ -194,12 +194,12 @@ impl ToJsonItem {
         let data = data.into_tokens();
 
         quote!(
-            #crate_path ::impl_to_json! {
+            #crate_path ::impl_to_json!(
                 impl_generics![#impl_generics],
                 where_clause![#where_clause],
                 |self: #name< #ty_generics >|
                     #data
-            }
+            );
         )
     }
 }
