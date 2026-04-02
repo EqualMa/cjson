@@ -331,7 +331,6 @@ impl ContextOfEnum {
     fn expand_to(&mut self, mut out: TokensCollector, errors: &mut ErrorCollector) {
         let item_span = self.name.span();
 
-        // TODO: match
         let mut match_inner = TokenStream::new();
         (0..(self.variants.len())).for_each(|index_variant| {
             let mut ctx_variant = ContextOfEnumVariant {
@@ -374,6 +373,14 @@ impl ContextOfEnum {
 
             // TODO: unused errors
         });
+
+        out.push(quote!(match).into_token_tree());
+        if self.variants.is_empty() {
+            out.push(quote!((*self)).into_token_tree());
+        } else {
+            out.push(quote!(self).into_token_tree());
+        }
+        out.push(quote!({ #match_inner }).into_token_tree());
     }
 }
 
