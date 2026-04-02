@@ -1075,8 +1075,7 @@ macro_rules! __private_impl_to_json_match_variants {
             data $data:tt
         }
     ) => {
-        // TODO: call to_json in either
-        $crate::__private_impl_to_json_expand! {
+        $crate::__private_impl_to_json_expand_verbatim! {
             mod(
                 #[allow(non_snake_case)]
                 mod cjson_macro_generated_types $expanded_mod
@@ -1087,7 +1086,7 @@ macro_rules! __private_impl_to_json_match_variants {
             )
             type(
                 $($expanded_type_prefix)*
-                $prev_branch_type
+                <$prev_branch_type as $crate::ser::ToJson>::ToJson<'cjson_lt_to_json>
                 $($expanded_type_postfix)*
             )
             value(
@@ -1095,7 +1094,12 @@ macro_rules! __private_impl_to_json_match_variants {
                     $($expanded_match)*
                     $crate::__private_impl_to_json_match_either_expr! {
                         $prev_either_paths
-                        $prev_branch_value
+                        <
+                            <Self as cjson_macro_generated_types::$prev_branch_name::ImplToJsonHelper>::ImplToJsonHelper<'_>
+                            as $crate::ser::ToJson
+                        >::to_json(
+                            &$prev_branch_value
+                        )
                     }
                 }
             )
@@ -1127,14 +1131,23 @@ macro_rules! __private_impl_to_json_variant_expand {
             // expanded
             {
                 mod {
-                    $(
-                        pub mod $match_branch_name {
-                            $define_item
+                    pub mod $match_branch_name {
+                        pub trait ImplToJsonHelper {
+                            type ImplToJsonHelper<'a>: $crate::ser::ToJson
+                            where
+                            Self: 'a;
                         }
-                    )?
+                        $($define_item)?
+                    }
                 }
                 impl {
                     $($impl_item)?
+
+                    $crate::__private_impl_to_json_match_impl_helper! {
+                        ($match_branch_name)
+                        $type
+                        $then
+                    }
                 }
                 type {
                     []
@@ -1191,21 +1204,30 @@ macro_rules! __private_impl_to_json_variant_expand {
             {
                 mod {
                     $($expanded_mod)*
-                    $(
-                        pub mod $match_branch_name {
-                            $define_item
+                    pub mod $match_branch_name {
+                        pub trait ImplToJsonHelper {
+                            type ImplToJsonHelper<'a>: $crate::ser::ToJson
+                            where
+                            Self: 'a;
                         }
-                    )?
+                        $($define_item)?
+                    }
                 }
                 impl {
                     $($expanded_impl)*
                     $($impl_item)?
+
+                    $crate::__private_impl_to_json_match_impl_helper! {
+                        ($match_branch_name)
+                        $type
+                        $then
+                    }
                 }
                 type {
                     [
                         $($expanded_type_prefix)*
                         $crate::values::Either<
-                            $prev_branch_type,
+                            <$prev_branch_type as $crate::ser::ToJson>::ToJson<'cjson_lt_to_json>,
                     ]
                     [
                         >
@@ -1216,7 +1238,14 @@ macro_rules! __private_impl_to_json_variant_expand {
                     $($expanded_match)*
                         $crate::__private_impl_to_json_match_either_expr! {
                             $prev_either_paths
-                            $crate::values::Either::A($prev_branch_value)
+                            $crate::values::Either::A(
+                                <
+                                    <Self as cjson_macro_generated_types::$prev_branch_name::ImplToJsonHelper>::ImplToJsonHelper<'_>
+                                    as $crate::ser::ToJson
+                                >::to_json(
+                                    &$prev_branch_value
+                                )
+                            )
                         },
                     $pat $($pat_if)* =>
                 }
@@ -1249,4 +1278,31 @@ macro_rules! __private_impl_to_json_match_either_expr {
 macro_rules! __private_impl_to_json_expand_if_else {
     { ()       $then:tt {$($else:tt)*} } => { $($else)* };
     { $pred:tt {$($then:tt)*} $else:tt } => { $($then)* };
+}
+
+#[macro_export]
+macro_rules! __private_impl_to_json_match_impl_helper {
+    (
+        ($($branch_name:ident)+)
+        ($ToJsonType:ty)
+        {
+            vis $vis:tt
+            matched $matched:tt
+            data {
+                impl_generics($($impl_generics:tt)*)
+                where_clause($($where_clause:tt)*)
+                self($_self:ident)
+                type($Type:ty)
+            }
+        }
+    ) => {
+        impl< $($impl_generics)* >
+            cjson_macro_generated_types::$($branch_name)+::ImplToJsonHelper
+            for $Type
+            $($where_clause)*
+        {
+            type ImplToJsonHelper<'cjson_lt_to_json> = $ToJsonType
+            where Self: 'cjson_lt_to_json;
+        }
+    };
 }
