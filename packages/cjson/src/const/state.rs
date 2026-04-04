@@ -28,13 +28,14 @@ impl State {
             StateInner::Intermediate(Intermediate { stack, state }) => {
                 let new_state = match state {
                     InString => panic!(),
-                    AfterArrayStart | AfterArrayComma => AfterArrayItem,
-                    AfterArrayItem => panic!(),
-                    AfterObjectStart | AfterObjectComma => panic!(),
+                    AfterArrayStart | AfterArrayComma | AfterArrayStartOrComma => AfterArrayItem,
+                    AfterArrayItem | AfterArrayStartOrItem => panic!(),
+                    AfterObjectStart | AfterObjectComma | AfterObjectStartOrComma => panic!(),
                     InObjectFieldName => panic!(),
                     AfterObjectFieldName => panic!(),
                     AfterObjectFieldColon => AfterObjectFieldValue,
                     AfterObjectFieldValue => panic!(),
+                    AfterObjectStartOrFieldValue => panic!(),
                 };
                 StateInner::Intermediate(Intermediate {
                     stack,
@@ -62,13 +63,17 @@ impl State {
                             Some(false) => AfterObjectFieldValue,
                             None => return Self::EOF,
                         },
-                        AfterArrayStart | AfterArrayComma => InString,
+                        AfterArrayStart | AfterArrayComma | AfterArrayStartOrComma => InString,
                         AfterArrayItem => panic!(),
-                        AfterObjectStart | AfterObjectComma => InObjectFieldName,
+                        AfterObjectStart | AfterObjectComma | AfterObjectStartOrComma => {
+                            InObjectFieldName
+                        }
                         InObjectFieldName => AfterObjectFieldName,
                         AfterObjectFieldName => panic!(),
                         AfterObjectFieldColon => InString,
                         AfterObjectFieldValue => panic!(),
+                        AfterArrayStartOrItem => panic!(),
+                        AfterObjectStartOrFieldValue => panic!(),
                     },
                     stack,
                 })
@@ -108,13 +113,16 @@ impl State {
                     stack,
                     state: match state {
                         InString => panic!(),
-                        AfterArrayStart | AfterArrayComma => panic!(),
+                        AfterArrayStart | AfterArrayComma | AfterArrayStartOrComma => panic!(),
+                        AfterArrayStartOrItem => panic!(),
                         AfterArrayItem => AfterArrayComma,
                         AfterObjectStart | AfterObjectComma => panic!(),
                         InObjectFieldName => panic!(),
                         AfterObjectFieldName => panic!(),
                         AfterObjectFieldColon => panic!(),
                         AfterObjectFieldValue => AfterObjectComma,
+                        AfterObjectStartOrComma => panic!(),
+                        AfterObjectStartOrFieldValue => panic!(),
                     },
                 })
             }
@@ -160,13 +168,18 @@ impl State {
             StateInner::Init => panic!(),
             StateInner::Intermediate(Intermediate { stack, state }) => match state {
                 InString => panic!(),
-                AfterArrayStart | AfterArrayItem => stack.end_array().into_state_inner(),
+                AfterArrayStart | AfterArrayItem | AfterArrayStartOrItem => {
+                    stack.end_array().into_state_inner()
+                }
                 AfterArrayComma => panic!(),
+                AfterArrayStartOrComma => panic!(),
                 AfterObjectStart | AfterObjectComma => panic!(),
                 InObjectFieldName => panic!(),
                 AfterObjectFieldName => panic!(),
                 AfterObjectFieldColon => panic!(),
                 AfterObjectFieldValue => panic!(),
+                AfterObjectStartOrComma => panic!(),
+                AfterObjectStartOrFieldValue => panic!(),
             },
             StateInner::Eof => panic!(),
         })
@@ -193,18 +206,98 @@ impl State {
         Self(match self.0 {
             StateInner::Init => panic!(),
             StateInner::Intermediate(Intermediate { stack, state }) => match state {
-                AfterObjectStart | AfterObjectFieldValue => stack.end_object().into_state_inner(),
+                AfterObjectStart | AfterObjectFieldValue | AfterObjectStartOrFieldValue => {
+                    stack.end_object().into_state_inner()
+                }
                 InString => panic!(),
                 AfterArrayStart => panic!(),
                 AfterArrayItem => panic!(),
                 AfterArrayComma => panic!(),
+                AfterArrayStartOrComma => panic!(),
+                AfterArrayStartOrItem => panic!(),
                 InObjectFieldName => panic!(),
                 AfterObjectFieldName => panic!(),
                 AfterObjectFieldColon => panic!(),
                 AfterObjectComma => panic!(),
+                AfterObjectStartOrComma => panic!(),
             },
             StateInner::Eof => panic!(),
         })
+    }
+
+    pub const fn json_items_after_item(self) -> State {
+        match &self.0 {
+            StateInner::Init => panic!(),
+            StateInner::Intermediate(Intermediate { stack: _, state }) => match state {
+                AfterArrayItem => self,
+                InString => panic!(),
+                AfterArrayStart => panic!(),
+                AfterArrayComma => panic!(),
+                AfterArrayStartOrComma => panic!(),
+                AfterArrayStartOrItem => panic!(),
+                AfterObjectStart => panic!(),
+                InObjectFieldName => panic!(),
+                AfterObjectFieldName => panic!(),
+                AfterObjectFieldColon => panic!(),
+                AfterObjectFieldValue => panic!(),
+                AfterObjectComma => panic!(),
+                AfterObjectStartOrComma => panic!(),
+                AfterObjectStartOrFieldValue => panic!(),
+            },
+            StateInner::Eof => panic!(),
+        }
+    }
+
+    pub const fn json_items_after_array_start_before_item(self) -> State {
+        match self.0 {
+            StateInner::Init => panic!(),
+            StateInner::Intermediate(Intermediate { stack, state }) => match state {
+                AfterArrayStart => Self(StateInner::Intermediate(Intermediate {
+                    stack,
+                    state: AfterArrayStartOrComma,
+                })),
+                InString => panic!(),
+                AfterArrayItem => panic!(),
+                AfterArrayComma => panic!(),
+                AfterArrayStartOrComma => panic!(),
+                AfterArrayStartOrItem => panic!(),
+                AfterObjectStart => panic!(),
+                InObjectFieldName => panic!(),
+                AfterObjectFieldName => panic!(),
+                AfterObjectFieldColon => panic!(),
+                AfterObjectFieldValue => panic!(),
+                AfterObjectComma => panic!(),
+                AfterObjectStartOrComma => panic!(),
+                AfterObjectStartOrFieldValue => panic!(),
+            },
+            StateInner::Eof => panic!(),
+        }
+    }
+
+    pub const fn json_items_between_brackets(self) -> State {
+        match self.0 {
+            StateInner::Init => panic!(),
+            StateInner::Intermediate(Intermediate { stack, state }) => match state {
+                AfterArrayStart => Self(StateInner::Intermediate(Intermediate {
+                    stack,
+                    state: AfterArrayStartOrItem,
+                })),
+                InString => panic!(),
+                AfterArrayItem => panic!(),
+                AfterArrayComma => panic!(),
+                AfterArrayStartOrComma => panic!(),
+                AfterArrayStartOrItem => panic!(),
+                AfterObjectStart => panic!(),
+                InObjectFieldName => panic!(),
+                AfterObjectFieldName => panic!(),
+                AfterObjectFieldColon => panic!(),
+                AfterObjectFieldValue => panic!(),
+                AfterObjectComma => panic!(),
+                AfterObjectStartOrComma => panic!(),
+                AfterObjectStartOrFieldValue => panic!(),
+            },
+            StateInner::Eof => panic!(),
+        }
     }
 
     pub(crate) const fn copied(&self) -> Self {
@@ -397,64 +490,82 @@ impl AfterEndArrayOrObject {
     }
 }
 
-#[derive(Debug)]
-enum IntermediateState {
-    InString,
-    AfterArrayStart,
-    AfterArrayItem,
-    AfterArrayComma,
-    AfterObjectStart,
-    InObjectFieldName,
-    AfterObjectFieldName,
-    AfterObjectFieldColon,
-    AfterObjectFieldValue,
-    AfterObjectComma,
+macro_rules! define_inter_state {
+    (
+        $(#$attr:tt)*
+        $vis:vis enum $IntermediateState:ident {
+            $($Var:ident),+ $(,)?
+        }
+
+        #[assert_same]
+        fn $assert_same:ident();
+
+        #[copied]
+        fn $copied:ident();
+    ) => {
+        $(#$attr)*
+        $vis enum $IntermediateState {
+            $($Var,)+
+        }
+
+        impl $IntermediateState {
+            const fn $assert_same(&self, other_state: &Self) {
+                match (self, other_state) {
+                    $((Self::$Var, Self::$Var) => {})+
+                    _ => {
+                        panic!("state mismatch")
+                    }
+                }
+            }
+
+            const fn $copied(&self) -> Self {
+                match self {
+                    $(Self::$Var => Self::$Var,)+
+                }
+            }
+        }
+    };
 }
+
+define_inter_state!(
+    #[derive(Debug)]
+    enum IntermediateState {
+        InString,
+        AfterArrayStart,
+        AfterArrayStartOrComma,
+        AfterArrayStartOrItem,
+        AfterArrayItem,
+        AfterArrayComma,
+        AfterObjectStart,
+        AfterObjectStartOrComma,
+        AfterObjectStartOrFieldValue,
+        InObjectFieldName,
+        AfterObjectFieldName,
+        AfterObjectFieldColon,
+        AfterObjectFieldValue,
+        AfterObjectComma,
+    }
+
+    #[assert_same]
+    fn assert_same();
+
+    #[copied]
+    fn copied();
+);
+
 impl IntermediateState {
     /// Assert the state is expecting
     /// json value except object field name
     const fn assert_expecting_value(&self) {
         match self {
-            AfterArrayStart | AfterArrayComma | AfterObjectFieldColon => {}
+            AfterArrayStart | AfterArrayComma | AfterArrayStartOrComma | AfterObjectFieldColon => {}
             InString => panic!(),
-            AfterArrayItem => panic!(),
-            AfterObjectStart | AfterObjectComma => panic!(),
+            AfterArrayStartOrItem | AfterArrayItem => panic!(),
+            AfterObjectStart | AfterObjectComma | AfterObjectStartOrComma => panic!(),
             InObjectFieldName => panic!(),
             AfterObjectFieldName => panic!(),
             AfterObjectFieldValue => panic!(),
-        }
-    }
-
-    const fn assert_same(&self, other_state: &IntermediateState) {
-        match (self, other_state) {
-            (InString, InString) => {}
-            (AfterArrayStart, AfterArrayStart) => {}
-            (AfterArrayItem, AfterArrayItem) => {}
-            (AfterArrayComma, AfterArrayComma) => {}
-            (AfterObjectStart, AfterObjectStart) => {}
-            (InObjectFieldName, InObjectFieldName) => {}
-            (AfterObjectFieldName, AfterObjectFieldName) => {}
-            (AfterObjectFieldColon, AfterObjectFieldColon) => {}
-            (AfterObjectFieldValue, AfterObjectFieldValue) => {}
-            (AfterObjectComma, AfterObjectComma) => {}
-            _ => {
-                panic!("state mismatch")
-            }
-        }
-    }
-
-    const fn copied(&self) -> Self {
-        match self {
-            Self::InString => Self::InString,
-            Self::AfterArrayStart => Self::AfterArrayStart,
-            Self::AfterArrayItem => Self::AfterArrayItem,
-            Self::AfterArrayComma => Self::AfterArrayComma,
-            Self::AfterObjectStart => Self::AfterObjectStart,
-            Self::InObjectFieldName => Self::InObjectFieldName,
-            Self::AfterObjectFieldName => Self::AfterObjectFieldName,
-            Self::AfterObjectFieldColon => Self::AfterObjectFieldColon,
-            Self::AfterObjectFieldValue => Self::AfterObjectFieldValue,
-            Self::AfterObjectComma => Self::AfterObjectComma,
+            AfterObjectStartOrFieldValue => panic!(),
         }
     }
 }

@@ -40,6 +40,24 @@ impl<'this, T: ?Sized + ToJsonStringFragment> ToJsonStringFragment for &'this T 
     }
 }
 
+pub trait ToJsonArray: ToJson {
+    type ToJsonArray<'a>: traits::Array
+    where
+        Self: 'a;
+    fn to_json_array(&self) -> Self::ToJsonArray<'_>;
+}
+
+impl<'this, T: ?Sized + ToJsonArray> ToJsonArray for &'this T {
+    type ToJsonArray<'a>
+        = T::ToJsonArray<'this>
+    where
+        Self: 'a;
+
+    fn to_json_array(&self) -> Self::ToJsonArray<'_> {
+        T::to_json_array(self)
+    }
+}
+
 mod bool;
 mod int;
 mod string;

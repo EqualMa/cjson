@@ -28,6 +28,7 @@ pub(crate) mod sealed {
     pub trait Array {}
     pub trait EmptyOrCommaSeparatedElements {}
     pub trait EmptyOrLeadingCommaWithCommaSeparatedElements {}
+    pub trait EmptyOrCommaSeparatedElementsWithTrailingComma {}
     pub trait JsonStringFragment {}
 }
 
@@ -49,6 +50,9 @@ pub trait EmptyOrCommaSeparatedElements:
     type PrependLeadingCommaIfNotEmpty: EmptyOrLeadingCommaWithCommaSeparatedElements;
     fn prepend_leading_comma_if_not_empty(self) -> Self::PrependLeadingCommaIfNotEmpty;
 
+    type AppendTrailingCommaIfNotEmpty: EmptyOrCommaSeparatedElementsWithTrailingComma;
+    fn append_trailing_comma_if_not_empty(self) -> Self::AppendTrailingCommaIfNotEmpty;
+
     type ChainWithComma<Other: EmptyOrCommaSeparatedElements>: EmptyOrCommaSeparatedElements;
     fn chain_with_comma<Other: EmptyOrCommaSeparatedElements>(
         self,
@@ -58,6 +62,11 @@ pub trait EmptyOrCommaSeparatedElements:
 
 pub trait EmptyOrLeadingCommaWithCommaSeparatedElements:
     sealed::EmptyOrLeadingCommaWithCommaSeparatedElements + IntoTextChunks
+{
+}
+
+pub trait EmptyOrCommaSeparatedElementsWithTrailingComma:
+    sealed::EmptyOrCommaSeparatedElementsWithTrailingComma + IntoTextChunks
 {
 }
 

@@ -25,3 +25,55 @@ impl traits::sealed::Value for Never {}
 impl traits::Value for Never {}
 impl traits::sealed::JsonStringFragment for Never {}
 impl traits::JsonStringFragment for Never {}
+
+pub enum NeverElements {}
+
+impl traits::sealed::Array for Never {}
+impl traits::Array for Never {
+    type IntoCommaSeparatedElements = NeverElements;
+
+    fn into_comma_separated_elements(self) -> Self::IntoCommaSeparatedElements {
+        match self {}
+    }
+}
+
+impl traits::IntoTextChunks for NeverElements {
+    type IntoTextChunks = NeverTextChunk;
+
+    fn into_text_chunks(self) -> Self::IntoTextChunks {
+        match self {}
+    }
+
+    #[cfg(feature = "alloc")]
+    fn _private_into_text_chunks_vec(self) -> alloc::vec::Vec<u8> {
+        match self {}
+    }
+}
+
+impl traits::sealed::EmptyOrLeadingCommaWithCommaSeparatedElements for NeverElements {}
+impl traits::EmptyOrLeadingCommaWithCommaSeparatedElements for NeverElements {}
+impl traits::sealed::EmptyOrCommaSeparatedElementsWithTrailingComma for NeverElements {}
+impl traits::EmptyOrCommaSeparatedElementsWithTrailingComma for NeverElements {}
+impl traits::sealed::EmptyOrCommaSeparatedElements for NeverElements {}
+impl traits::EmptyOrCommaSeparatedElements for NeverElements {
+    type PrependLeadingCommaIfNotEmpty = Self;
+
+    fn prepend_leading_comma_if_not_empty(self) -> Self::PrependLeadingCommaIfNotEmpty {
+        match self {}
+    }
+
+    type AppendTrailingCommaIfNotEmpty = Self;
+
+    fn append_trailing_comma_if_not_empty(self) -> Self::AppendTrailingCommaIfNotEmpty {
+        match self {}
+    }
+
+    type ChainWithComma<Other: traits::EmptyOrCommaSeparatedElements> = Self;
+
+    fn chain_with_comma<Other: traits::EmptyOrCommaSeparatedElements>(
+        self,
+        _: Other,
+    ) -> Self::ChainWithComma<Other> {
+        match self {}
+    }
+}

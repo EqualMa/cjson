@@ -3,7 +3,8 @@ use core::marker::PhantomData;
 use ref_cast::{RefCastCustom, ref_cast_custom};
 
 use crate::ser::{
-    ToJson, ToJsonStringFragment, iter_text_chunk::IterNonLending, texts, traits::IntoTextChunks,
+    ToJson, ToJsonArray, ToJsonStringFragment, texts,
+    traits::{self, Array, EmptyOrCommaSeparatedElements, IntoTextChunks},
 };
 
 pub struct ConstIntoJson<T>(pub T);
@@ -549,5 +550,117 @@ mod ser_chunks {
 
             texts::Value::new_without_validation(self.0.to_into_text_chunks())
         }
+    }
+}
+
+/// json_items_after_item
+///
+/// ```ignore
+/// [v1, ..items,]    -> [v1 $(,$item)*     ]
+/// [v1, ..items, v2] -> [v1 $(,$item)* , v2]
+/// ```
+#[derive(Debug, Clone, Copy)]
+pub struct ChunkConcatJsonItemsAfterItem<C: RuntimeChunk, V: ToJsonArray>(pub C, pub V);
+
+type JsonItemsAfterItem<T> =
+    <JsonItemsBetweenBrackets<T> as traits::EmptyOrCommaSeparatedElements>::PrependLeadingCommaIfNotEmpty;
+
+/// json_items_after_array_start_before_item
+///
+/// ```ignore
+/// [..items, v]      -> [   $($item,)*  v ]
+/// ```
+#[derive(Debug, Clone, Copy)]
+pub struct ChunkConcatJsonItemsAfterArrayStartBeforeItem<C: RuntimeChunk, V: ToJsonArray>(
+    pub C,
+    pub V,
+);
+
+type JsonItemsAfterArrayStartBeforeItem<T> =
+    <JsonItemsBetweenBrackets<T> as traits::EmptyOrCommaSeparatedElements>::AppendTrailingCommaIfNotEmpty;
+
+/// json_items_between_brackets
+///
+/// ```ignore
+/// [..items]         -> [   $($item),*     ]
+/// ```
+#[derive(Debug, Clone, Copy)]
+pub struct ChunkConcatJsonItemsBetweenBrackets<C: RuntimeChunk, V: ToJsonArray>(pub C, pub V);
+
+type JsonItemsBetweenBrackets<T> = <T as traits::Array>::IntoCommaSeparatedElements;
+
+impl<C: RuntimeChunk, V: ToJsonArray> RuntimeChunk for ChunkConcatJsonItemsAfterItem<C, V> {
+    const PREV_STATE: State = C::PREV_STATE;
+    const NEXT_STATE: State = C::NEXT_STATE.json_items_after_item();
+
+    type ToIntoTextChunks<'a>
+        = crate::ser::iter_text_chunk::Chain<
+        <C::ToIntoTextChunks<'a> as IntoTextChunks>::IntoTextChunks,
+        <JsonItemsAfterItem<V::ToJsonArray<'a>> as IntoTextChunks>::IntoTextChunks,
+    >
+    where
+        Self: 'a;
+
+    fn to_into_text_chunks(&self) -> Self::ToIntoTextChunks<'_> {
+        const { _ = Self::NEXT_STATE }
+        crate::ser::iter_text_chunk::Chain::new(
+            self.0.to_into_text_chunks().into_text_chunks(),
+            self.1
+                .to_json_array()
+                .into_comma_separated_elements()
+                .prepend_leading_comma_if_not_empty()
+                .into_text_chunks(),
+        )
+    }
+}
+
+impl<C: RuntimeChunk, V: ToJsonArray> RuntimeChunk
+    for ChunkConcatJsonItemsAfterArrayStartBeforeItem<C, V>
+{
+    const PREV_STATE: State = C::PREV_STATE;
+    const NEXT_STATE: State = C::NEXT_STATE.json_items_after_array_start_before_item();
+
+    type ToIntoTextChunks<'a>
+        = crate::ser::iter_text_chunk::Chain<
+        <C::ToIntoTextChunks<'a> as IntoTextChunks>::IntoTextChunks,
+        <JsonItemsAfterArrayStartBeforeItem<V::ToJsonArray<'a>> as IntoTextChunks>::IntoTextChunks,
+    >
+    where
+        Self: 'a;
+
+    fn to_into_text_chunks(&self) -> Self::ToIntoTextChunks<'_> {
+        const { _ = Self::NEXT_STATE }
+        crate::ser::iter_text_chunk::Chain::new(
+            self.0.to_into_text_chunks().into_text_chunks(),
+            self.1
+                .to_json_array()
+                .into_comma_separated_elements()
+                .append_trailing_comma_if_not_empty()
+                .into_text_chunks(),
+        )
+    }
+}
+
+impl<C: RuntimeChunk, V: ToJsonArray> RuntimeChunk for ChunkConcatJsonItemsBetweenBrackets<C, V> {
+    const PREV_STATE: State = C::PREV_STATE;
+    const NEXT_STATE: State = C::NEXT_STATE.json_items_between_brackets();
+
+    type ToIntoTextChunks<'a>
+        = crate::ser::iter_text_chunk::Chain<
+        <C::ToIntoTextChunks<'a> as IntoTextChunks>::IntoTextChunks,
+        <JsonItemsBetweenBrackets<V::ToJsonArray<'a>> as IntoTextChunks>::IntoTextChunks,
+    >
+    where
+        Self: 'a;
+
+    fn to_into_text_chunks(&self) -> Self::ToIntoTextChunks<'_> {
+        const { _ = Self::NEXT_STATE }
+        crate::ser::iter_text_chunk::Chain::new(
+            self.0.to_into_text_chunks().into_text_chunks(),
+            self.1
+                .to_json_array()
+                .into_comma_separated_elements()
+                .into_text_chunks(),
+        )
     }
 }

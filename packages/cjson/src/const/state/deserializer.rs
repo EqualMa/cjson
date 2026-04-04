@@ -153,7 +153,25 @@ impl<'a> Deserializer<'a> {
                     },
                     _ => return Err("unexpect chars after array item"),
                 },
-                IntermediateState::AfterArrayComma => {
+                IntermediateState::AfterArrayStartOrItem => {
+                    match next_byte_or_return_current!(self) {
+                        b']' => match inter_state.stack.end_array() {
+                            AfterEndArrayOrObject::Intermediate(new_state) => {
+                                inter_state = new_state
+                            }
+                            AfterEndArrayOrObject::Eof => {
+                                return {
+                                    tri!(self.expect_eof_after_value());
+                                    Ok(StateInner::Eof)
+                                };
+                            }
+                        },
+                        _ => return Err("expect `]` after array start or item"),
+                    }
+                }
+
+                // note that for AfterArrayStartOrComma: (']' | value) & value = value
+                IntermediateState::AfterArrayComma | IntermediateState::AfterArrayStartOrComma => {
                     if self.0.is_empty() {
                         return Ok(StateInner::Intermediate(inter_state));
                     } else {
@@ -214,6 +232,30 @@ impl<'a> Deserializer<'a> {
                     b'"' => inter_state.state = IntermediateState::InObjectFieldName,
                     _ => return Err("unexpected chars after comma in object"),
                 },
+                IntermediateState::AfterObjectStartOrComma => {
+                    // note that ('"' | '}') & '"' = '"'
+                    match next_byte_or_return_current!(self) {
+                        b'"' => inter_state.state = IntermediateState::InObjectFieldName,
+                        _ => return Err("unexpected chars after object after or comma"),
+                    }
+                }
+                IntermediateState::AfterObjectStartOrFieldValue => {
+                    // note that ('"' | '}') & (',' | '}') = '}'
+                    match next_byte_or_return_current!(self) {
+                        b'}' => match inter_state.stack.end_object() {
+                            AfterEndArrayOrObject::Intermediate(new_state) => {
+                                inter_state = new_state
+                            }
+                            AfterEndArrayOrObject::Eof => {
+                                return {
+                                    tri!(self.expect_eof_after_value());
+                                    Ok(StateInner::Eof)
+                                };
+                            }
+                        },
+                        _ => return Err("unexpect chars after object start or field value"),
+                    }
+                }
             }
         }
     }

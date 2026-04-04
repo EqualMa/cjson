@@ -1,6 +1,6 @@
 use ref_cast::{RefCastCustom, ref_cast_custom};
 
-use crate::ser::ToJson;
+use crate::ser::{ToJson, ToJsonArray};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Never {}
@@ -72,3 +72,8 @@ impl Finite<f32> {
 }
 
 mod float;
+
+#[derive(Debug, Clone, Copy)]
+pub struct ChainArray<A: ToJsonArray, B: ToJsonArray>(pub A, pub B);
+
+mod chain;

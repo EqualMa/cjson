@@ -176,30 +176,14 @@ macro_rules! __private_json_after_array_start {
     };
     // runtime items
     (
-        [
-            prev $prev:tt
-            current_compile_time $compile_time:tt
-            after_value $after_value:tt
-        ]
+        $state:tt
         ..($runtime_items:expr)
         $(as $runtime_type:ty)?
         $(, $($rest:tt)*)?
     ) => {
-        $crate::__private_json_after_array_comma! {
-            [
-                prev[
-                    prev $prev
-                    current {
-                        compile_time $compile_time
-                        runtime[
-                            json_items($runtime_items)
-                            $(as $runtime_type)?
-                        ]
-                    }
-                ]
-                current_compile_time[]
-                after_value $after_value
-            ]
+        $crate::__private_json_after_runtime_items! {
+            $state
+            [after_array_start ($runtime_items) $($runtime_type)?]
             $($($rest)*)?
         }
     };
@@ -216,6 +200,203 @@ macro_rules! __private_json_after_array_start {
                 before_value()
             }
             $state
+            $($rest)+
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_json_after_runtime_items {
+    // runtime_items_after_array_start + EOF
+    (
+        [
+            prev $prev:tt
+            current_compile_time $current_compile_time:tt
+            after_value $after_value:tt
+        ]
+        [after_array_start ($runtime_items:expr) $($runtime_type:ty)?]
+        // EOF
+    ) => {
+        $crate::__private_json_after_value! {
+            chunks[
+                prev_compile_runtime[
+                    prev $prev
+                    current {
+                        compile_time $current_compile_time
+                        runtime[
+                            json_items_between_brackets($runtime_items)
+                            $(as $runtime_type)?
+                        ]
+                    }
+                ]
+                last_compile_time[
+                    right_bracket()
+                ]
+            ]
+            after_value $after_value
+        }
+    };
+    // runtime_items_after_item + EOF
+    (
+        [
+            prev $prev:tt
+            current_compile_time $current_compile_time:tt
+            after_value $after_value:tt
+        ]
+        [after_item ($runtime_items:expr) $($runtime_type:ty)?]
+        // EOF
+    ) => {
+        $crate::__private_json_after_value! {
+            chunks[
+                prev_compile_runtime[
+                    prev $prev
+                    current {
+                        compile_time $current_compile_time
+                        runtime[
+                            json_items_after_item($runtime_items)
+                            $(as $runtime_type)?
+                        ]
+                    }
+                ]
+                last_compile_time[
+                    right_bracket()
+                ]
+            ]
+            after_value $after_value
+        }
+    };
+    // runtime_items + runtime_items
+    (
+        $state:tt
+        [$items_kind:ident ($prev_runtime_items:expr) $($prev_runtime_type:ty)?]
+        ..($runtime_items:expr)
+        $(as $runtime_type:ty)?
+        $(, $($rest:tt)*)?
+    ) => {
+        $crate::__private_json_after_runtime_items! {
+            $state
+            [
+                $items_kind
+                (
+                    $crate::values::ChainArray($prev_runtime_items, $runtime_items)
+                )
+                $crate::values::ChainArray<
+                    $crate::__expand_or![[$($prev_runtime_type)?][_]],
+                    $crate::__expand_or![[$($runtime_type     )?][_]],
+                >
+            ]
+            $($($rest)*)?
+        }
+    };
+    // runtime_items + const_items
+    (
+        $state:tt
+        $runtime:tt
+        ..[ $($array_inner:tt)* ]
+        $(,)?
+    ) => {
+        $crate::__private_json_after_runtime_items! {
+            $state
+            $runtime
+            $($array_inner)*
+        }
+    };
+    // runtime_items + const_items
+    (
+        $state:tt
+        $runtime:tt
+        ..[ $($array_inner:tt)* ]
+        , $($rest:tt)+
+    ) => {
+        $crate::__private_json_array_detect_trailing_comma! {
+            {$($array_inner)*}
+            [
+                $crate::__private_json_after_runtime_items! {
+                    $state
+                    $runtime
+                    $($array_inner)*
+                    $($rest)+
+                }
+            ]
+            [
+                $crate::__private_json_after_runtime_items! {
+                    $state
+                    $runtime
+                    $($array_inner)*
+                    ,
+                    $($rest)+
+                }
+            ]
+        }
+    };
+    // runtime_items_after_array_start  + item
+    (
+        [
+            prev $prev:tt
+            current_compile_time $compile_time:tt
+            after_value $after_value:tt
+        ]
+        [after_array_start ($runtime_items:expr) $($runtime_type:ty)?]
+        $($rest:tt)+
+    ) => {
+        $crate::__private_json_value! {
+            {
+                after_comma_bang(
+                    $crate::__private_json_after_array_comma!
+                )
+                before_value(
+                )
+            }
+            [
+                prev[
+                    prev $prev
+                    current {
+                        compile_time $compile_time
+                        runtime[
+                            json_items_after_array_start_before_item($runtime_items)
+                            $(as $runtime_type)?
+                        ]
+                    }
+                ]
+                current_compile_time[]
+                after_value $after_value
+            ]
+            $($rest)+
+        }
+    };
+    // runtime_items_after_item  + item
+    (
+        [
+            prev $prev:tt
+            current_compile_time $compile_time:tt
+            after_value $after_value:tt
+        ]
+        [after_array_item ($runtime_items:expr) $($runtime_type:ty)?]
+        $($rest:tt)+
+    ) => {
+        $crate::__private_json_value! {
+            {
+                after_comma_bang(
+                    $crate::__private_json_after_array_comma!
+                )
+                before_value(
+                    comma()
+                )
+            }
+            [
+                prev[
+                    prev $prev
+                    current {
+                        compile_time $compile_time
+                        runtime[
+                            json_items_after_item($runtime_items)
+                            $(as $runtime_type)?
+                        ]
+                    }
+                ]
+                current_compile_time[]
+                after_value $after_value
+            ]
             $($rest)+
         }
     };

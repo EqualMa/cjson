@@ -1,4 +1,4 @@
-use crate::{ToJson, ser::ToJsonStringFragment, utils::impl_many};
+use crate::{ToJson, ser::ToJsonArray, ser::ToJsonStringFragment, utils::impl_many};
 
 impl_many!({
     {
@@ -25,6 +25,20 @@ impl_many!({
             match self {
                 EitherA!(this) => EitherA!(A::to_json(this)),
                 EitherB!(this) => EitherB!(B::to_json(this)),
+            }
+        }
+    }
+
+    impl<A: ToJsonArray, B: ToJsonArray> ToJsonArray for Either<A, B> {
+        type ToJsonArray<'a>
+            = Either<A::ToJsonArray<'a>, B::ToJsonArray<'a>>
+        where
+            Self: 'a;
+
+        fn to_json_array(&self) -> Self::ToJsonArray<'_> {
+            match self {
+                EitherA!(this) => EitherA!(A::to_json_array(this)),
+                EitherB!(this) => EitherB!(B::to_json_array(this)),
             }
         }
     }

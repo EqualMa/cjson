@@ -4,6 +4,7 @@ use crate::{
         traits::{self, IntoTextChunks},
     },
     utils::impl_many,
+    values::Either as CrateEither,
 };
 
 macro_rules! derive_either_one {
@@ -61,4 +62,18 @@ impl_many!({
         Value,
         JsonStringFragment,
     );
+
+    impl<A: traits::Array, B: traits::Array> traits::sealed::Array for Either<A, B> {}
+    impl<A: traits::Array, B: traits::Array> traits::Array for Either<A, B> {
+        type IntoCommaSeparatedElements =
+            CrateEither<A::IntoCommaSeparatedElements, B::IntoCommaSeparatedElements>;
+        fn into_comma_separated_elements(self) -> Self::IntoCommaSeparatedElements {
+            match self {
+                EitherA!(this) => CrateEither::A(A::into_comma_separated_elements(this)),
+                EitherB!(this) => CrateEither::B(B::into_comma_separated_elements(this)),
+            }
+        }
+    }
 });
+
+mod crate_either;

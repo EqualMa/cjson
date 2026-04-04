@@ -49,3 +49,16 @@ impl<
 > traits::EmptyOrLeadingCommaWithCommaSeparatedElements for Chain<A, B>
 {
 }
+
+impl<
+    A: traits::EmptyOrCommaSeparatedElementsWithTrailingComma,
+    B: traits::EmptyOrCommaSeparatedElementsWithTrailingComma,
+> traits::sealed::EmptyOrCommaSeparatedElementsWithTrailingComma for Chain<A, B>
+{
+}
+impl<
+    A: traits::EmptyOrCommaSeparatedElementsWithTrailingComma,
+    B: traits::EmptyOrCommaSeparatedElementsWithTrailingComma,
+> traits::EmptyOrCommaSeparatedElementsWithTrailingComma for Chain<A, B>
+{
+}

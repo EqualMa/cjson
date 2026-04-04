@@ -20,6 +20,12 @@ impl traits::EmptyOrCommaSeparatedElements for Empty {
         self
     }
 
+    type AppendTrailingCommaIfNotEmpty = Self;
+
+    fn append_trailing_comma_if_not_empty(self) -> Self::AppendTrailingCommaIfNotEmpty {
+        self
+    }
+
     type ChainWithComma<Other: traits::EmptyOrCommaSeparatedElements> = Other;
 
     fn chain_with_comma<Other: traits::EmptyOrCommaSeparatedElements>(
@@ -32,3 +38,6 @@ impl traits::EmptyOrCommaSeparatedElements for Empty {
 
 impl traits::sealed::EmptyOrLeadingCommaWithCommaSeparatedElements for Empty {}
 impl traits::EmptyOrLeadingCommaWithCommaSeparatedElements for Empty {}
+
+impl traits::sealed::EmptyOrCommaSeparatedElementsWithTrailingComma for Empty {}
+impl traits::EmptyOrCommaSeparatedElementsWithTrailingComma for Empty {}

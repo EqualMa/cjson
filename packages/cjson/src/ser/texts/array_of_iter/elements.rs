@@ -206,6 +206,12 @@ impl<I: Iterator<Item: traits::Text>> traits::EmptyOrCommaSeparatedElements
         PrependLeadingCommaIfNotEmpty(self.0)
     }
 
+    type AppendTrailingCommaIfNotEmpty = AppendTrailingCommaIfNotEmpty<I>;
+
+    fn append_trailing_comma_if_not_empty(self) -> Self::AppendTrailingCommaIfNotEmpty {
+        AppendTrailingCommaIfNotEmpty(self.0)
+    }
+
     type ChainWithComma<Other: traits::EmptyOrCommaSeparatedElements> = ChainWithComma<I, Other>;
 
     fn chain_with_comma<Other: traits::EmptyOrCommaSeparatedElements>(
@@ -265,6 +271,139 @@ impl<I: Iterator<Item: traits::Text>> traits::EmptyOrLeadingCommaWithCommaSepara
 {
 }
 
+struct InnerAppendTrailingComma<I: Iterator<Item: IterTextChunk>>(Inner<I>);
+
+pub struct AppendTrailingCommaIfNotEmptyChunks<I: Iterator<Item: traits::Text>>(
+    InnerAppendTrailingComma<MapIntoTextChunks<I>>,
+);
+
+impl<I: Iterator<Item: IterTextChunk>> InnerAppendTrailingComma<I> {
+    fn next_text_chunk(&mut self) -> Option<Chunk<<I::Item as IterTextChunk>::Chunk<'_>>> {
+        enum End {
+            WithTrailingComma,
+            Empty,
+        }
+
+        macro_rules! BorrowingOutput {
+            () => {
+                ForLt![Option<Chunk<<I::Item as IterTextChunk>::Chunk<'_>>>]
+            };
+        }
+
+        match polonius::<Inner<I>, End, BorrowingOutput![]>(&mut self.0, |this| {
+            let (cur, iter) = match &mut this.0 {
+                Some((cur_opt, iter)) => match cur_opt {
+                    Some(cur) => (cur, iter),
+                    None => {
+                        // first run
+                        *cur_opt = iter.next();
+                        match cur_opt {
+                            Some(cur) => (cur, iter),
+                            None => return PoloniusResult::Owned(End::Empty),
+                        }
+                    }
+                },
+                None => return PoloniusResult::Borrowing(None),
+            };
+
+            struct NextItem<T>(Option<T>);
+
+            match polonius::<I::Item, (), BorrowingOutput![]>(cur, |cur| {
+                match cur.next_text_chunk() {
+                    Some(v) => PoloniusResult::Borrowing(Some(Chunk::Chunk(v))),
+                    None => PoloniusResult::Owned(()),
+                }
+            }) {
+                PoloniusResult::Borrowing(v) => PoloniusResult::Borrowing(v),
+                PoloniusResult::Owned {
+                    value: (),
+                    input_borrow: cur,
+                } => match iter.next() {
+                    Some(item) => {
+                        *cur = item;
+                        PoloniusResult::Borrowing(Some(Chunk::Comma))
+                    }
+                    None => PoloniusResult::Owned(End::WithTrailingComma),
+                },
+            }
+        }) {
+            PoloniusResult::Borrowing(v) => v,
+            PoloniusResult::Owned {
+                value: end,
+                input_borrow: this,
+            } => {
+                this.0 = None;
+
+                match end {
+                    End::WithTrailingComma => Some(Chunk::Comma),
+                    End::Empty => None,
+                }
+            }
+        }
+    }
+    fn bytes_len_hint(&self) -> (usize, Option<usize>) {
+        match &self.0.0 {
+            Some((cur_opt, iter)) => {
+                match cur_opt {
+                    Some(cur) => {
+                        (SizeHint(cur.bytes_len_hint()) + 1 + (SizeHint(iter.size_hint()) * 2)).0
+                    }
+                    // not started
+                    None => (SizeHint(iter.size_hint()) * 2).0,
+                }
+            }
+            None => (0, Some(0)),
+        }
+    }
+}
+
+impl<I: Iterator<Item: traits::Text> + core::fmt::Debug> core::fmt::Debug
+    for AppendTrailingCommaIfNotEmptyChunks<I>
+where
+    <I::Item as IntoTextChunks>::IntoTextChunks: core::fmt::Debug,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.0.0.fmt(f, "AppendTrailingCommaIfNotEmptyChunks")
+    }
+}
+
+impl<I: Iterator<Item: traits::Text>> IterTextChunk for AppendTrailingCommaIfNotEmptyChunks<I> {
+    type Chunk<'a>
+        = Chunk<<<I::Item as IntoTextChunks>::IntoTextChunks as IterTextChunk>::Chunk<'a>>
+    where
+        Self: 'a;
+
+    fn next_text_chunk(&mut self) -> Option<Self::Chunk<'_>> {
+        self.0.next_text_chunk()
+    }
+
+    fn bytes_len_hint(&self) -> (usize, Option<usize>) {
+        self.0.bytes_len_hint()
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct AppendTrailingCommaIfNotEmpty<I: Iterator<Item: traits::Text>>(I);
+
+impl<I: Iterator<Item: traits::Text>> IntoTextChunks for AppendTrailingCommaIfNotEmpty<I> {
+    type IntoTextChunks = AppendTrailingCommaIfNotEmptyChunks<I>;
+
+    fn into_text_chunks(self) -> Self::IntoTextChunks {
+        AppendTrailingCommaIfNotEmptyChunks(InnerAppendTrailingComma(Inner::new(
+            MapIntoTextChunks { iter: self.0 },
+        )))
+    }
+}
+
+impl<I: Iterator<Item: traits::Text>> traits::sealed::EmptyOrCommaSeparatedElementsWithTrailingComma
+    for AppendTrailingCommaIfNotEmpty<I>
+{
+}
+impl<I: Iterator<Item: traits::Text>> traits::EmptyOrCommaSeparatedElementsWithTrailingComma
+    for AppendTrailingCommaIfNotEmpty<I>
+{
+}
+
 pub struct ChainWithComma<
     I: Iterator<Item: traits::Text>,
     Other: traits::EmptyOrCommaSeparatedElements,
@@ -297,6 +436,18 @@ impl<I: Iterator<Item: traits::Text>, ThisOther: traits::EmptyOrCommaSeparatedEl
         super::super::Chain(
             PrependLeadingCommaIfNotEmpty(self.0),
             self.1.prepend_leading_comma_if_not_empty(),
+        )
+    }
+
+    type AppendTrailingCommaIfNotEmpty = super::super::Chain<
+        AppendTrailingCommaIfNotEmpty<I>,
+        ThisOther::AppendTrailingCommaIfNotEmpty,
+    >;
+
+    fn append_trailing_comma_if_not_empty(self) -> Self::AppendTrailingCommaIfNotEmpty {
+        super::super::Chain(
+            AppendTrailingCommaIfNotEmpty(self.0),
+            self.1.append_trailing_comma_if_not_empty(),
         )
     }
 
