@@ -473,11 +473,11 @@ impl<A: RuntimeChunk, B: RuntimeChunk> ChunkConcat<A, B> {
 
 impl<A: RuntimeChunk, B: RuntimeChunk> RuntimeChunk for ChunkConcat<A, B> {
     const PREV_STATE: State = {
-        Self::ASSERT;
+        () = Self::ASSERT;
         A::PREV_STATE
     };
     const NEXT_STATE: State = {
-        Self::ASSERT;
+        () = Self::ASSERT;
         B::NEXT_STATE
     };
 
