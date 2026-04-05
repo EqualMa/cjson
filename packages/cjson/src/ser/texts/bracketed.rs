@@ -2,7 +2,10 @@ use core::mem;
 
 use crate::{ser::iter_text_chunk::IterTextChunk, utils::size_hint::SizeHint};
 
-use super::super::traits::{self, EmptyOrCommaSeparatedElements};
+use super::{
+    super::traits::{self, EmptyOrCommaSeparatedElements},
+    Bracketed,
+};
 
 #[derive(Debug)]
 enum Inner<Values: IterTextChunk> {
@@ -69,20 +72,20 @@ impl<Values: IterTextChunk> IterTextChunk for TextChunks<Values> {
     }
 }
 
-impl<Values: EmptyOrCommaSeparatedElements> traits::IntoTextChunks for super::Array<Values> {
+impl<Values: EmptyOrCommaSeparatedElements> traits::IntoTextChunks for Bracketed<Values> {
     type IntoTextChunks = TextChunks<Values::IntoTextChunks>;
 
     fn into_text_chunks(self) -> Self::IntoTextChunks {
         TextChunks(Inner::Init(self.0.into_text_chunks()))
     }
 }
-impl<Values: EmptyOrCommaSeparatedElements> traits::sealed::Text for super::Array<Values> {}
-impl<Values: EmptyOrCommaSeparatedElements> traits::Text for super::Array<Values> {}
-impl<Values: EmptyOrCommaSeparatedElements> traits::sealed::Value for super::Array<Values> {}
-impl<Values: EmptyOrCommaSeparatedElements> traits::Value for super::Array<Values> {}
+impl<Values: EmptyOrCommaSeparatedElements> traits::sealed::Text for Bracketed<Values> {}
+impl<Values: EmptyOrCommaSeparatedElements> traits::Text for Bracketed<Values> {}
+impl<Values: EmptyOrCommaSeparatedElements> traits::sealed::Value for Bracketed<Values> {}
+impl<Values: EmptyOrCommaSeparatedElements> traits::Value for Bracketed<Values> {}
 
-impl<Values: EmptyOrCommaSeparatedElements> traits::sealed::Array for super::Array<Values> {}
-impl<Values: EmptyOrCommaSeparatedElements> traits::Array for super::Array<Values> {
+impl<Values: EmptyOrCommaSeparatedElements> traits::sealed::Array for Bracketed<Values> {}
+impl<Values: EmptyOrCommaSeparatedElements> traits::Array for Bracketed<Values> {
     type IntoCommaSeparatedElements = Values;
 
     fn into_comma_separated_elements(self) -> Self::IntoCommaSeparatedElements {

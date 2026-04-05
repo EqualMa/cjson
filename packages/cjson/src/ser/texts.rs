@@ -16,8 +16,8 @@ mod boolean;
 
 /// Json array.
 #[derive(Debug, Clone, Copy)]
-pub struct Array<Values: traits::EmptyOrCommaSeparatedElements>(pub Values);
-mod array;
+pub struct Bracketed<Values: traits::EmptyOrCommaSeparatedElements>(pub Values);
+mod bracketed;
 
 /// Json array.
 #[derive(Debug, Clone, Copy)]
