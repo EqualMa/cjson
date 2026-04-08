@@ -414,7 +414,7 @@ macro_rules! __private_impl_to_json_type {
         {$(const $CONST:ident : $ConstTy:ty $(= $const_value:expr)?;)*} // used const generics
         $(($($next_list:tt)*))?
     ) => {
-        $crate::r#const::AssertJsonValueChunks<
+        $crate::r#const::value::Value<
             $crate::__private_impl_to_json_type_resolve! {
                 $compile_runtime
                 $last_compile_time
@@ -502,7 +502,7 @@ macro_rules! __private_impl_to_json_value {
         $used_const_generics:tt
         // {$(const $CONST:ident : $ConstTy:ty $(= $const_value:expr)?;)*} // used const generics
     ) => {
-        $crate::r#const::AssertJsonValueChunks(
+        $crate::r#const::value::Value::new(
             $crate::__private_impl_to_json_value_resolve!(
                 $compile_runtime
                 $last_compile_time

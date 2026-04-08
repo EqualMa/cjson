@@ -1,11 +1,19 @@
-use core::marker::PhantomData;
+use core::{marker::PhantomData, mem::transmute};
 
 use ref_cast::{RefCastCustom, ref_cast_custom};
 
-use crate::ser::{
-    ToJson, ToJsonArray, ToJsonStringFragment, texts,
-    traits::{self, Array, EmptyOrCommaSeparatedElements, IntoTextChunks},
+use crate::{
+    ser::{
+        ToJson, ToJsonArray, ToJsonStringFragment,
+        texts::{self, Chain},
+        traits::{self, Array, EmptyOrCommaSeparatedElements, IntoTextChunks},
+    },
+    utils::impl_many,
 };
+
+pub mod value;
+
+pub mod array;
 
 pub struct ConstIntoJson<T>(pub T);
 
@@ -35,6 +43,15 @@ impl<T> AsRefU8Slice<T> {
 pub trait HasConstJsonValue {
     const JSON_VALUE: texts::Value<&'static str>;
 }
+
+mod sealed {
+    pub trait HasConstJsonArray {}
+}
+
+/// Asserts [`Self::JSON_VALUE`] starts with `[` and ends with `]`.
+///
+/// [`Self::JSON_VALUE`]: HasConstJsonValue::JSON_VALUE
+pub trait HasConstJsonArray: HasConstJsonValue + sealed::HasConstJsonArray {}
 
 pub struct ConstJsonValue<T: ?Sized>(PhantomData<T>);
 impl<T: ?Sized> ConstJsonValue<T> {
@@ -68,13 +85,17 @@ impl<T: ?Sized + HasConstJsonValue> ConstJsonValue<T> {
 mod ser {
     use core::marker::PhantomData;
 
-    use crate::ser::{
-        ToJson,
-        iter_text_chunk::IterNonLending,
-        traits::{self, IntoTextChunks},
+    use crate::{
+        ser::{
+            ToJson,
+            iter_text_chunk::{ConstChunk, IterNonLending},
+            texts::{self, Empty},
+            traits::{self, IntoTextChunks},
+        },
+        values::Either,
     };
 
-    use super::{ConstJsonValue, HasConstJsonValue};
+    use super::{ConstJsonValue, HasConstJsonArray, HasConstJsonValue};
 
     pub struct Chunk<T: ?Sized + HasConstJsonValue>(PhantomData<T>);
 
@@ -107,6 +128,49 @@ mod ser {
     impl<T: ?Sized + HasConstJsonValue> traits::Text for ConstJsonValue<T> {}
     impl<T: ?Sized + HasConstJsonValue> traits::sealed::Value for ConstJsonValue<T> {}
     impl<T: ?Sized + HasConstJsonValue> traits::Value for ConstJsonValue<T> {}
+
+    impl<T: ?Sized + HasConstJsonArray> traits::sealed::Array for ConstJsonValue<T> {}
+    impl<T: ?Sized + HasConstJsonArray> traits::Array for ConstJsonValue<T> {
+        type IntoCommaSeparatedElements =
+            Either<texts::NonEmptyCommaSeparatedItems<ConstChunk<ConstNonEmptyItems<T>>>, Empty>;
+
+        fn into_comma_separated_elements(self) -> Self::IntoCommaSeparatedElements {
+            const {
+                let items = array_items(T::JSON_VALUE.inner());
+                if items.is_empty() {
+                    Either::B(Empty)
+                } else {
+                    Either::A(texts::NonEmptyCommaSeparatedItems::new_without_validation(
+                        ConstChunk::DEFAULT,
+                    ))
+                }
+            }
+        }
+    }
+
+    enum Never {}
+    pub struct ConstNonEmptyItems<T: ?Sized + HasConstJsonArray>(Never, PhantomData<T>);
+
+    const fn array_items(arr: &str) -> &str {
+        let (lb, after_lb) = arr.split_at(1);
+        assert!(matches!(lb.as_bytes(), b"["));
+
+        let (items, rb) = after_lb.split_at(after_lb.len() - 1);
+        assert!(matches!(rb.as_bytes(), b"]"));
+
+        items
+    }
+
+    impl<T: ?Sized + HasConstJsonArray> crate::ser::iter_text_chunk::HasConstChunk
+        for ConstNonEmptyItems<T>
+    {
+        const CHUNK: &'static str = {
+            let items = array_items(T::JSON_VALUE.inner());
+
+            assert!(!items.is_empty());
+            items
+        };
+    }
 
     mod r#const {}
 }
@@ -150,8 +214,6 @@ pub use self::state::{
 };
 
 pub(crate) use self::state::assert_json_value;
-
-pub mod array;
 
 #[derive(Debug)]
 pub struct StatedChunkStr<'a> {
@@ -420,18 +482,16 @@ impl<C: RuntimeChunk, V: ToJson> RuntimeChunk for ChunkConcatJsonValue<C, V> {
     const NEXT_STATE: State = C::NEXT_STATE.json_value();
 
     type ToIntoTextChunks<'a>
-        = crate::ser::iter_text_chunk::Chain<
-        <C::ToIntoTextChunks<'a> as IntoTextChunks>::IntoTextChunks,
-        <V::ToJson<'a> as IntoTextChunks>::IntoTextChunks,
-    >
+        = Chain<C::ToIntoTextChunks<'a>, V::ToJson<'a>>
     where
         Self: 'a;
 
     fn to_into_text_chunks(&self) -> Self::ToIntoTextChunks<'_> {
         const { _ = Self::NEXT_STATE }
-        crate::ser::iter_text_chunk::Chain::new(
-            self.0.to_into_text_chunks().into_text_chunks(),
-            self.1.to_json().into_text_chunks(),
+        Chain(
+            //
+            self.0.to_into_text_chunks(),
+            self.1.to_json(),
         )
     }
 }
@@ -446,18 +506,15 @@ impl<C: RuntimeChunk, V: ToJsonStringFragment> RuntimeChunk
     const NEXT_STATE: State = C::NEXT_STATE.json_string_fragment();
 
     type ToIntoTextChunks<'a>
-        = crate::ser::iter_text_chunk::Chain<
-        <C::ToIntoTextChunks<'a> as IntoTextChunks>::IntoTextChunks,
-        <V::ToJsonStringFragment<'a> as IntoTextChunks>::IntoTextChunks,
-    >
+        = Chain<C::ToIntoTextChunks<'a>, V::ToJsonStringFragment<'a>>
     where
         Self: 'a;
 
     fn to_into_text_chunks(&self) -> Self::ToIntoTextChunks<'_> {
         const { _ = Self::NEXT_STATE }
-        crate::ser::iter_text_chunk::Chain::new(
-            self.0.to_into_text_chunks().into_text_chunks(),
-            self.1.to_json_string_fragment().into_text_chunks(),
+        Chain(
+            self.0.to_into_text_chunks(),
+            self.1.to_json_string_fragment(),
         )
     }
 }
@@ -482,20 +539,69 @@ impl<A: RuntimeChunk, B: RuntimeChunk> RuntimeChunk for ChunkConcat<A, B> {
     };
 
     type ToIntoTextChunks<'a>
-        = crate::ser::iter_text_chunk::Chain<
-        <A::ToIntoTextChunks<'a> as IntoTextChunks>::IntoTextChunks,
-        <B::ToIntoTextChunks<'a> as IntoTextChunks>::IntoTextChunks,
-    >
+        = Chain<A::ToIntoTextChunks<'a>, B::ToIntoTextChunks<'a>>
     where
         Self: 'a;
 
     fn to_into_text_chunks(&self) -> Self::ToIntoTextChunks<'_> {
         const { () = Self::ASSERT }
 
-        crate::ser::iter_text_chunk::Chain::new(
-            self.0.to_into_text_chunks().into_text_chunks(),
-            self.1.to_into_text_chunks().into_text_chunks(),
+        Chain(
+            //
+            self.0.to_into_text_chunks(),
+            self.1.to_into_text_chunks(),
         )
+    }
+}
+
+impl<A: RuntimeChunkStartingWithCompileTime, B: RuntimeChunk> RuntimeChunkStartingWithCompileTime
+    for ChunkConcat<A, B>
+{
+    type RemoveGroupOpen<'a>
+        = Chain<A::RemoveGroupOpen<'a>, B::ToIntoTextChunks<'a>>
+    where
+        Self: 'a;
+
+    const PREV_STATE_REMOVE_GROUP_OPEN: State = {
+        () = Self::ASSERT;
+        A::PREV_STATE_REMOVE_GROUP_OPEN
+    };
+
+    fn remove_group_open<'a>(Chain(a, b): Self::ToIntoTextChunks<'a>) -> Self::RemoveGroupOpen<'a>
+    where
+        Self: 'a,
+    {
+        const { _ = Self::PREV_STATE_REMOVE_GROUP_OPEN }
+        Chain(A::remove_group_open(a), b)
+    }
+}
+
+impl<A: RuntimeChunkStartingWithCompileTime, B: ?Sized + HasConstCompileTimeChunk>
+    RuntimeChunkSurroundedWithCompileTime for ChunkConcat<A, CompileTimeChunk<B>>
+{
+    type UngroupTextChunks<'a>
+        = Chain<A::RemoveGroupOpen<'a>, CompileTimeChunk<ConstRemoveGroupClose<B>>>
+    where
+        Self: 'a;
+
+    const UNGROUPED_STATES: (State, State) = {
+        A::NEXT_STATE.assert_same(CompileTimeChunk::<ConstRemoveGroupClose<B>>::PREV_STATE);
+        (
+            A::PREV_STATE_REMOVE_GROUP_OPEN,
+            CompileTimeChunk::<ConstRemoveGroupClose<B>>::NEXT_STATE,
+        )
+    };
+
+    fn ungroup_text_chunks<'a>(
+        Chain(a, CompileTimeChunk { .. }): Self::ToIntoTextChunks<'a>,
+    ) -> Self::UngroupTextChunks<'a>
+    where
+        Self: 'a,
+    {
+        const {
+            _ = ConstRemoveGroupClose::<B>::CHUNK;
+        }
+        Chain(A::remove_group_open(a), CompileTimeChunk::DEFAULT)
     }
 }
 
@@ -510,6 +616,46 @@ pub trait RuntimeChunk {
     fn to_into_text_chunks(&self) -> Self::ToIntoTextChunks<'_>;
 }
 
+impl<'this, C: ?Sized + RuntimeChunk> RuntimeChunk for &'this C {
+    const PREV_STATE: State = C::PREV_STATE;
+    const NEXT_STATE: State = C::NEXT_STATE;
+
+    type ToIntoTextChunks<'a>
+        = C::ToIntoTextChunks<'this>
+    where
+        Self: 'a;
+
+    fn to_into_text_chunks(&self) -> Self::ToIntoTextChunks<'_> {
+        C::to_into_text_chunks(self)
+    }
+}
+
+// TODO: sealed
+/// Implementing this trait means:
+/// `for<'a, B>` transmuting `Chain<Self::ToIntoTextChunks<'a>, B>` to `Chain<Self::RemoveGroupOpen<'a>, B>` is safe.
+pub trait RuntimeChunkStartingWithCompileTime: RuntimeChunk + Sized {
+    type RemoveGroupOpen<'a>: IntoTextChunks
+    where
+        Self: 'a;
+
+    const PREV_STATE_REMOVE_GROUP_OPEN: State;
+
+    fn remove_group_open<'a>(chunk: Self::ToIntoTextChunks<'a>) -> Self::RemoveGroupOpen<'a>
+    where
+        Self: 'a;
+}
+
+// TODO: sealed
+pub trait RuntimeChunkSurroundedWithCompileTime: for<'a> RuntimeChunk {
+    type UngroupTextChunks<'a>: IntoTextChunks
+    where
+        Self: 'a;
+    const UNGROUPED_STATES: (State, State);
+    fn ungroup_text_chunks<'a>(chunks: Self::ToIntoTextChunks<'a>) -> Self::UngroupTextChunks<'a>
+    where
+        Self: 'a;
+}
+
 impl<T: ?Sized + HasConstCompileTimeChunk> RuntimeChunk for CompileTimeChunk<T> {
     const PREV_STATE: State = T::CHUNK.prev_state;
     const NEXT_STATE: State = T::CHUNK.next_state;
@@ -520,37 +666,78 @@ impl<T: ?Sized + HasConstCompileTimeChunk> RuntimeChunk for CompileTimeChunk<T> 
         Self: 'a;
 
     fn to_into_text_chunks(&self) -> Self::ToIntoTextChunks<'_> {
-        *self
+        const { Self::DEFAULT }
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct AssertJsonValueChunks<C: RuntimeChunk>(pub C);
+impl<T: ?Sized + HasConstCompileTimeChunk> RuntimeChunkStartingWithCompileTime
+    for CompileTimeChunk<T>
+{
+    type RemoveGroupOpen<'a>
+        = CompileTimeChunk<ConstRemoveGroupOpen<T>>
+    where
+        Self: 'a;
 
-impl<C: RuntimeChunk> AssertJsonValueChunks<C> {
-    const ASSERT: () = {
-        C::PREV_STATE.assert_same(State::INIT);
-        C::NEXT_STATE.assert_same(State::EOF);
+    const PREV_STATE_REMOVE_GROUP_OPEN: State = {
+        let chunk = <ConstRemoveGroupOpen<T> as HasConstCompileTimeChunk>::CHUNK;
+
+        chunk.next_state.assert_same(Self::NEXT_STATE);
+
+        chunk.prev_state
     };
+
+    fn remove_group_open<'a>(Self { .. }: Self::ToIntoTextChunks<'a>) -> Self::RemoveGroupOpen<'a>
+    where
+        Self: 'a,
+    {
+        const { _ = Self::PREV_STATE_REMOVE_GROUP_OPEN }
+        CompileTimeChunk::DEFAULT
+    }
 }
 
-mod ser_chunks {
-    use crate::ser::{ToJson, texts};
+// TODO: is this needed?
+impl<T: ?Sized + HasConstCompileTimeChunk> RuntimeChunkSurroundedWithCompileTime
+    for CompileTimeChunk<T>
+{
+    type UngroupTextChunks<'a>
+        = CompileTimeChunk<ConstRemoveSurroundingGroup<T>>
+    where
+        Self: 'a;
 
-    use super::{AssertJsonValueChunks, RuntimeChunk};
+    const UNGROUPED_STATES: (State, State) = {
+        let chunk = <ConstRemoveSurroundingGroup<T> as HasConstCompileTimeChunk>::CHUNK;
 
-    impl<C: RuntimeChunk> ToJson for AssertJsonValueChunks<C> {
-        type ToJson<'a>
-            = texts::Value<C::ToIntoTextChunks<'a>>
-        where
-            Self: 'a;
+        (chunk.prev_state, chunk.next_state)
+    };
 
-        fn to_json(&self) -> Self::ToJson<'_> {
-            const { () = Self::ASSERT }
-
-            texts::Value::new_without_validation(self.0.to_into_text_chunks())
+    fn ungroup_text_chunks<'a>(
+        Self { .. }: Self::ToIntoTextChunks<'a>,
+    ) -> Self::UngroupTextChunks<'a>
+    where
+        Self: 'a,
+    {
+        const {
+            _ = Self::UNGROUPED_STATES;
+            CompileTimeChunk::DEFAULT
         }
     }
+}
+
+enum Never {}
+pub struct ConstRemoveSurroundingGroup<T: ?Sized + HasConstCompileTimeChunk>(Never, PhantomData<T>);
+pub struct ConstRemoveGroupOpen<T: ?Sized + HasConstCompileTimeChunk>(Never, PhantomData<T>);
+pub struct ConstRemoveGroupClose<T: ?Sized + HasConstCompileTimeChunk>(Never, PhantomData<T>);
+
+impl<T: ?Sized + HasConstCompileTimeChunk> HasConstCompileTimeChunk
+    for ConstRemoveSurroundingGroup<T>
+{
+    const CHUNK: StatedChunkStr<'static> = T::CHUNK.remove_surrounding_group();
+}
+impl<T: ?Sized + HasConstCompileTimeChunk> HasConstCompileTimeChunk for ConstRemoveGroupOpen<T> {
+    const CHUNK: StatedChunkStr<'static> = T::CHUNK.remove_group_open();
+}
+impl<T: ?Sized + HasConstCompileTimeChunk> HasConstCompileTimeChunk for ConstRemoveGroupClose<T> {
+    const CHUNK: StatedChunkStr<'static> = T::CHUNK.remove_group_close();
 }
 
 /// json_items_after_item
@@ -594,22 +781,22 @@ impl<C: RuntimeChunk, V: ToJsonArray> RuntimeChunk for ChunkConcatJsonItemsAfter
     const NEXT_STATE: State = C::NEXT_STATE.json_items_after_item();
 
     type ToIntoTextChunks<'a>
-        = crate::ser::iter_text_chunk::Chain<
-        <C::ToIntoTextChunks<'a> as IntoTextChunks>::IntoTextChunks,
-        <JsonItemsAfterItem<V::ToJsonArray<'a>> as IntoTextChunks>::IntoTextChunks,
+        = Chain<
+        //
+        C::ToIntoTextChunks<'a>,
+        JsonItemsAfterItem<V::ToJsonArray<'a>>,
     >
     where
         Self: 'a;
 
     fn to_into_text_chunks(&self) -> Self::ToIntoTextChunks<'_> {
         const { _ = Self::NEXT_STATE }
-        crate::ser::iter_text_chunk::Chain::new(
-            self.0.to_into_text_chunks().into_text_chunks(),
+        Chain(
+            self.0.to_into_text_chunks(),
             self.1
                 .to_json_array()
                 .into_comma_separated_elements()
-                .prepend_leading_comma_if_not_empty()
-                .into_text_chunks(),
+                .prepend_leading_comma_if_not_empty(),
         )
     }
 }
@@ -621,22 +808,22 @@ impl<C: RuntimeChunk, V: ToJsonArray> RuntimeChunk
     const NEXT_STATE: State = C::NEXT_STATE.json_items_after_array_start_before_item();
 
     type ToIntoTextChunks<'a>
-        = crate::ser::iter_text_chunk::Chain<
-        <C::ToIntoTextChunks<'a> as IntoTextChunks>::IntoTextChunks,
-        <JsonItemsAfterArrayStartBeforeItem<V::ToJsonArray<'a>> as IntoTextChunks>::IntoTextChunks,
+        = Chain<
+        //
+        C::ToIntoTextChunks<'a>,
+        JsonItemsAfterArrayStartBeforeItem<V::ToJsonArray<'a>>,
     >
     where
         Self: 'a;
 
     fn to_into_text_chunks(&self) -> Self::ToIntoTextChunks<'_> {
         const { _ = Self::NEXT_STATE }
-        crate::ser::iter_text_chunk::Chain::new(
-            self.0.to_into_text_chunks().into_text_chunks(),
+        Chain(
+            self.0.to_into_text_chunks(),
             self.1
                 .to_json_array()
                 .into_comma_separated_elements()
-                .append_trailing_comma_if_not_empty()
-                .into_text_chunks(),
+                .append_trailing_comma_if_not_empty(),
         )
     }
 }
@@ -646,21 +833,72 @@ impl<C: RuntimeChunk, V: ToJsonArray> RuntimeChunk for ChunkConcatJsonItemsBetwe
     const NEXT_STATE: State = C::NEXT_STATE.json_items_between_brackets();
 
     type ToIntoTextChunks<'a>
-        = crate::ser::iter_text_chunk::Chain<
-        <C::ToIntoTextChunks<'a> as IntoTextChunks>::IntoTextChunks,
-        <JsonItemsBetweenBrackets<V::ToJsonArray<'a>> as IntoTextChunks>::IntoTextChunks,
+        = Chain<
+        //
+        C::ToIntoTextChunks<'a>,
+        JsonItemsBetweenBrackets<V::ToJsonArray<'a>>,
     >
     where
         Self: 'a;
 
     fn to_into_text_chunks(&self) -> Self::ToIntoTextChunks<'_> {
         const { _ = Self::NEXT_STATE }
-        crate::ser::iter_text_chunk::Chain::new(
-            self.0.to_into_text_chunks().into_text_chunks(),
-            self.1
-                .to_json_array()
-                .into_comma_separated_elements()
-                .into_text_chunks(),
+        Chain(
+            self.0.to_into_text_chunks(),
+            self.1.to_json_array().into_comma_separated_elements(),
         )
     }
 }
+
+impl_many!({
+    {
+        {
+            use ChunkConcatJsonValue as CR;
+            use ToJson as ToTrait;
+            type RuntimeChunkToTextChunk<'a, V> = <V as ToJson>::ToJson<'a>;
+        }
+        {
+            use ChunkConcatJsonItemsAfterItem as CR;
+            use ToJsonArray as ToTrait;
+            type RuntimeChunkToTextChunk<'a, V> =
+                JsonItemsAfterItem<<V as ToJsonArray>::ToJsonArray<'a>>;
+        }
+        {
+            use ChunkConcatJsonItemsAfterArrayStartBeforeItem as CR;
+            use ToJsonArray as ToTrait;
+            type RuntimeChunkToTextChunk<'a, V> =
+                JsonItemsAfterArrayStartBeforeItem<<V as ToJsonArray>::ToJsonArray<'a>>;
+        }
+        {
+            use ChunkConcatJsonItemsBetweenBrackets as CR;
+            use ToJsonArray as ToTrait;
+            type RuntimeChunkToTextChunk<'a, V> =
+                JsonItemsBetweenBrackets<<V as ToJsonArray>::ToJsonArray<'a>>;
+        }
+    }
+
+    impl<C: RuntimeChunkStartingWithCompileTime, V: ToTrait> RuntimeChunkStartingWithCompileTime
+        for CR<C, V>
+    {
+        type RemoveGroupOpen<'a>
+            = Chain<
+            //
+            C::RemoveGroupOpen<'a>,
+            RuntimeChunkToTextChunk<'a, V>,
+        >
+        where
+            Self: 'a;
+
+        const PREV_STATE_REMOVE_GROUP_OPEN: State = C::PREV_STATE_REMOVE_GROUP_OPEN;
+
+        fn remove_group_open<'a>(
+            Chain(a, b): Self::ToIntoTextChunks<'a>,
+        ) -> Self::RemoveGroupOpen<'a>
+        where
+            Self: 'a,
+        {
+            const { _ = Self::PREV_STATE_REMOVE_GROUP_OPEN }
+            Chain(C::remove_group_open(a), b)
+        }
+    }
+});

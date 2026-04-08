@@ -56,6 +56,9 @@ macro_rules! define_refined_type {
             fn into_text_chunks(self) -> Self::IntoTextChunks {
                 self.0.into_text_chunks()
             }
+
+            // TODO:
+            // fn _private_into_text_chunks_vec(self)
         }
 
         $(
@@ -71,6 +74,14 @@ define_refined_type!(
     #[derive(Debug, Clone, Copy)]
     pub struct Text<T: traits::IntoTextChunks>(T);
 );
+
+define_refined_type!(
+    #[assert_refined(NonEmptyCommaSeparatedElements)]
+    #[derive(Debug, Clone, Copy)]
+    pub struct NonEmptyCommaSeparatedItems<T: traits::IntoTextChunks>(T);
+);
+
+mod non_empty_comma_separated_items;
 
 define_refined_type!(
     #[assert_refined(Text, Value)]
@@ -119,3 +130,7 @@ mod chain;
 #[derive(Debug, Clone, Copy)]
 pub struct CommaSeparated<A, B>(pub A, pub B);
 mod comma_separated;
+
+#[derive(Debug, Clone, Copy)]
+pub struct Comma;
+mod comma;

@@ -27,6 +27,7 @@ pub(crate) mod sealed {
     pub trait Value {}
     pub trait Array {}
     pub trait EmptyOrCommaSeparatedElements {}
+    pub trait NonEmptyCommaSeparatedElements {}
     pub trait EmptyOrLeadingCommaWithCommaSeparatedElements {}
     pub trait EmptyOrCommaSeparatedElementsWithTrailingComma {}
     pub trait JsonStringFragment {}
@@ -58,6 +59,39 @@ pub trait EmptyOrCommaSeparatedElements:
         self,
         other: Other,
     ) -> Self::ChainWithComma<Other>;
+}
+
+macro_rules! impl_EmptyOrCommaSeparatedElements_for_NonEmptyCommaSeparatedElements {
+    () => {
+        type PrependLeadingCommaIfNotEmpty =
+            crate::ser::texts::Chain<crate::ser::texts::Comma, Self>;
+        fn prepend_leading_comma_if_not_empty(self) -> Self::PrependLeadingCommaIfNotEmpty {
+            crate::ser::texts::Chain(crate::ser::texts::Comma, self)
+        }
+
+        type AppendTrailingCommaIfNotEmpty =
+            crate::ser::texts::Chain<Self, crate::ser::texts::Comma>;
+        fn append_trailing_comma_if_not_empty(self) -> Self::AppendTrailingCommaIfNotEmpty {
+            crate::ser::texts::Chain(self, crate::ser::texts::Comma)
+        }
+
+        type ChainWithComma<Other: crate::ser::traits::EmptyOrCommaSeparatedElements> =
+            crate::ser::texts::Chain<Self, Other::PrependLeadingCommaIfNotEmpty>;
+
+        fn chain_with_comma<Other: crate::ser::traits::EmptyOrCommaSeparatedElements>(
+            self,
+            other: Other,
+        ) -> Self::ChainWithComma<Other> {
+            crate::ser::texts::Chain(self, other.prepend_leading_comma_if_not_empty())
+        }
+    };
+}
+
+pub(crate) use impl_EmptyOrCommaSeparatedElements_for_NonEmptyCommaSeparatedElements;
+
+pub trait NonEmptyCommaSeparatedElements:
+    EmptyOrCommaSeparatedElements + sealed::NonEmptyCommaSeparatedElements
+{
 }
 
 pub trait EmptyOrLeadingCommaWithCommaSeparatedElements:

@@ -74,3 +74,13 @@ impl<A: IterTextChunk, B: IterTextChunk> Chain<A, B> {
         Self(Some((Some(a), b)))
     }
 }
+
+pub trait HasConstChunk {
+    const CHUNK: &'static str;
+}
+pub struct ConstChunk<T: ?Sized + HasConstChunk>(const_chunk::Inner<T>);
+
+impl<T: ?Sized + HasConstChunk> ConstChunk<T> {
+    pub(crate) const DEFAULT: Self = Self(const_chunk::Inner::DEFAULT);
+}
+mod const_chunk;

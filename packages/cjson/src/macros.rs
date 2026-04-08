@@ -44,7 +44,7 @@ macro_rules! json {
                     left_bracket()
                 ]
                 after_value {
-                    do(EOF)
+                    do(EOF json_array)
                     outer_const_generics [$({ $CONST $ConstTy $(= $const_value)? })*]
                 }
             ]
@@ -61,7 +61,7 @@ macro_rules! json {
                 prev[]
                 current_compile_time[]
                 after_value {
-                    do(EOF)
+                    do(EOF $well_known_macro)
                     outer_const_generics [$({ $CONST $ConstTy $(= $const_value)? })*]
                 }
             ]
@@ -78,7 +78,7 @@ macro_rules! json {
                     left_brace()
                 ]
                 after_value {
-                    do(EOF)
+                    do(EOF json_object)
                     outer_const_generics [$({ $CONST $ConstTy $(= $const_value)? })*]
                 }
             ]
@@ -243,7 +243,7 @@ macro_rules! __private_json_after_runtime_items {
             current_compile_time $current_compile_time:tt
             after_value $after_value:tt
         ]
-        [after_item ($runtime_items:expr) $($runtime_type:ty)?]
+        [after_array_item ($runtime_items:expr) $($runtime_type:ty)?]
         // EOF
     ) => {
         $crate::__private_json_after_value! {
@@ -705,75 +705,16 @@ macro_rules! __private_json_after_array_comma {
             ]
         }
     };
-    // runtime items (merge prev)
-    (
-        [
-            prev[
-                prev $prev:tt
-                current {
-                    compile_time $compile_time:tt
-                    runtime[
-                        json_items($prev_runtime_items:expr)
-                        $(as $prev_runtime_type:ty)?
-                    ]
-                }
-            ]
-            current_compile_time[]
-            after_value $after_value:tt
-        ]
-        ..($runtime_items:expr)
-        $(as $runtime_type:ty)?
-        $(, $($rest:tt)*)?
-    ) => {
-        $crate::__private_json_after_array_comma! {
-            [
-                prev[
-                    prev $prev
-                    current {
-                        compile_time $compile_time
-                        runtime[
-                            json_items(
-                                todo!() // TODO:
-                                // $prev_runtime_items
-                                // $runtime_items
-                            )
-                            // $(as $prev_runtime_type)?
-                            // $(as $runtime_type)?
-                        ]
-                    }
-                ]
-                current_compile_time[]
-                after_value $after_value
-            ]
-            $($($rest)*)?
-        }
-    };
     // runtime items
     (
-        [
-            prev $prev:tt
-            current_compile_time $compile_time:tt
-            after_value $after_value:tt
-        ]
+        $state:tt
         ..($runtime_items:expr)
         $(as $runtime_type:ty)?
         $(, $($rest:tt)*)?
     ) => {
-        $crate::__private_json_after_array_comma! {
-            [
-                prev[
-                    prev $prev
-                    current {
-                        compile_time $compile_time
-                        runtime[
-                            json_items($runtime_items)
-                            $(as $runtime_type)?
-                        ]
-                    }
-                ]
-                current_compile_time[]
-                after_value $after_value
-            ]
+        $crate::__private_json_after_runtime_items! {
+            $state
+            [after_array_item ($runtime_items) $($runtime_type:ty)?]
             $($($rest)*)?
         }
     };
@@ -807,6 +748,160 @@ macro_rules! __private_json_type_with_const_generics {
         $Type::<
             $({$crate::__private::__expand_or!([$($const_value)?][$CONST])}),*
         >
+    };
+}
+
+#[macro_export]
+macro_rules! __private_json_eof_normalize {
+    // EmptyArray
+    (
+        kind(json_array)
+        chunks[
+            prev_compile_runtime[]
+            last_compile_time[
+                left_bracket()
+                right_bracket()
+            ]
+        ]
+        then_macro_bang($($then_macro_bang:tt)+)
+        then_macro_rest($($then_macro_rest:tt)*)
+    ) => {
+        $($then_macro_bang)+ {
+            EmptyArray {}
+            $($then_macro_rest)*
+        }
+    };
+    // NonEmptyArray only_compile_time
+    (
+        kind(json_array)
+        chunks[
+            prev_compile_runtime[]
+            last_compile_time[
+                left_bracket()
+                $($rest:tt)+
+            ]
+        ]
+        then_macro_bang($($then_macro_bang:tt)+)
+        then_macro_rest($($then_macro_rest:tt)*)
+    ) => {
+        $($then_macro_bang)+ {
+            only_compile_time {
+                kind NonEmptyArray
+                chunk [
+                    left_bracket()
+                    $($rest)+
+                ]
+                CONST_ASSOC(JSON_ARRAY_NON_EMPTY)
+            }
+            $($then_macro_rest)*
+        }
+    };
+    // ArrayOfItems
+    (
+        kind(json_array)
+        chunks[
+            prev_compile_runtime[
+                prev[]
+                current {
+                    compile_time[left_bracket()]
+                    runtime[
+                        json_items_between_brackets($runtime_expr:expr)
+                        $(as $RuntimeType:ty)?
+                    ]
+                }
+            ]
+            last_compile_time [right_bracket()]
+        ]
+        then_macro_bang($($then_macro_bang:tt)+)
+        then_macro_rest($($then_macro_rest:tt)*)
+    ) => {
+        $($then_macro_bang)+ {
+            ArrayOfItems {
+                ($runtime_expr)
+                $(as $RuntimeType)?
+            }
+            $($then_macro_rest)*
+        }
+    };
+    // NonEmptyArray runtime_chunks
+    (
+        kind(json_array)
+        chunks $chunks:tt
+        then_macro_bang($($then_macro_bang:tt)+)
+        then_macro_rest($($then_macro_rest:tt)*)
+    ) => {
+        $($then_macro_bang)+ {
+            runtime_chunks {
+                kind NonEmptyArray
+                chunks $chunks
+                path($crate::r#const::array::NonEmptyArray)
+            }
+            $($then_macro_rest)*
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_json_eof {
+    (
+        EmptyArray {}
+        outer_const_generics $outer_const_generics:tt
+    ) => {
+        $crate::r#const::array::EmptyArray
+    };
+    (
+        ArrayOfItems {
+            ($runtime_expr:expr)
+            $(as $RuntimeType:ty)?
+        }
+        outer_const_generics $outer_const_generics:tt
+    ) => {
+        $crate::r#const::array::ArrayOfItems $( ::<$RuntimeType> )? ($runtime_expr)
+    };
+    (
+        only_compile_time {
+            kind $kind:tt
+            chunk $only_compile_time:tt
+            CONST_ASSOC($CONST_ASSOC:ident)
+        }
+        outer_const_generics $outer_const_generics:tt
+    ) => {
+        $crate::__private_json_concat_only_compile_time_tokens! {
+            prev_state($crate::r#const::State::INIT)
+            then(
+                $crate::r#const::CompileTimeChunk::<
+                    $crate::__private_json_type_with_const_generics![
+                        HasConstCompileTimeChunk
+                        $outer_const_generics
+                    ]
+                >::$CONST_ASSOC
+            )
+            tokens $only_compile_time
+            outer_const_generics $outer_const_generics
+        }
+    };
+    (
+        runtime_chunks {
+            kind $kind:tt
+            chunks[
+                prev_compile_runtime $prev_compile_runtime:tt
+                last_compile_time $last_compile_time:tt
+            ]
+            path($($path:tt)+)
+        }
+        outer_const_generics $outer_const_generics:tt
+    ) => {
+        $($path)+ ::new($crate::r#const::value::Value::new($crate::__private_json_concat_chunks! {
+            prev_state($crate::r#const::State::INIT)
+            outer_const_generics $outer_const_generics
+            compile_runtime $prev_compile_runtime
+            then_macro_bang(
+                $crate::__private_json_after_value_concat_chunks_then!
+            )
+            then_macro_rest(
+                last_compile_time $last_compile_time
+            )
+        }))
     };
 }
 
@@ -869,52 +964,20 @@ macro_rules! __private_json_after_value {
         }
     };
     (
-        chunks[
-            prev_compile_runtime[]
-            last_compile_time $only_compile_time:tt
-        ]
+        chunks $chunks:tt
         after_value {
-            do(EOF)
+            do(EOF $json_value_kind:tt)
             outer_const_generics $outer_const_generics:tt
         }
     ) => {
-        $crate::__private_json_concat_only_compile_time_tokens! {
-            prev_state($crate::r#const::State::INIT)
-            then(
-                $crate::r#const::CompileTimeChunk::<
-                    $crate::__private_json_type_with_const_generics![
-                        HasConstCompileTimeChunk
-                        $outer_const_generics
-                    ]
-                >::JSON_VALUE
-            )
-            tokens $only_compile_time
-            outer_const_generics $outer_const_generics
-        }
-    };
-    (
-        chunks[
-            prev_compile_runtime $prev_compile_runtime:tt
-            last_compile_time $last_compile_time:tt
-        ]
-        after_value {
-            do(EOF)
-            outer_const_generics $outer_const_generics:tt
-        }
-    ) => {
-        $crate::r#const::AssertJsonValueChunks(
-            $crate::__private_json_concat_chunks! {
-                prev_state($crate::r#const::State::INIT)
+        $crate::__private_json_eof_normalize! {
+            kind($json_value_kind)
+            chunks $chunks
+            then_macro_bang( $crate::__private_json_eof! )
+            then_macro_rest(
                 outer_const_generics $outer_const_generics
-                compile_runtime $prev_compile_runtime
-                then_macro_bang(
-                    $crate::__private_json_after_value_concat_chunks_then!
-                )
-                then_macro_rest(
-                    last_compile_time $last_compile_time
-                )
-            }
-        )
+            )
+        }
     };
     (
         chunks $chunks:tt

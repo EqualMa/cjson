@@ -3,7 +3,7 @@ use crate::ser::{
     traits::{self, IntoTextChunks},
 };
 
-use super::Chain;
+use super::{Chain, Comma};
 
 impl<A: IntoTextChunks, B: IntoTextChunks> IntoTextChunks for Chain<A, B> {
     type IntoTextChunks = iter_text_chunk::Chain<A::IntoTextChunks, B::IntoTextChunks>;
@@ -60,5 +60,50 @@ impl<
     A: traits::EmptyOrCommaSeparatedElementsWithTrailingComma,
     B: traits::EmptyOrCommaSeparatedElementsWithTrailingComma,
 > traits::EmptyOrCommaSeparatedElementsWithTrailingComma for Chain<A, B>
+{
+}
+
+impl<T: traits::NonEmptyCommaSeparatedElements>
+    traits::sealed::EmptyOrLeadingCommaWithCommaSeparatedElements for Chain<Comma, T>
+{
+}
+impl<T: traits::NonEmptyCommaSeparatedElements>
+    traits::EmptyOrLeadingCommaWithCommaSeparatedElements for Chain<Comma, T>
+{
+}
+
+impl<T: traits::NonEmptyCommaSeparatedElements>
+    traits::sealed::EmptyOrCommaSeparatedElementsWithTrailingComma for Chain<T, Comma>
+{
+}
+impl<T: traits::NonEmptyCommaSeparatedElements>
+    traits::EmptyOrCommaSeparatedElementsWithTrailingComma for Chain<T, Comma>
+{
+}
+
+impl<
+    T: traits::NonEmptyCommaSeparatedElements,
+    Other: traits::EmptyOrLeadingCommaWithCommaSeparatedElements,
+> traits::sealed::EmptyOrCommaSeparatedElements for Chain<T, Other>
+{
+}
+impl<
+    A: traits::NonEmptyCommaSeparatedElements,
+    B: traits::EmptyOrLeadingCommaWithCommaSeparatedElements,
+> traits::EmptyOrCommaSeparatedElements for Chain<A, B>
+{
+    traits::impl_EmptyOrCommaSeparatedElements_for_NonEmptyCommaSeparatedElements! {}
+}
+
+impl<
+    A: traits::NonEmptyCommaSeparatedElements,
+    B: traits::EmptyOrLeadingCommaWithCommaSeparatedElements,
+> traits::sealed::NonEmptyCommaSeparatedElements for Chain<A, B>
+{
+}
+impl<
+    A: traits::NonEmptyCommaSeparatedElements,
+    B: traits::EmptyOrLeadingCommaWithCommaSeparatedElements,
+> traits::NonEmptyCommaSeparatedElements for Chain<A, B>
 {
 }

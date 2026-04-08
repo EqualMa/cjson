@@ -1,6 +1,6 @@
 use core::{fmt, marker::PhantomData};
 
-use crate::r#const::HasConstJsonValue;
+use crate::r#const::{HasConstJsonArray, HasConstJsonValue};
 
 use super::StatedChunkStr;
 
@@ -21,6 +21,29 @@ impl State {
 
     pub const INIT: Self = Self(StateInner::Init);
     pub(crate) const EOF: Self = Self(StateInner::Eof);
+    pub(crate) const INIT_AFTER_ARRAY_START: Self = Self::INIT.left_bracket();
+    pub(crate) const INIT_AFTER_ARRAY_ITEM: Self = Self::INIT_AFTER_ARRAY_START.json_value();
+    pub(crate) const INIT_AFTER_OBJECT_START: Self = Self::INIT.left_brace();
+    pub(crate) const INIT_AFTER_OBJECT_FIELD_VALUE: Self = Self::INIT_AFTER_OBJECT_START
+        .double_quote()
+        .double_quote()
+        .colon()
+        .json_value();
+    pub(crate) const INIT_IN_STRING: Self = Self::INIT.double_quote();
+
+    pub(crate) const fn assert_is_top_level_after_array_start(self) {
+        self.assert_same(Self::INIT_AFTER_ARRAY_START);
+    }
+    pub(crate) const fn assert_is_before_top_level_right_bracket(self) {
+        self.right_bracket().assert_same(Self::EOF);
+    }
+
+    pub(crate) const fn assert_is_top_level_after_object_start(self) {
+        self.assert_same(Self::INIT_AFTER_OBJECT_START);
+    }
+    pub(crate) const fn assert_is_before_top_level_right_brace(self) {
+        self.right_brace().assert_same(Self::EOF);
+    }
 
     pub const fn json_value(self) -> Self {
         Self(match self.0 {
@@ -389,6 +412,14 @@ impl Stack {
         }
     }
 
+    const fn is_in_top_level_array(&self) -> bool {
+        self.len == 1 && ((self.inner & 1) == 1)
+    }
+
+    const fn is_in_top_level_object(&self) -> bool {
+        self.len == 1 && ((self.inner & 1) == 0)
+    }
+
     const fn pop(&mut self) -> Option<bool> {
         if self.len == 0 {
             None
@@ -580,6 +611,108 @@ impl<'a> StatedChunkStr<'a> {
 
         self.next_state.0.assert_same(next_state);
     }
+
+    pub(crate) const fn remove_surrounding_group(self) -> Self {
+        assert!(matches!(self.prev_state.0, StateInner::Init));
+        assert!(matches!(self.next_state.0, StateInner::Eof));
+
+        match self.chunk.as_bytes() {
+            [b'[', inner @ .., b']'] => Self {
+                prev_state: State::INIT_AFTER_ARRAY_START,
+                next_state: if inner.is_empty() {
+                    State::INIT_AFTER_ARRAY_START
+                } else {
+                    State::INIT_AFTER_ARRAY_ITEM
+                },
+                chunk: unsafe { str::from_utf8_unchecked(inner) },
+            },
+            [b'{', inner @ .., b'}'] => Self {
+                prev_state: State::INIT_AFTER_OBJECT_START,
+                next_state: if inner.is_empty() {
+                    State::INIT_AFTER_OBJECT_START
+                } else {
+                    State::INIT_AFTER_OBJECT_FIELD_VALUE
+                },
+                chunk: unsafe { str::from_utf8_unchecked(inner) },
+            },
+            [b'"', inner @ .., b'"'] => Self {
+                prev_state: State::INIT_IN_STRING,
+                next_state: State::INIT_IN_STRING,
+                chunk: unsafe { str::from_utf8_unchecked(inner) },
+            },
+            _ => panic!("no valid surrounding group"),
+        }
+    }
+
+    pub(crate) const fn remove_group_open(self) -> Self {
+        assert!(matches!(self.prev_state.0, StateInner::Init));
+
+        match self.chunk.as_bytes() {
+            [b'[', rest @ ..] => Self {
+                prev_state: State::INIT_AFTER_ARRAY_START,
+                next_state: self.next_state,
+                chunk: unsafe { str::from_utf8_unchecked(rest) },
+            },
+            [b'{', rest @ ..] => Self {
+                prev_state: State::INIT_AFTER_OBJECT_START,
+                next_state: self.next_state,
+                chunk: unsafe { str::from_utf8_unchecked(rest) },
+            },
+            [b'"', rest @ ..] => Self {
+                prev_state: State::INIT_IN_STRING,
+                next_state: self.next_state,
+                chunk: unsafe { str::from_utf8_unchecked(rest) },
+            },
+            _ => panic!("no valid group open"),
+        }
+    }
+
+    pub(crate) const fn remove_group_close(self) -> Self {
+        assert!(matches!(self.next_state.0, StateInner::Eof));
+        match self.chunk.as_bytes() {
+            [head @ .., b']'] => Self {
+                prev_state: self.prev_state.copied(),
+                next_state: if head.is_empty() {
+                    self.prev_state
+                } else {
+                    match self.prev_state {
+                        State(StateInner::Init) => match head {
+                            [b'['] => State::INIT_AFTER_ARRAY_START,
+                            [b'[', ..] => State::INIT_AFTER_ARRAY_ITEM,
+                            _ => panic!(),
+                        },
+                        _ => State::INIT_AFTER_ARRAY_ITEM,
+                    }
+                },
+                chunk: unsafe { str::from_utf8_unchecked(head) },
+            },
+            [head @ .., b'}'] => Self {
+                prev_state: self.prev_state.copied(),
+                next_state: if head.is_empty() {
+                    self.prev_state
+                } else {
+                    match self.prev_state {
+                        State(StateInner::Init) => match head {
+                            [b'{'] => State::INIT_AFTER_OBJECT_START,
+                            [b'{', ..] => State::INIT_AFTER_OBJECT_FIELD_VALUE,
+                            _ => panic!(),
+                        },
+                        _ => State::INIT_AFTER_OBJECT_FIELD_VALUE,
+                    }
+                },
+                chunk: unsafe { str::from_utf8_unchecked(head) },
+            },
+            [head @ .., b'"'] => {
+                const IN_STRING: State = State(StateInner::Init).double_quote();
+                Self {
+                    prev_state: self.prev_state.copied(),
+                    next_state: IN_STRING,
+                    chunk: unsafe { str::from_utf8_unchecked(head) },
+                }
+            }
+            _ => panic!("no valid group close"),
+        }
+    }
 }
 
 /// Panics if `s` is not a json value or `s` contains json whitespaces.
@@ -616,28 +749,24 @@ impl<T: ?Sized + HasConstCompileTimeChunk> Clone for CompileTimeChunk<T> {
 mod ser {
     use core::{iter, marker::PhantomData};
 
-    use crate::ser::{iter_text_chunk::IterNonLending, traits::IntoTextChunks};
+    use crate::ser::{
+        iter_text_chunk::{ConstChunk, HasConstChunk, IterNonLending},
+        traits::IntoTextChunks,
+    };
 
     use super::{CompileTimeChunk, HasConstCompileTimeChunk};
 
     pub struct Chunk<T: ?Sized + HasConstCompileTimeChunk>(PhantomData<T>);
 
-    impl<T: ?Sized + HasConstCompileTimeChunk> AsRef<[u8]> for Chunk<T> {
-        fn as_ref(&self) -> &[u8] {
-            const { T::CHUNK.chunk.as_bytes() }
-        }
+    impl<T: ?Sized + HasConstCompileTimeChunk> HasConstChunk for Chunk<T> {
+        const CHUNK: &'static str = T::CHUNK.chunk;
     }
 
     impl<T: ?Sized + HasConstCompileTimeChunk> IntoTextChunks for CompileTimeChunk<T> {
-        type IntoTextChunks = IterNonLending<iter::Once<Chunk<T>>>;
+        type IntoTextChunks = ConstChunk<Chunk<T>>;
 
         fn into_text_chunks(self) -> Self::IntoTextChunks {
-            IterNonLending(iter::once(Chunk(PhantomData)))
-        }
-
-        #[cfg(feature = "alloc")]
-        fn _private_into_text_chunks_vec(self) -> alloc::vec::Vec<u8> {
-            const { T::CHUNK.chunk }.into()
+            ConstChunk::DEFAULT
         }
     }
 }
@@ -653,6 +782,21 @@ impl<T: ?Sized + HasConstCompileTimeChunk> HasConstJsonValue for CompileTimeChun
     };
 }
 
+pub struct CompileTimeChunkIsJsonArray<T: ?Sized + HasConstCompileTimeChunk>(Never, PhantomData<T>);
+
+impl<T: ?Sized + HasConstCompileTimeChunk> HasConstJsonValue for CompileTimeChunkIsJsonArray<T> {
+    const JSON_VALUE: crate::ser::texts::Value<&'static str> = {
+        () = CompileTimeChunk::<T>::ASSERT_JSON_ARRAY;
+        CompileTimeChunkIsJsonValue::<T>::JSON_VALUE
+    };
+}
+
+impl<T: ?Sized + HasConstCompileTimeChunk> super::sealed::HasConstJsonArray
+    for CompileTimeChunkIsJsonArray<T>
+{
+}
+impl<T: ?Sized + HasConstCompileTimeChunk> HasConstJsonArray for CompileTimeChunkIsJsonArray<T> {}
+
 impl<T: ?Sized + HasConstCompileTimeChunk> CompileTimeChunk<T> {
     pub const DEFAULT: Self = Self(PhantomData);
 
@@ -665,6 +809,23 @@ impl<T: ?Sized + HasConstCompileTimeChunk> CompileTimeChunk<T> {
 
     pub const JSON_VALUE: super::ConstJsonValue<CompileTimeChunkIsJsonValue<T>> = {
         () = Self::ASSERT_JSON_VALUE;
+        super::ConstJsonValue::new()
+    };
+
+    const ASSERT_JSON_ARRAY: () = {
+        () = Self::ASSERT_JSON_VALUE;
+        assert!(matches!(
+            T::CHUNK.chunk.as_bytes().first().copied(),
+            Some(b'['),
+        ));
+        assert!(matches!(
+            T::CHUNK.chunk.as_bytes().last().copied(),
+            Some(b']'),
+        ));
+    };
+
+    pub const JSON_ARRAY: super::ConstJsonValue<CompileTimeChunkIsJsonArray<T>> = {
+        () = Self::ASSERT_JSON_ARRAY;
         super::ConstJsonValue::new()
     };
 }
