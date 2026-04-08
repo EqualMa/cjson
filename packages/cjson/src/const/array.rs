@@ -58,9 +58,7 @@ pub struct NonEmptyArray<C: RuntimeChunkSurroundedWithCompileTime>(Value<C>);
 
 impl<C: RuntimeChunkSurroundedWithCompileTime> NonEmptyArray<C> {
     pub const fn new(chunk: Value<C>) -> Self {
-        const {
-            () = self::non_empty_array::NonEmptyArraySer::<C>::ASSERT;
-        }
+        const { () = Self::ASSERT }
         Self(chunk)
     }
 }
@@ -78,12 +76,12 @@ impl<C: RuntimeChunkSurroundedWithCompileTime> ToJson for NonEmptyArray<C> {
 
 impl<C: RuntimeChunkSurroundedWithCompileTime> ToJsonArray for NonEmptyArray<C> {
     type ToJsonArray<'a>
-        = non_empty_array::NonEmptyArraySer<'a, C>
+        = non_empty_array::NonEmptyArraySer<C::ChunksReadyToUngroup<'a>>
     where
         Self: 'a;
 
     fn to_json_array(&self) -> Self::ToJsonArray<'_> {
-        non_empty_array::NonEmptyArraySer::from_non_empty_array(self)
+        non_empty_array::NonEmptyArraySer::from_non_empty_array::<C>(self)
     }
 }
 

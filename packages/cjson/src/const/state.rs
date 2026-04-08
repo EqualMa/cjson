@@ -798,7 +798,10 @@ impl<T: ?Sized + HasConstCompileTimeChunk> super::sealed::HasConstJsonArray
 impl<T: ?Sized + HasConstCompileTimeChunk> HasConstJsonArray for CompileTimeChunkIsJsonArray<T> {}
 
 impl<T: ?Sized + HasConstCompileTimeChunk> CompileTimeChunk<T> {
-    pub const DEFAULT: Self = Self(PhantomData);
+    pub const DEFAULT: Self = {
+        _ = T::CHUNK;
+        Self(PhantomData)
+    };
 
     pub(crate) const ASSERT: () = T::CHUNK.assert();
 
