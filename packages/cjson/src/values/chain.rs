@@ -1,9 +1,8 @@
 use crate::{
     ToJson,
     ser::{
-        ToJsonArray, ToJsonString,
-        texts::{self, CommaSeparated},
-        traits::{self, Array, JsonString},
+        ToJsonArray, ToJsonString, texts,
+        traits::{self, Array, EmptyOrCommaSeparatedElements, JsonString},
     },
 };
 
@@ -19,8 +18,10 @@ impl<A: ToJsonArray, B: ToJsonArray> ToJson for ChainArray<A, B> {
         Self::to_json_array(self)
     }
 }
+
+type CommaSeparated<A, B> = <A as traits::EmptyOrCommaSeparatedElements>::ChainWithComma<B>;
+
 impl<A: ToJsonArray, B: ToJsonArray> ToJsonArray for ChainArray<A, B> {
-    // TODO: remove CommaSeparated
     type ToJsonArray<'a>
         = texts::Bracketed<
         CommaSeparated<
@@ -32,10 +33,12 @@ impl<A: ToJsonArray, B: ToJsonArray> ToJsonArray for ChainArray<A, B> {
         Self: 'a;
 
     fn to_json_array(&self) -> Self::ToJsonArray<'_> {
-        texts::Bracketed(CommaSeparated(
-            self.0.to_json_array().into_comma_separated_elements(),
-            self.1.to_json_array().into_comma_separated_elements(),
-        ))
+        texts::Bracketed(
+            self.0
+                .to_json_array()
+                .into_comma_separated_elements()
+                .chain_with_comma(self.1.to_json_array().into_comma_separated_elements()),
+        )
     }
 }
 

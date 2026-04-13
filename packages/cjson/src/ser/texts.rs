@@ -133,10 +133,6 @@ pub struct Chain<A, B>(pub A, pub B);
 mod chain;
 
 #[derive(Debug, Clone, Copy)]
-pub struct CommaSeparated<A, B>(pub A, pub B);
-mod comma_separated;
-
-#[derive(Debug, Clone, Copy)]
 pub struct Comma;
 mod comma;
 
