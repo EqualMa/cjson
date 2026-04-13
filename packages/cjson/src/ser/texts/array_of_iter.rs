@@ -176,3 +176,6 @@ impl<I: Iterator<Item: traits::Text>> traits::Array for ArrayOfIter<I> {
         CommaSeparatedElementsOfIter(self.0)
     }
 }
+
+#[cfg(test)]
+mod tests;

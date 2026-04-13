@@ -1,5 +1,7 @@
 use core::mem;
 
+use polonius_the_crab::{ForLt, PoloniusResult, polonius};
+
 use crate::{ser::iter_text_chunk::IterTextChunk, utils::size_hint::SizeHint};
 
 use super::{
@@ -30,10 +32,29 @@ impl<Values: IterTextChunk> Inner<Values> {
                 });
                 Some(Chunk::LeftSquareBracket)
             }
-            Inner::Chunks(values) => match values.next_text_chunk() {
-                Some(chunk) => Some(Chunk::CommaSeparatedValuesChunk(chunk)),
-                None => Some(Chunk::RightSquareBracket),
-            },
+            Inner::Chunks(_) => {
+                struct AssignFinished();
+                match polonius::<Self, AssignFinished, ForLt![Values::Chunk<'_>]>(self, |this| {
+                    let Inner::Chunks(values) = this else {
+                        unreachable!()
+                    };
+                    match values.next_text_chunk() {
+                        Some(chunk) => PoloniusResult::Borrowing(chunk),
+                        None => PoloniusResult::Owned(AssignFinished()),
+                    }
+                }) {
+                    PoloniusResult::Borrowing(chunk) => {
+                        Some(Chunk::CommaSeparatedValuesChunk(chunk))
+                    }
+                    PoloniusResult::Owned {
+                        value: AssignFinished(),
+                        input_borrow: this,
+                    } => {
+                        *this = Inner::Finished;
+                        Some(Chunk::RightSquareBracket)
+                    }
+                }
+            }
             Inner::Finished => None,
         }
     }
@@ -92,3 +113,6 @@ impl<Values: EmptyOrCommaSeparatedElements> traits::Array for Bracketed<Values> 
         self.0
     }
 }
+
+#[cfg(test)]
+mod tests;
