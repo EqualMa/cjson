@@ -714,7 +714,7 @@ macro_rules! __private_json_after_array_comma {
     ) => {
         $crate::__private_json_after_runtime_items! {
             $state
-            [after_array_item ($runtime_items) $($runtime_type:ty)?]
+            [after_array_item ($runtime_items) $($runtime_type)?]
             $($($rest)*)?
         }
     };
@@ -2051,7 +2051,7 @@ macro_rules! __private_json_after_object_field_value {
     ) => {
         $crate::__private_json_after_runtime_items! {
             $state
-            [after_object_field_value ($runtime) $($runtime_type:ty)?]
+            [after_object_field_value ($runtime) $($runtime_type)?]
             $($($rest)*)?
         }
     };
