@@ -1,24 +1,24 @@
-use crate::ser::{ToJson, ToJsonStringFragment, texts};
+use crate::ser::{ToJson, ToJsonString, texts};
 
 impl ToJson for str {
     type ToJson<'a>
-        = texts::QuotedJsonStringFragment<texts::StrToJsonStringFragment<'a>>
+        = <Self as ToJsonString>::ToJsonString<'a>
     where
         Self: 'a;
 
     fn to_json(&self) -> Self::ToJson<'_> {
-        texts::QuotedJsonStringFragment(texts::StrToJsonStringFragment(self))
+        Self::to_json_string(self)
     }
 }
 
-impl ToJsonStringFragment for str {
-    type ToJsonStringFragment<'a>
-        = texts::StrToJsonStringFragment<'a>
+impl ToJsonString for str {
+    type ToJsonString<'a>
+        = texts::QuotedJsonStringFragment<texts::StrToJsonStringFragment<'a>>
     where
         Self: 'a;
 
-    fn to_json_string_fragment(&self) -> Self::ToJsonStringFragment<'_> {
-        texts::StrToJsonStringFragment(self)
+    fn to_json_string(&self) -> Self::ToJsonString<'_> {
+        texts::QuotedJsonStringFragment(texts::StrToJsonStringFragment(self))
     }
 }
 

@@ -8,6 +8,9 @@ impl<'s> Value<&'s str> {
         crate::r#const::assert_json_value(s);
         Self::new_without_validation(s)
     }
+
+    pub(crate) const EMPTY_ARRAY: Self = Self("[]");
+    pub(crate) const EMPTY_OBJECT: Self = Self("{}");
 }
 
 impl<'s> ConstAsJsonValueStr<Value<&'s str>> {

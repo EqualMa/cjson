@@ -23,6 +23,15 @@ impl traits::sealed::Text for Never {}
 impl traits::Text for Never {}
 impl traits::sealed::Value for Never {}
 impl traits::Value for Never {}
+impl traits::sealed::JsonString for Never {}
+impl traits::JsonString for Never {
+    type IntoJsonStringFragments = Self;
+
+    fn into_json_string_fragments(self) -> Self::IntoJsonStringFragments {
+        self
+    }
+}
+
 impl traits::sealed::JsonStringFragment for Never {}
 impl traits::JsonStringFragment for Never {}
 

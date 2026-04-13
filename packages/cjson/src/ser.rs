@@ -22,21 +22,21 @@ impl<'this, T: ?Sized + ToJson> ToJson for &'this T {
     }
 }
 
-pub trait ToJsonStringFragment {
-    type ToJsonStringFragment<'a>: traits::JsonStringFragment
+pub trait ToJsonString {
+    type ToJsonString<'a>: traits::JsonString
     where
         Self: 'a;
-    fn to_json_string_fragment(&self) -> Self::ToJsonStringFragment<'_>;
+    fn to_json_string(&self) -> Self::ToJsonString<'_>;
 }
 
-impl<'this, T: ?Sized + ToJsonStringFragment> ToJsonStringFragment for &'this T {
-    type ToJsonStringFragment<'a>
-        = T::ToJsonStringFragment<'this>
+impl<'this, T: ?Sized + ToJsonString> ToJsonString for &'this T {
+    type ToJsonString<'a>
+        = T::ToJsonString<'this>
     where
         Self: 'a;
 
-    fn to_json_string_fragment(&self) -> Self::ToJsonStringFragment<'_> {
-        T::to_json_string_fragment(self)
+    fn to_json_string(&self) -> Self::ToJsonString<'_> {
+        T::to_json_string(self)
     }
 }
 
@@ -55,6 +55,24 @@ impl<'this, T: ?Sized + ToJsonArray> ToJsonArray for &'this T {
 
     fn to_json_array(&self) -> Self::ToJsonArray<'_> {
         T::to_json_array(self)
+    }
+}
+
+pub trait ToJsonObject: ToJson {
+    type ToJsonObject<'a>: traits::Object
+    where
+        Self: 'a;
+    fn to_json_object(&self) -> Self::ToJsonObject<'_>;
+}
+
+impl<'this, T: ?Sized + ToJsonObject> ToJsonObject for &'this T {
+    type ToJsonObject<'a>
+        = T::ToJsonObject<'this>
+    where
+        Self: 'a;
+
+    fn to_json_object(&self) -> Self::ToJsonObject<'_> {
+        T::to_json_object(self)
     }
 }
 

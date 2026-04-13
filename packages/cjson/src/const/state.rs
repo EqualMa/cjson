@@ -1,8 +1,9 @@
 use core::{fmt, marker::PhantomData};
 
-use crate::r#const::{HasConstJsonArray, HasConstJsonValue};
-
-use super::StatedChunkStr;
+use super::{
+    HasConstJsonValue, StatedChunkStr, array::NonEmptyArray, object::NonEmptyObject,
+    string::JsonString, value::Value,
+};
 
 use self::IntermediateState::*;
 
@@ -777,25 +778,10 @@ pub struct CompileTimeChunkIsJsonValue<T: ?Sized + HasConstCompileTimeChunk>(Nev
 
 impl<T: ?Sized + HasConstCompileTimeChunk> HasConstJsonValue for CompileTimeChunkIsJsonValue<T> {
     const JSON_VALUE: crate::ser::texts::Value<&'static str> = {
-        () = CompileTimeChunk::<T>::ASSERT_JSON_VALUE;
+        _ = CompileTimeChunk::<T>::JSON_VALUE;
         crate::ser::texts::Value::new_without_validation(T::CHUNK.chunk)
     };
 }
-
-pub struct CompileTimeChunkIsJsonArray<T: ?Sized + HasConstCompileTimeChunk>(Never, PhantomData<T>);
-
-impl<T: ?Sized + HasConstCompileTimeChunk> HasConstJsonValue for CompileTimeChunkIsJsonArray<T> {
-    const JSON_VALUE: crate::ser::texts::Value<&'static str> = {
-        () = CompileTimeChunk::<T>::ASSERT_JSON_ARRAY;
-        CompileTimeChunkIsJsonValue::<T>::JSON_VALUE
-    };
-}
-
-impl<T: ?Sized + HasConstCompileTimeChunk> super::sealed::HasConstJsonArray
-    for CompileTimeChunkIsJsonArray<T>
-{
-}
-impl<T: ?Sized + HasConstCompileTimeChunk> HasConstJsonArray for CompileTimeChunkIsJsonArray<T> {}
 
 impl<T: ?Sized + HasConstCompileTimeChunk> CompileTimeChunk<T> {
     pub const DEFAULT: Self = {
@@ -803,34 +789,13 @@ impl<T: ?Sized + HasConstCompileTimeChunk> CompileTimeChunk<T> {
         Self(PhantomData)
     };
 
-    pub(crate) const ASSERT: () = T::CHUNK.assert();
+    pub const JSON_VALUE: Value<Self> = Value::new(Self::DEFAULT);
 
-    const ASSERT_JSON_VALUE: () = {
-        assert!(matches!(T::CHUNK.prev_state.0, StateInner::Init));
-        assert!(matches!(T::CHUNK.next_state.0, StateInner::Eof));
-    };
+    pub const JSON_STRING: JsonString<Self> = JsonString::new(Self::JSON_VALUE);
 
-    pub const JSON_VALUE: super::ConstJsonValue<CompileTimeChunkIsJsonValue<T>> = {
-        () = Self::ASSERT_JSON_VALUE;
-        super::ConstJsonValue::new()
-    };
+    pub const JSON_ARRAY_NON_EMPTY: NonEmptyArray<Self> = NonEmptyArray::new(Self::JSON_VALUE);
 
-    const ASSERT_JSON_ARRAY: () = {
-        () = Self::ASSERT_JSON_VALUE;
-        assert!(matches!(
-            T::CHUNK.chunk.as_bytes().first().copied(),
-            Some(b'['),
-        ));
-        assert!(matches!(
-            T::CHUNK.chunk.as_bytes().last().copied(),
-            Some(b']'),
-        ));
-    };
-
-    pub const JSON_ARRAY: super::ConstJsonValue<CompileTimeChunkIsJsonArray<T>> = {
-        () = Self::ASSERT_JSON_ARRAY;
-        super::ConstJsonValue::new()
-    };
+    pub const JSON_OBJECT_NON_EMPTY: NonEmptyObject<Self> = NonEmptyObject::new(Self::JSON_VALUE);
 }
 
 mod deserializer;

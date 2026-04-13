@@ -1,13 +1,13 @@
 use crate::{
     ToJson,
     ser::{
-        ToJsonArray,
+        ToJsonArray, ToJsonString,
         texts::{self, CommaSeparated},
-        traits::{self, Array},
+        traits::{self, Array, JsonString},
     },
 };
 
-use super::ChainArray;
+use super::{ChainArray, ChainString};
 
 impl<A: ToJsonArray, B: ToJsonArray> ToJson for ChainArray<A, B> {
     type ToJson<'a>
@@ -20,6 +20,7 @@ impl<A: ToJsonArray, B: ToJsonArray> ToJson for ChainArray<A, B> {
     }
 }
 impl<A: ToJsonArray, B: ToJsonArray> ToJsonArray for ChainArray<A, B> {
+    // TODO: remove CommaSeparated
     type ToJsonArray<'a>
         = texts::Bracketed<
         CommaSeparated<
@@ -34,6 +35,36 @@ impl<A: ToJsonArray, B: ToJsonArray> ToJsonArray for ChainArray<A, B> {
         texts::Bracketed(CommaSeparated(
             self.0.to_json_array().into_comma_separated_elements(),
             self.1.to_json_array().into_comma_separated_elements(),
+        ))
+    }
+}
+
+impl<A: ToJsonString, B: ToJsonString> ToJson for ChainString<A, B> {
+    type ToJson<'a>
+        = <Self as ToJsonString>::ToJsonString<'a>
+    where
+        Self: 'a;
+
+    fn to_json(&self) -> Self::ToJson<'_> {
+        Self::to_json_string(self)
+    }
+}
+impl<A: ToJsonString, B: ToJsonString> ToJsonString for ChainString<A, B> {
+    // TODO: optimize
+    type ToJsonString<'a>
+        = texts::QuotedJsonStringFragment<
+        texts::Chain<
+            <A::ToJsonString<'a> as traits::JsonString>::IntoJsonStringFragments,
+            <B::ToJsonString<'a> as traits::JsonString>::IntoJsonStringFragments,
+        >,
+    >
+    where
+        Self: 'a;
+
+    fn to_json_string(&self) -> Self::ToJsonString<'_> {
+        texts::QuotedJsonStringFragment(texts::Chain(
+            self.0.to_json_string().into_json_string_fragments(),
+            self.1.to_json_string().into_json_string_fragments(),
         ))
     }
 }

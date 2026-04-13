@@ -138,7 +138,9 @@ macro_rules! __private_impl_to_json_parse_with {
                     left_bracket()
                 ]
                 after_value {
-                    EOF_impl_to_json(
+                    EOF_impl_to_json {
+                        kind(json_array)
+                    } (
                         $used_const_generics
                         $expand
                     )
@@ -159,7 +161,9 @@ macro_rules! __private_impl_to_json_parse_with {
                     left_brace()
                 ]
                 after_value {
-                    EOF_impl_to_json(
+                    EOF_impl_to_json {
+                        kind(json_object)
+                    } (
                         $used_const_generics
                         $expand
                     )
@@ -179,7 +183,9 @@ macro_rules! __private_impl_to_json_parse_with {
                 prev[]
                 current_compile_time[]
                 after_value {
-                    EOF_impl_to_json(
+                    EOF_impl_to_json {
+                        kind($well_known_macro)
+                    } (
                         $used_const_generics
                         $expand
                     )
@@ -268,6 +274,7 @@ macro_rules! __private_impl_to_json_mod {
         $compile_runtime:tt
         $last_compile_time:tt
         $used_const_generics:tt
+        $path:tt
     ) => {
         $crate::__private_impl_to_json_define_struct_with_generics! $used_const_generics
 
@@ -325,6 +332,7 @@ macro_rules! __private_impl_to_json_impl {
         $compile_runtime:tt
         $last_compile_time:tt
         {$(const $CONST:ident : $ConstTy:ty $(= $const_value:expr)?;)*}
+        $path:tt
         $(($($next_list:tt)*))?
     ) => {
         $crate::__private_impl_to_json_impl_resolve! {
@@ -412,9 +420,10 @@ macro_rules! __private_impl_to_json_type {
         $compile_runtime:tt
         $last_compile_time:tt
         {$(const $CONST:ident : $ConstTy:ty $(= $const_value:expr)?;)*} // used const generics
+        ($($path:tt)+)
         $(($($next_list:tt)*))?
     ) => {
-        $crate::r#const::value::Value<
+        $($path)+ <
             $crate::__private_impl_to_json_type_resolve! {
                 $compile_runtime
                 $last_compile_time
@@ -501,13 +510,14 @@ macro_rules! __private_impl_to_json_value {
         $last_compile_time:tt
         $used_const_generics:tt
         // {$(const $CONST:ident : $ConstTy:ty $(= $const_value:expr)?;)*} // used const generics
+        ($($path:tt)+)
     ) => {
-        $crate::r#const::value::Value::new(
+        $($path)+ ::new($crate::r#const::value::Value::new(
             $crate::__private_impl_to_json_value_resolve!(
                 $compile_runtime
                 $last_compile_time
             )
-        )
+        ))
     };
 }
 
@@ -696,12 +706,114 @@ macro_rules! __private_impl_to_json_const {
 }
 
 #[macro_export]
-macro_rules! __private_impl_to_json_after_value {
+macro_rules! __private_impl_to_json_eof {
+    // EmptyArray
     (
-        [
-            prev_compile_runtime[]
-            last_compile_time $only_compile_time:tt
-        ]
+        EmptyArray {}
+        (
+            $used_const_generics:tt
+            {
+                vis $vis:tt
+                branch_name_or_empty $branch_name_or_empty:tt
+                expand_macro_bang($($expand_macro_bang:tt)+)
+                expand_macro_rest($($expand_macro_rest:tt)*)
+            }
+        )
+    ) => {
+        $($expand_macro_bang)+ {
+            mod()
+            type(
+                $crate::r#const::array::EmptyArray
+            )
+            value(
+                $crate::r#const::array::EmptyArray
+            )
+            $($expand_macro_rest)*
+        }
+    };
+    (
+        ArrayOfItems {
+            ($runtime_expr:expr)
+            $(as $RuntimeType:ty)?
+        }
+        (
+            $used_const_generics:tt
+            {
+                vis $vis:tt
+                branch_name_or_empty $branch_name_or_empty:tt
+                expand_macro_bang($($expand_macro_bang:tt)+)
+                expand_macro_rest($($expand_macro_rest:tt)*)
+            }
+        )
+    ) => {
+        $($expand_macro_bang)+ {
+            mod()
+            type(
+                $crate::r#const::array::ArrayOfItems::<$crate::__expand_or![[$($RuntimeType)?][_]]>
+            )
+            value(
+                $crate::r#const::array::ArrayOfItems($runtime_expr)
+            )
+            $($expand_macro_rest)*
+        }
+    };
+    // EmptyObject
+    (
+        EmptyObject {}
+        (
+            $used_const_generics:tt
+            {
+                vis $vis:tt
+                branch_name_or_empty $branch_name_or_empty:tt
+                expand_macro_bang($($expand_macro_bang:tt)+)
+                expand_macro_rest($($expand_macro_rest:tt)*)
+            }
+        )
+    ) => {
+        $($expand_macro_bang)+ {
+            mod()
+            type(
+                $crate::r#const::object::EmptyObject
+            )
+            value(
+                $crate::r#const::object::EmptyObject
+            )
+            $($expand_macro_rest)*
+        }
+    };
+    (
+        ObjectOfKvs {
+            ($runtime_expr:expr)
+            $(as $RuntimeType:ty)?
+        }
+        (
+            $used_const_generics:tt
+            {
+                vis $vis:tt
+                branch_name_or_empty $branch_name_or_empty:tt
+                expand_macro_bang($($expand_macro_bang:tt)+)
+                expand_macro_rest($($expand_macro_rest:tt)*)
+            }
+        )
+    ) => {
+        $($expand_macro_bang)+ {
+            mod()
+            type(
+                $crate::r#const::object::ObjectOfKvs::<$crate::__expand_or![[$($RuntimeType)?][_]]>
+            )
+            value(
+                $crate::r#const::object::ObjectOfKvs($runtime_expr)
+            )
+            $($expand_macro_rest)*
+        }
+    };
+    // only_compile_time (no branch name)
+    (
+        only_compile_time {
+            kind $kind:tt
+            chunk $only_compile_time:tt
+            CONST_ASSOC($CONST_ASSOC:ident)
+        }
         (
             // used_const_generics
             {$( const $CONST:ident: $ConstTy:ty $(= $const_value:expr)? ;)*}
@@ -725,8 +837,8 @@ macro_rules! __private_impl_to_json_after_value {
                 }
             )
             type(
-                $crate::r#const::ConstJsonValue::<
-                    $crate::r#const::CompileTimeChunkIsJsonValue<
+                $crate::__private::only_compile_time_kinds::$CONST_ASSOC::<
+                    $crate::r#const::CompileTimeChunk::<
                         HasConstCompileTimeChunk<$( $CONST ),*>
                     >
                 >
@@ -734,16 +846,18 @@ macro_rules! __private_impl_to_json_after_value {
             value(
                 $crate::r#const::CompileTimeChunk::<
                     HasConstCompileTimeChunk<$( $CONST ),*>
-                >::JSON_VALUE
+                >::$CONST_ASSOC
             )
             $($expand_macro_rest)*
         }
     };
+    // only_compile_time (with branch name)
     (
-        [
-            prev_compile_runtime[]
-            last_compile_time $only_compile_time:tt
-        ]
+        only_compile_time {
+            kind $kind:tt
+            chunk $only_compile_time:tt
+            CONST_ASSOC($CONST_ASSOC:ident)
+        }
         (
             // used_const_generics
             {$( const $CONST:ident: $ConstTy:ty $(= $const_value:expr)? ;)*}
@@ -772,8 +886,8 @@ macro_rules! __private_impl_to_json_after_value {
                 }
             )
             type(
-                $crate::r#const::ConstJsonValue::<
-                    $crate::r#const::CompileTimeChunkIsJsonValue<
+                $crate::__private::only_compile_time_kinds::$CONST_ASSOC::<
+                    $crate::r#const::CompileTimeChunk<
                         CjsonMacroGeneratedChunk::<
                             cjson_macro_generated_types:: $($branch_name::)+ HasConstCompileTimeChunk,
                             $( $CONST ),*
@@ -787,22 +901,26 @@ macro_rules! __private_impl_to_json_after_value {
                         cjson_macro_generated_types:: $($branch_name::)+ HasConstCompileTimeChunk,
                         $( $CONST ),*
                     >
-                >::JSON_VALUE
+                >::$CONST_ASSOC
             )
             $($expand_macro_rest)*
         }
     };
     (
-        [
-            prev_compile_runtime $prev_compile_runtime:tt
-            last_compile_time $last_compile_time:tt
-        ]
+        runtime_chunks {
+            kind $kind:tt
+            chunks[
+                prev_compile_runtime $prev_compile_runtime:tt
+                last_compile_time $last_compile_time:tt
+            ]
+            path $path:tt
+        }
         $args:tt
     ) => {
         $crate::__private_impl_to_json_after_value_mixed! {
             $prev_compile_runtime
             []
-            ($last_compile_time $args)
+            ($last_compile_time $path $args)
         }
     };
 }
@@ -830,13 +948,14 @@ macro_rules! __private_impl_to_json_after_value_mixed {
     (
         []
         $parsed:tt
-        ($last_compile_time:tt ($used_const_generics:tt $data:tt))
+        ($last_compile_time:tt $path:tt ($used_const_generics:tt $data:tt))
     ) => {
         $crate::__private_impl_to_json_after_value_mixed_expand! {
             {
                 $parsed
                 $last_compile_time
                 $used_const_generics
+                $path
             }
             $data
         }
@@ -873,6 +992,7 @@ macro_rules! __private_impl_to_json_after_value_mixed_expand {
             $compile_runtime:tt
             $last_compile_time:tt
             $used_const_generics:tt
+            $path:tt
         }
         {
             vis $vis:tt
@@ -891,6 +1011,7 @@ macro_rules! __private_impl_to_json_after_value_mixed_expand {
                     $compile_runtime
                     $last_compile_time
                     $used_const_generics
+                    __unused_path__
                     ($($branch_name)+)
                 }
             )
@@ -899,6 +1020,7 @@ macro_rules! __private_impl_to_json_after_value_mixed_expand {
                     $compile_runtime
                     $last_compile_time
                     $used_const_generics
+                    $path
                     ($($branch_name)+)
                 }
             )
@@ -907,6 +1029,7 @@ macro_rules! __private_impl_to_json_after_value_mixed_expand {
                     $compile_runtime
                     $last_compile_time
                     $used_const_generics
+                    $path
                 }
             )
             $($expand_macro_rest)*

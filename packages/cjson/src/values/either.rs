@@ -1,4 +1,6 @@
-use crate::{ToJson, ser::ToJsonArray, ser::ToJsonStringFragment, utils::impl_many};
+use crate::{
+    ToJson, ser::ToJsonArray, ser::ToJsonString, utils::impl_many, values::Either as CrateEither,
+};
 
 impl_many!({
     {
@@ -17,42 +19,42 @@ impl_many!({
 
     impl<A: ToJson, B: ToJson> ToJson for Either<A, B> {
         type ToJson<'a>
-            = Either<A::ToJson<'a>, B::ToJson<'a>>
+            = CrateEither<A::ToJson<'a>, B::ToJson<'a>>
         where
             Self: 'a;
 
         fn to_json(&self) -> Self::ToJson<'_> {
             match self {
-                EitherA!(this) => EitherA!(A::to_json(this)),
-                EitherB!(this) => EitherB!(B::to_json(this)),
+                EitherA!(this) => CrateEither::A(A::to_json(this)),
+                EitherB!(this) => CrateEither::B(B::to_json(this)),
             }
         }
     }
 
     impl<A: ToJsonArray, B: ToJsonArray> ToJsonArray for Either<A, B> {
         type ToJsonArray<'a>
-            = Either<A::ToJsonArray<'a>, B::ToJsonArray<'a>>
+            = CrateEither<A::ToJsonArray<'a>, B::ToJsonArray<'a>>
         where
             Self: 'a;
 
         fn to_json_array(&self) -> Self::ToJsonArray<'_> {
             match self {
-                EitherA!(this) => EitherA!(A::to_json_array(this)),
-                EitherB!(this) => EitherB!(B::to_json_array(this)),
+                EitherA!(this) => CrateEither::A(A::to_json_array(this)),
+                EitherB!(this) => CrateEither::B(B::to_json_array(this)),
             }
         }
     }
 
-    impl<A: ToJsonStringFragment, B: ToJsonStringFragment> ToJsonStringFragment for Either<A, B> {
-        type ToJsonStringFragment<'a>
-            = Either<A::ToJsonStringFragment<'a>, B::ToJsonStringFragment<'a>>
+    impl<A: ToJsonString, B: ToJsonString> ToJsonString for Either<A, B> {
+        type ToJsonString<'a>
+            = CrateEither<A::ToJsonString<'a>, B::ToJsonString<'a>>
         where
             Self: 'a;
 
-        fn to_json_string_fragment(&self) -> Self::ToJsonStringFragment<'_> {
+        fn to_json_string(&self) -> Self::ToJsonString<'_> {
             match self {
-                EitherA!(this) => EitherA!(A::to_json_string_fragment(this)),
-                EitherB!(this) => EitherB!(B::to_json_string_fragment(this)),
+                EitherA!(this) => CrateEither::A(A::to_json_string(this)),
+                EitherB!(this) => CrateEither::B(B::to_json_string(this)),
             }
         }
     }

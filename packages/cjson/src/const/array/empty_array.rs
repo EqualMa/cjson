@@ -9,7 +9,7 @@ use super::EmptyArray;
 pub enum Chunk {}
 
 impl HasConstChunk for Chunk {
-    const CHUNK: &'static str = "[]";
+    const CHUNK: &'static str = texts::Value::EMPTY_ARRAY.inner();
 }
 
 impl IntoTextChunks for EmptyArray {

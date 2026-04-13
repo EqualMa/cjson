@@ -19,6 +19,11 @@ mod boolean;
 pub struct Bracketed<Values: traits::EmptyOrCommaSeparatedElements>(pub Values);
 mod bracketed;
 
+/// Json object.
+#[derive(Debug, Clone, Copy)]
+pub struct Braced<Values: traits::Kvs>(pub Values);
+mod braced;
+
 /// Json array.
 #[derive(Debug, Clone, Copy)]
 pub struct ArrayOfIter<I: Iterator<Item: traits::Text>>(pub I);
@@ -134,3 +139,11 @@ mod comma_separated;
 #[derive(Debug, Clone, Copy)]
 pub struct Comma;
 mod comma;
+
+define_refined_type!(
+    #[assert_refined(NonEmptyKvs)]
+    #[derive(Debug, Clone, Copy)]
+    pub struct NonEmptyKvs<T: traits::IntoTextChunks>(T);
+);
+
+mod non_empty_kvs;

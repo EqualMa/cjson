@@ -41,3 +41,33 @@ impl traits::EmptyOrLeadingCommaWithCommaSeparatedElements for Empty {}
 
 impl traits::sealed::EmptyOrCommaSeparatedElementsWithTrailingComma for Empty {}
 impl traits::EmptyOrCommaSeparatedElementsWithTrailingComma for Empty {}
+
+// kvs
+impl traits::sealed::Kvs for Empty {}
+impl traits::Kvs for Empty {
+    type IntoEmptyOrLeadingCommaWithNonEmptyKvs = Self;
+
+    fn into_kvs_with_leading_comma_if_not_empty(
+        self,
+    ) -> Self::IntoEmptyOrLeadingCommaWithNonEmptyKvs {
+        self
+    }
+
+    type IntoEmptyOrNonEmptyKvsWithTrailingComma = Self;
+
+    fn into_kvs_with_trailing_comma_if_not_empty(
+        self,
+    ) -> Self::IntoEmptyOrNonEmptyKvsWithTrailingComma {
+        self
+    }
+
+    type ChainOtherKvs<Other: traits::Kvs> = Other;
+
+    fn chain_other_kvs<Other: traits::Kvs>(self, other: Other) -> Self::ChainOtherKvs<Other> {
+        other
+    }
+}
+impl traits::sealed::EmptyOrLeadingCommaWithNonEmptyKvs for Empty {}
+impl traits::EmptyOrLeadingCommaWithNonEmptyKvs for Empty {}
+impl traits::sealed::EmptyOrNonEmptyKvsWithTrailingComma for Empty {}
+impl traits::EmptyOrNonEmptyKvsWithTrailingComma for Empty {}

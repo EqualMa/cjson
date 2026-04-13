@@ -1,6 +1,6 @@
 use crate::{
     ToJson,
-    ser::{ToJsonArray, ToJsonStringFragment},
+    ser::{ToJsonArray, ToJsonString},
 };
 
 use super::Never;
@@ -16,13 +16,13 @@ impl ToJson for Never {
     }
 }
 
-impl ToJsonStringFragment for Never {
-    type ToJsonStringFragment<'a>
+impl ToJsonString for Never {
+    type ToJsonString<'a>
         = Self
     where
         Self: 'a;
 
-    fn to_json_string_fragment(&self) -> Self::ToJsonStringFragment<'_> {
+    fn to_json_string(&self) -> Self::ToJsonString<'_> {
         match *self {}
     }
 }

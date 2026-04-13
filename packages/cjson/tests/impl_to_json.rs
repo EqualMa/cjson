@@ -165,7 +165,7 @@ impl_to_json!(
     impl_generics![A, B],
     where_clause![
         where
-            A: cjson::ser::ToJsonStringFragment,
+            A: cjson::ser::ToJsonString,
             B: ToJson,
     ],
     |self: ObjectRuntime2<A, B>| {

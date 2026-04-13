@@ -4,9 +4,9 @@ use ref_cast::{RefCastCustom, ref_cast_custom};
 
 use crate::{
     ser::{
-        ToJson, ToJsonArray, ToJsonStringFragment,
+        ToJson, ToJsonArray, ToJsonString,
         texts::{self, Chain},
-        traits::{self, Array, EmptyOrCommaSeparatedElements, IntoTextChunks},
+        traits::{self, Array, EmptyOrCommaSeparatedElements, IntoTextChunks, JsonString},
     },
     utils::impl_many,
 };
@@ -14,6 +14,8 @@ use crate::{
 pub mod value;
 
 pub mod array;
+pub mod object;
+pub mod string;
 
 pub struct ConstIntoJson<T>(pub T);
 
@@ -482,9 +484,9 @@ impl<C: RuntimeChunk, V: ToJson> ChunkConcatJsonValue<C, V> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct ChunkConcatJsonStringFragment<C: RuntimeChunk, V: ToJsonStringFragment>(pub C, pub V);
+pub struct ChunkConcatJsonStringFragment<C: RuntimeChunk, V: ToJsonString>(pub C, pub V);
 
-impl<C: RuntimeChunk, V: ToJsonStringFragment> ChunkConcatJsonStringFragment<C, V> {
+impl<C: RuntimeChunk, V: ToJsonString> ChunkConcatJsonStringFragment<C, V> {
     const IMPL_NEXT_STATE: State = C::NEXT_STATE.json_string_fragment();
 }
 
@@ -546,6 +548,31 @@ impl<A: RuntimeChunkStartingWithCompileTime, B: RuntimeChunk> RuntimeChunkStarti
     }
 }
 
+impl<A: RuntimeChunk, B: RuntimeChunkEndingWithCompileTime> RuntimeChunkEndingWithCompileTime
+    for ChunkConcat<A, B>
+{
+    const NEXT_STATE_REMOVE_GROUP_CLOSE: State = {
+        () = Self::ASSERT;
+        B::NEXT_STATE_REMOVE_GROUP_CLOSE
+    };
+
+    type ChunksReadyToRemoveGroupClose<'a>
+        = Chain<A::ToIntoTextChunks<'a>, B::ChunksReadyToRemoveGroupClose<'a>>
+    where
+        Self: 'a;
+
+    fn to_text_chunks_ready_to_remove_group_close(
+        &self,
+    ) -> Self::ChunksReadyToRemoveGroupClose<'_> {
+        const { _ = Self::NEXT_STATE_REMOVE_GROUP_CLOSE }
+        Chain(
+            //
+            self.0.to_into_text_chunks(),
+            self.1.to_text_chunks_ready_to_remove_group_close(),
+        )
+    }
+}
+
 impl<A: TextChunksReadyToRemoveGroupOpen, B: IntoTextChunks> TextChunksReadyToRemoveGroupOpen
     for Chain<A, B>
 {
@@ -556,19 +583,29 @@ impl<A: TextChunksReadyToRemoveGroupOpen, B: IntoTextChunks> TextChunksReadyToRe
     }
 }
 
-impl<A: RuntimeChunkStartingWithCompileTime, B: ?Sized + HasConstCompileTimeChunk>
-    RuntimeChunkSurroundedWithCompileTime for ChunkConcat<A, CompileTimeChunk<B>>
+impl<A: IntoTextChunks, B: TextChunksReadyToRemoveGroupClose> TextChunksReadyToRemoveGroupClose
+    for Chain<A, B>
+{
+    type RemoveGroupClose = Chain<A, B::RemoveGroupClose>;
+
+    fn remove_group_close(self) -> Self::RemoveGroupClose {
+        Chain(self.0, self.1.remove_group_close())
+    }
+}
+
+impl<A: RuntimeChunkStartingWithCompileTime, B: RuntimeChunkEndingWithCompileTime>
+    RuntimeChunkSurroundedWithCompileTime for ChunkConcat<A, B>
 {
     type ChunksReadyToUngroup<'a>
-        = Chain<A::ChunksReadyToRemoveGroupOpen<'a>, CompileTimeChunk<B>>
+        = Chain<A::ChunksReadyToRemoveGroupOpen<'a>, B::ChunksReadyToRemoveGroupClose<'a>>
     where
         Self: 'a;
 
     const UNGROUPED_STATES: (State, State) = {
-        A::NEXT_STATE.assert_same(CompileTimeChunk::<ConstRemoveGroupClose<B>>::PREV_STATE);
+        A::NEXT_STATE.assert_same(B::PREV_STATE);
         (
             A::PREV_STATE_REMOVE_GROUP_OPEN,
-            CompileTimeChunk::<ConstRemoveGroupClose<B>>::NEXT_STATE,
+            B::NEXT_STATE_REMOVE_GROUP_CLOSE,
         )
     };
 
@@ -577,18 +614,18 @@ impl<A: RuntimeChunkStartingWithCompileTime, B: ?Sized + HasConstCompileTimeChun
         Chain(
             //
             self.0.to_text_chunks_ready_to_remove_group_open(),
-            CompileTimeChunk::DEFAULT,
+            self.1.to_text_chunks_ready_to_remove_group_close(),
         )
     }
 }
 
-impl<A: TextChunksReadyToRemoveGroupOpen, B: ?Sized + HasConstCompileTimeChunk>
-    TextChunksReadyToUngroup for Chain<A, CompileTimeChunk<B>>
+impl<A: TextChunksReadyToRemoveGroupOpen, B: TextChunksReadyToRemoveGroupClose>
+    TextChunksReadyToUngroup for Chain<A, B>
 {
-    type Ungroup = Chain<A::RemoveGroupOpen, CompileTimeChunk<ConstRemoveGroupClose<B>>>;
+    type Ungroup = Chain<A::RemoveGroupOpen, B::RemoveGroupClose>;
 
     fn ungroup(self) -> Self::Ungroup {
-        Chain(self.0.remove_group_open(), CompileTimeChunk::DEFAULT)
+        Chain(self.0.remove_group_open(), self.1.remove_group_close())
     }
 }
 
@@ -622,6 +659,11 @@ pub trait TextChunksReadyToRemoveGroupOpen: IntoTextChunks {
     fn remove_group_open(self) -> Self::RemoveGroupOpen;
 }
 
+pub trait TextChunksReadyToRemoveGroupClose: IntoTextChunks {
+    type RemoveGroupClose: IntoTextChunks;
+    fn remove_group_close(self) -> Self::RemoveGroupClose;
+}
+
 // TODO: sealed
 pub trait RuntimeChunkStartingWithCompileTime: RuntimeChunk + Sized {
     const PREV_STATE_REMOVE_GROUP_OPEN: State;
@@ -630,6 +672,17 @@ pub trait RuntimeChunkStartingWithCompileTime: RuntimeChunk + Sized {
     where
         Self: 'a;
     fn to_text_chunks_ready_to_remove_group_open(&self) -> Self::ChunksReadyToRemoveGroupOpen<'_>;
+}
+
+// TODO: sealed
+pub trait RuntimeChunkEndingWithCompileTime: RuntimeChunk + Sized {
+    const NEXT_STATE_REMOVE_GROUP_CLOSE: State;
+
+    type ChunksReadyToRemoveGroupClose<'a>: TextChunksReadyToRemoveGroupClose
+    where
+        Self: 'a;
+    fn to_text_chunks_ready_to_remove_group_close(&self)
+    -> Self::ChunksReadyToRemoveGroupClose<'_>;
 }
 
 pub trait TextChunksReadyToUngroup: IntoTextChunks {
@@ -670,6 +723,16 @@ impl<T: ?Sized + HasConstCompileTimeChunk> TextChunksReadyToRemoveGroupOpen
     }
 }
 
+impl<T: ?Sized + HasConstCompileTimeChunk> TextChunksReadyToRemoveGroupClose
+    for CompileTimeChunk<T>
+{
+    type RemoveGroupClose = CompileTimeChunk<ConstRemoveGroupClose<T>>;
+
+    fn remove_group_close(self) -> Self::RemoveGroupClose {
+        CompileTimeChunk::DEFAULT
+    }
+}
+
 impl<T: ?Sized + HasConstCompileTimeChunk> TextChunksReadyToUngroup for CompileTimeChunk<T> {
     type Ungroup = CompileTimeChunk<ConstRemoveSurroundingGroup<T>>;
 
@@ -697,6 +760,32 @@ impl<T: ?Sized + HasConstCompileTimeChunk> RuntimeChunkStartingWithCompileTime
     fn to_text_chunks_ready_to_remove_group_open(&self) -> Self::ChunksReadyToRemoveGroupOpen<'_> {
         const {
             _ = Self::PREV_STATE_REMOVE_GROUP_OPEN;
+            Self::DEFAULT
+        }
+    }
+}
+
+impl<T: ?Sized + HasConstCompileTimeChunk> RuntimeChunkEndingWithCompileTime
+    for CompileTimeChunk<T>
+{
+    const NEXT_STATE_REMOVE_GROUP_CLOSE: State = {
+        let chunk = <ConstRemoveGroupClose<T> as HasConstCompileTimeChunk>::CHUNK;
+
+        chunk.prev_state.assert_same(Self::PREV_STATE);
+
+        chunk.next_state
+    };
+
+    type ChunksReadyToRemoveGroupClose<'a>
+        = Self
+    where
+        Self: 'a;
+
+    fn to_text_chunks_ready_to_remove_group_close(
+        &self,
+    ) -> Self::ChunksReadyToRemoveGroupClose<'_> {
+        const {
+            _ = Self::NEXT_STATE_REMOVE_GROUP_CLOSE;
             Self::DEFAULT
         }
     }
@@ -802,13 +891,12 @@ impl_many!({
         }
         {
             use ChunkConcatJsonStringFragment as CR;
-            use ToJsonStringFragment as ToTrait;
+            use ToJsonString as ToTrait;
+            type FragmentsOf<S> = <S as traits::JsonString>::IntoJsonStringFragments;
             type RuntimeChunkToTextChunk<'a, V> =
-                <V as ToJsonStringFragment>::ToJsonStringFragment<'a>;
-            fn runtime_chunk_to_text_chunk<V: ToJsonStringFragment>(
-                v: &V,
-            ) -> RuntimeChunkToTextChunk<V> {
-                V::to_json_string_fragment(v)
+                FragmentsOf<<V as ToJsonString>::ToJsonString<'a>>;
+            fn runtime_chunk_to_text_chunk<V: ToJsonString>(v: &V) -> RuntimeChunkToTextChunk<V> {
+                V::to_json_string(v).into_json_string_fragments()
             }
         }
         {

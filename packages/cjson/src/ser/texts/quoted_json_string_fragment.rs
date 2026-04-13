@@ -113,3 +113,11 @@ impl<T: traits::JsonStringFragment> traits::sealed::Text for QuotedJsonStringFra
 impl<T: traits::JsonStringFragment> traits::Text for QuotedJsonStringFragment<T> {}
 impl<T: traits::JsonStringFragment> traits::sealed::Value for QuotedJsonStringFragment<T> {}
 impl<T: traits::JsonStringFragment> traits::Value for QuotedJsonStringFragment<T> {}
+impl<T: traits::JsonStringFragment> traits::sealed::JsonString for QuotedJsonStringFragment<T> {}
+impl<T: traits::JsonStringFragment> traits::JsonString for QuotedJsonStringFragment<T> {
+    type IntoJsonStringFragments = T;
+
+    fn into_json_string_fragments(self) -> Self::IntoJsonStringFragments {
+        self.0
+    }
+}

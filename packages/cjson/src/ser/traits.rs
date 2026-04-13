@@ -25,12 +25,19 @@ impl<T: IterTextChunk> IntoTextChunks for T {
 pub(crate) mod sealed {
     pub trait Text {}
     pub trait Value {}
+    pub trait JsonString {}
     pub trait Array {}
+    pub trait Object {}
     pub trait EmptyOrCommaSeparatedElements {}
     pub trait NonEmptyCommaSeparatedElements {}
     pub trait EmptyOrLeadingCommaWithCommaSeparatedElements {}
     pub trait EmptyOrCommaSeparatedElementsWithTrailingComma {}
     pub trait JsonStringFragment {}
+
+    pub trait Kvs {}
+    pub trait NonEmptyKvs {}
+    pub trait EmptyOrLeadingCommaWithNonEmptyKvs {}
+    pub trait EmptyOrNonEmptyKvsWithTrailingComma {}
 }
 
 /// Json text.
@@ -38,6 +45,11 @@ pub trait Text: sealed::Text + IntoTextChunks {}
 
 /// All json values are json texts without surrounding whitespaces.
 pub trait Value: sealed::Value + Text {}
+
+pub trait JsonString: sealed::JsonString + Value {
+    type IntoJsonStringFragments: JsonStringFragment;
+    fn into_json_string_fragments(self) -> Self::IntoJsonStringFragments;
+}
 
 pub trait Array: sealed::Array + Value {
     type IntoCommaSeparatedElements: EmptyOrCommaSeparatedElements;
@@ -112,6 +124,69 @@ pub trait EmptyOrCommaSeparatedElementsWithTrailingComma:
 ///   they can be decoded to the same utf-8 string if surrounded with `"`.
 /// - `b"\\uDEAD"` (a single unpaired UTF-16 surrogate) is not a `JsonStringFragment`.
 pub trait JsonStringFragment: sealed::JsonStringFragment + IntoTextChunks {}
+
+pub trait Object: sealed::Object + Value {
+    type IntoKvs: Kvs;
+    fn into_kvs(self) -> Self::IntoKvs;
+}
+
+pub trait Kvs: sealed::Kvs + IntoTextChunks {
+    type IntoEmptyOrLeadingCommaWithNonEmptyKvs: EmptyOrLeadingCommaWithNonEmptyKvs;
+    fn into_kvs_with_leading_comma_if_not_empty(
+        self,
+    ) -> Self::IntoEmptyOrLeadingCommaWithNonEmptyKvs;
+
+    type IntoEmptyOrNonEmptyKvsWithTrailingComma: EmptyOrNonEmptyKvsWithTrailingComma;
+    fn into_kvs_with_trailing_comma_if_not_empty(
+        self,
+    ) -> Self::IntoEmptyOrNonEmptyKvsWithTrailingComma;
+
+    type ChainOtherKvs<Other: Kvs>: Kvs;
+
+    fn chain_other_kvs<Other: Kvs>(self, other: Other) -> Self::ChainOtherKvs<Other>;
+}
+
+macro_rules! impl_Kvs_for_NonEmptyKvs {
+    () => {
+        type IntoEmptyOrLeadingCommaWithNonEmptyKvs =
+            crate::ser::texts::Chain<crate::ser::texts::Comma, Self>;
+        fn into_kvs_with_leading_comma_if_not_empty(
+            self,
+        ) -> Self::IntoEmptyOrLeadingCommaWithNonEmptyKvs {
+            crate::ser::texts::Chain(crate::ser::texts::Comma, self)
+        }
+
+        type IntoEmptyOrNonEmptyKvsWithTrailingComma =
+            crate::ser::texts::Chain<Self, crate::ser::texts::Comma>;
+        fn into_kvs_with_trailing_comma_if_not_empty(
+            self,
+        ) -> Self::IntoEmptyOrNonEmptyKvsWithTrailingComma {
+            crate::ser::texts::Chain(self, crate::ser::texts::Comma)
+        }
+
+        type ChainOtherKvs<Other: crate::ser::traits::Kvs> =
+            crate::ser::texts::Chain<Self, Other::IntoEmptyOrLeadingCommaWithNonEmptyKvs>;
+
+        fn chain_other_kvs<Other: crate::ser::traits::Kvs>(
+            self,
+            other: Other,
+        ) -> Self::ChainOtherKvs<Other> {
+            crate::ser::texts::Chain(self, other.into_kvs_with_leading_comma_if_not_empty())
+        }
+    };
+}
+
+pub(crate) use impl_Kvs_for_NonEmptyKvs;
+
+pub trait NonEmptyKvs: sealed::NonEmptyKvs + Kvs {}
+pub trait EmptyOrLeadingCommaWithNonEmptyKvs:
+    sealed::EmptyOrLeadingCommaWithNonEmptyKvs + IntoTextChunks
+{
+}
+pub trait EmptyOrNonEmptyKvsWithTrailingComma:
+    sealed::EmptyOrNonEmptyKvsWithTrailingComma + IntoTextChunks
+{
+}
 
 #[cfg(test)]
 mod tests {

@@ -1,5 +1,5 @@
 use crate::ser::{
-    ToJsonStringFragment, iter_text_chunk,
+    iter_text_chunk,
     traits::{self, IntoTextChunks},
 };
 
@@ -21,20 +21,6 @@ impl<A: traits::JsonStringFragment, B: traits::JsonStringFragment>
 impl<A: traits::JsonStringFragment, B: traits::JsonStringFragment> traits::JsonStringFragment
     for Chain<A, B>
 {
-}
-
-impl<A: ToJsonStringFragment, B: ToJsonStringFragment> ToJsonStringFragment for Chain<A, B> {
-    type ToJsonStringFragment<'a>
-        = Chain<A::ToJsonStringFragment<'a>, B::ToJsonStringFragment<'a>>
-    where
-        Self: 'a;
-
-    fn to_json_string_fragment(&self) -> Self::ToJsonStringFragment<'_> {
-        Chain(
-            self.0.to_json_string_fragment(),
-            self.1.to_json_string_fragment(),
-        )
-    }
 }
 
 impl<
@@ -105,5 +91,54 @@ impl<
     A: traits::NonEmptyCommaSeparatedElements,
     B: traits::EmptyOrLeadingCommaWithCommaSeparatedElements,
 > traits::NonEmptyCommaSeparatedElements for Chain<A, B>
+{
+}
+
+impl<A: traits::EmptyOrLeadingCommaWithNonEmptyKvs, B: traits::EmptyOrLeadingCommaWithNonEmptyKvs>
+    traits::sealed::EmptyOrLeadingCommaWithNonEmptyKvs for Chain<A, B>
+{
+}
+impl<A: traits::EmptyOrLeadingCommaWithNonEmptyKvs, B: traits::EmptyOrLeadingCommaWithNonEmptyKvs>
+    traits::EmptyOrLeadingCommaWithNonEmptyKvs for Chain<A, B>
+{
+}
+
+impl<A: traits::EmptyOrNonEmptyKvsWithTrailingComma, B: traits::EmptyOrNonEmptyKvsWithTrailingComma>
+    traits::sealed::EmptyOrNonEmptyKvsWithTrailingComma for Chain<A, B>
+{
+}
+impl<A: traits::EmptyOrNonEmptyKvsWithTrailingComma, B: traits::EmptyOrNonEmptyKvsWithTrailingComma>
+    traits::EmptyOrNonEmptyKvsWithTrailingComma for Chain<A, B>
+{
+}
+
+impl<T: traits::NonEmptyKvs> traits::sealed::EmptyOrLeadingCommaWithNonEmptyKvs
+    for Chain<Comma, T>
+{
+}
+impl<T: traits::NonEmptyKvs> traits::EmptyOrLeadingCommaWithNonEmptyKvs for Chain<Comma, T> {}
+
+impl<T: traits::NonEmptyKvs> traits::sealed::EmptyOrNonEmptyKvsWithTrailingComma
+    for Chain<T, Comma>
+{
+}
+impl<T: traits::NonEmptyKvs> traits::EmptyOrNonEmptyKvsWithTrailingComma for Chain<T, Comma> {}
+
+impl<T: traits::NonEmptyKvs, Other: traits::EmptyOrLeadingCommaWithNonEmptyKvs> traits::sealed::Kvs
+    for Chain<T, Other>
+{
+}
+impl<A: traits::NonEmptyKvs, B: traits::EmptyOrLeadingCommaWithNonEmptyKvs> traits::Kvs
+    for Chain<A, B>
+{
+    traits::impl_Kvs_for_NonEmptyKvs! {}
+}
+
+impl<A: traits::NonEmptyKvs, B: traits::EmptyOrLeadingCommaWithNonEmptyKvs>
+    traits::sealed::NonEmptyKvs for Chain<A, B>
+{
+}
+impl<A: traits::NonEmptyKvs, B: traits::EmptyOrLeadingCommaWithNonEmptyKvs> traits::NonEmptyKvs
+    for Chain<A, B>
 {
 }

@@ -16,7 +16,7 @@ const fn test_simple()
 -> TestSimple<impl ToJson + Copy, impl ToJson + Copy, impl ToJson + Copy, impl ToJson + Copy> {
     TestSimple {
         empty: {
-            let v = json!([]);
+            let v: crate::r#const::array::EmptyArray = json!([]);
 
             let s = v.as_json_value_str().inner().as_bytes();
             assert!(matches!(s, b"[]"));

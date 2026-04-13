@@ -3,8 +3,7 @@ use crate::{
         iter_text_chunk::EitherTextChunks,
         traits::{self, IntoTextChunks},
     },
-    utils::impl_many,
-    values::Either as CrateEither,
+    values::Either,
 };
 
 macro_rules! derive_either_one {
@@ -22,58 +21,54 @@ macro_rules! derive_either {
     };
 }
 
-impl_many!({
-    {
-        {
-            use crate::values::Either;
-            macro_rules! EitherA { [$($t:tt)*] => [Either::A($($t)*)] }
-            macro_rules! EitherB { [$($t:tt)*] => [Either::B($($t)*)] }
-        }
-        #[cfg(feature = "either")]
-        {
-            use ::either::Either;
-            macro_rules! EitherA { [$($t:tt)*] => [Either::Left ($($t)*)] }
-            macro_rules! EitherB { [$($t:tt)*] => [Either::Right($($t)*)] }
+impl<A: IntoTextChunks, B: IntoTextChunks> IntoTextChunks for Either<A, B> {
+    type IntoTextChunks = EitherTextChunks<A::IntoTextChunks, B::IntoTextChunks>;
+
+    fn into_text_chunks(self) -> Self::IntoTextChunks {
+        match self {
+            Either::A(this) => EitherTextChunks::A(A::into_text_chunks(this)),
+            Either::B(this) => EitherTextChunks::B(B::into_text_chunks(this)),
         }
     }
 
-    impl<A: IntoTextChunks, B: IntoTextChunks> IntoTextChunks for Either<A, B> {
-        type IntoTextChunks = EitherTextChunks<A::IntoTextChunks, B::IntoTextChunks>;
-
-        fn into_text_chunks(self) -> Self::IntoTextChunks {
-            match self {
-                EitherA!(this) => EitherTextChunks::A(A::into_text_chunks(this)),
-                EitherB!(this) => EitherTextChunks::B(B::into_text_chunks(this)),
-            }
-        }
-
-        #[cfg(feature = "alloc")]
-        fn _private_into_text_chunks_vec(self) -> alloc::vec::Vec<u8> {
-            match self {
-                EitherA!(this) => A::_private_into_text_chunks_vec(this),
-                EitherB!(this) => B::_private_into_text_chunks_vec(this),
-            }
+    #[cfg(feature = "alloc")]
+    fn _private_into_text_chunks_vec(self) -> alloc::vec::Vec<u8> {
+        match self {
+            Either::A(this) => A::_private_into_text_chunks_vec(this),
+            Either::B(this) => B::_private_into_text_chunks_vec(this),
         }
     }
+}
 
-    derive_either!(
-        //
-        Text,
-        Value,
-        JsonStringFragment,
-    );
+derive_either!(
+    //
+    Text,
+    Value,
+    JsonStringFragment,
+);
 
-    impl<A: traits::Array, B: traits::Array> traits::sealed::Array for Either<A, B> {}
-    impl<A: traits::Array, B: traits::Array> traits::Array for Either<A, B> {
-        type IntoCommaSeparatedElements =
-            CrateEither<A::IntoCommaSeparatedElements, B::IntoCommaSeparatedElements>;
-        fn into_comma_separated_elements(self) -> Self::IntoCommaSeparatedElements {
-            match self {
-                EitherA!(this) => CrateEither::A(A::into_comma_separated_elements(this)),
-                EitherB!(this) => CrateEither::B(B::into_comma_separated_elements(this)),
-            }
+impl<A: traits::Array, B: traits::Array> traits::sealed::Array for Either<A, B> {}
+impl<A: traits::Array, B: traits::Array> traits::Array for Either<A, B> {
+    type IntoCommaSeparatedElements =
+        Either<A::IntoCommaSeparatedElements, B::IntoCommaSeparatedElements>;
+    fn into_comma_separated_elements(self) -> Self::IntoCommaSeparatedElements {
+        match self {
+            Either::A(this) => Either::A(A::into_comma_separated_elements(this)),
+            Either::B(this) => Either::B(B::into_comma_separated_elements(this)),
         }
     }
-});
+}
+
+impl<A: traits::JsonString, B: traits::JsonString> traits::sealed::JsonString for Either<A, B> {}
+impl<A: traits::JsonString, B: traits::JsonString> traits::JsonString for Either<A, B> {
+    type IntoJsonStringFragments = Either<A::IntoJsonStringFragments, B::IntoJsonStringFragments>;
+
+    fn into_json_string_fragments(self) -> Self::IntoJsonStringFragments {
+        match self {
+            Either::A(this) => Either::A(A::into_json_string_fragments(this)),
+            Either::B(this) => Either::B(B::into_json_string_fragments(this)),
+        }
+    }
+}
 
 mod crate_either;

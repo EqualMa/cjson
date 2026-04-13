@@ -1,6 +1,6 @@
 use crate::{
     ToJson,
-    r#const::{RuntimeChunk, State},
+    r#const::{CompileTimeChunk, HasConstCompileTimeChunk, RuntimeChunk, State},
     ser::texts,
 };
 
@@ -21,6 +21,12 @@ impl<C: RuntimeChunk> Value<C> {
     }
 }
 
+impl<T: ?Sized + HasConstCompileTimeChunk> Value<CompileTimeChunk<T>> {
+    pub const fn as_json_value_str(self) -> texts::Value<&'static str> {
+        texts::Value::new_without_validation(T::CHUNK.chunk)
+    }
+}
+
 impl<C: RuntimeChunk> ToJson for Value<C> {
     type ToJson<'a>
         = texts::Value<C::ToIntoTextChunks<'a>>
@@ -31,18 +37,3 @@ impl<C: RuntimeChunk> ToJson for Value<C> {
         texts::Value::new_without_validation(self.inner().to_into_text_chunks())
     }
 }
-
-#[cfg(todo)]
-impl<C: RuntimeChunk> ToJson for Value<C> {
-    type ToJson<'a>
-        = ser::ValueSer<'a, C>
-    where
-        Self: 'a;
-
-    fn to_json(&self) -> Self::ToJson<'_> {
-        ser::ValueSer(self)
-    }
-}
-
-#[cfg(todo)]
-mod ser;

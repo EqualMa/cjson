@@ -839,6 +839,133 @@ macro_rules! __private_json_eof_normalize {
             $($then_macro_rest)*
         }
     };
+    // EmptyObject
+    (
+        kind(json_object)
+        chunks[
+            prev_compile_runtime[]
+            last_compile_time[
+                left_brace()
+                right_brace()
+            ]
+        ]
+        then_macro_bang($($then_macro_bang:tt)+)
+        then_macro_rest($($then_macro_rest:tt)*)
+    ) => {
+        $($then_macro_bang)+ {
+            EmptyObject {}
+            $($then_macro_rest)*
+        }
+    };
+    // NonEmptyObject only_compile_time
+    (
+        kind(json_object)
+        chunks[
+            prev_compile_runtime[]
+            last_compile_time[
+                left_brace()
+                $($rest:tt)+
+            ]
+        ]
+        then_macro_bang($($then_macro_bang:tt)+)
+        then_macro_rest($($then_macro_rest:tt)*)
+    ) => {
+        $($then_macro_bang)+ {
+            only_compile_time {
+                kind NonEmptyObject
+                chunk [
+                    left_brace()
+                    $($rest)+
+                ]
+                CONST_ASSOC(JSON_OBJECT_NON_EMPTY)
+            }
+            $($then_macro_rest)*
+        }
+    };
+    // ObjectOfKvs
+    (
+        kind(json_object)
+        chunks[
+            prev_compile_runtime[
+                prev[]
+                current {
+                    compile_time[left_brace()]
+                    runtime[
+                        json_kvs_between_braces($runtime_expr:expr)
+                        $(as $RuntimeType:ty)?
+                    ]
+                }
+            ]
+            last_compile_time [right_brace()]
+        ]
+        then_macro_bang($($then_macro_bang:tt)+)
+        then_macro_rest($($then_macro_rest:tt)*)
+    ) => {
+        $($then_macro_bang)+ {
+            ObjectOfKvs {
+                ($runtime_expr)
+                $(as $RuntimeType)?
+            }
+            $($then_macro_rest)*
+        }
+    };
+    // NonEmptyObject runtime_chunks
+    (
+        kind(json_object)
+        chunks $chunks:tt
+        then_macro_bang($($then_macro_bang:tt)+)
+        then_macro_rest($($then_macro_rest:tt)*)
+    ) => {
+        $($then_macro_bang)+ {
+            runtime_chunks {
+                kind NonEmptyObject
+                chunks $chunks
+                path($crate::r#const::object::NonEmptyObject)
+            }
+            $($then_macro_rest)*
+        }
+    };
+    // json_string only_compile_time
+    (
+        kind(json_string)
+        chunks[
+            prev_compile_runtime[]
+            last_compile_time[
+                double_quote()
+                $($rest:tt)+
+            ]
+        ]
+        then_macro_bang($($then_macro_bang:tt)+)
+        then_macro_rest($($then_macro_rest:tt)*)
+    ) => {
+        $($then_macro_bang)+ {
+            only_compile_time {
+                kind json_string
+                chunk [
+                    double_quote()
+                    $($rest)+
+                ]
+                CONST_ASSOC(JSON_STRING)
+            }
+            $($then_macro_rest)*
+        }
+    };
+    // json_string runtime_chunks
+    (
+        kind(json_string)
+        chunks $chunks:tt
+        then_macro_bang($($then_macro_bang:tt)+)
+        then_macro_rest($($then_macro_rest:tt)*)
+    ) => {
+        $($then_macro_bang)+ {
+            runtime_chunks {
+                kind json_string
+                chunks $chunks
+                path($crate::r#const::string::JsonString)
+            }
+            $($then_macro_rest)*
+        }
+    };
 }
 
 #[macro_export]
@@ -857,6 +984,21 @@ macro_rules! __private_json_eof {
         outer_const_generics $outer_const_generics:tt
     ) => {
         $crate::r#const::array::ArrayOfItems $( ::<$RuntimeType> )? ($runtime_expr)
+    };
+    (
+        EmptyObject {}
+        outer_const_generics $outer_const_generics:tt
+    ) => {
+        $crate::r#const::object::EmptyObject
+    };
+    (
+        ObjectOfKvs {
+            ($runtime_expr:expr)
+            $(as $RuntimeType:ty)?
+        }
+        outer_const_generics $outer_const_generics:tt
+    ) => {
+        $crate::r#const::object::ObjectOfKvs $( ::<$RuntimeType> )? ($runtime_expr)
     };
     (
         only_compile_time {
@@ -907,15 +1049,6 @@ macro_rules! __private_json_eof {
 
 #[macro_export]
 macro_rules! __private_json_after_value {
-    // (
-    //     [
-    //         prev $prev:tt
-    //         current_compile_time[
-    //             $($current_compile_time:tt)*
-    //         ]
-    //         after_value $after_value:tt
-    //     ]
-    // ) => {};
     (
         chunks[
             prev_compile_runtime $prev:tt
@@ -982,13 +1115,19 @@ macro_rules! __private_json_after_value {
     (
         chunks $chunks:tt
         after_value {
-            EOF_impl_to_json
+            EOF_impl_to_json {
+                kind $json_value_kind:tt
+            }
             $args:tt
         }
     ) => {
-        $crate::__private_impl_to_json_after_value! {
-            $chunks
-            $args
+        $crate::__private_json_eof_normalize! {
+            kind $json_value_kind
+            chunks $chunks
+            then_macro_bang( $crate::__private_impl_to_json_eof! )
+            then_macro_rest(
+                $args
+            )
         }
     };
 }
@@ -1394,32 +1533,16 @@ macro_rules! __private_json_after_object_start {
             ]
         }
     };
-    // runtime fields
+    // runtime kvs
     (
-        [
-            prev $prev:tt
-            current_compile_time $compile_time:tt
-            after_value $after_value:tt
-        ]
-        ..($runtime_fields:expr)
+        $state:tt
+        ..($runtime_kvs:expr)
         $(as $runtime_type:ty)?
         $(; $($rest:tt)*)?
     ) => {
-        $crate::__private_json_after_object_field_value! {
-            [
-                prev[
-                    prev $prev
-                    current {
-                        compile_time $compile_time
-                        runtime[
-                            json_fields($runtime_fields)
-                            $(as $runtime_type)?
-                        ]
-                    }
-                ]
-                current_compile_time[]
-                after_value $after_value
-            ]
+        $crate::__private_json_after_runtime_kvs! {
+            $state
+            [after_object_start ($runtime_kvs) $($runtime_type)?]
             $($($rest)*)?
         }
     };
@@ -1433,6 +1556,197 @@ macro_rules! __private_json_after_object_start {
                 before_field_name()
             }
             $state
+            $($rest)+
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_json_after_runtime_kvs {
+    // runtime_kvs_after_object_start + EOF
+    (
+        [
+            prev $prev:tt
+            current_compile_time $current_compile_time:tt
+            after_value $after_value:tt
+        ]
+        [after_object_start ($runtime_items:expr) $($runtime_type:ty)?]
+        // EOF
+    ) => {
+        $crate::__private_json_after_value! {
+            chunks[
+                prev_compile_runtime[
+                    prev $prev
+                    current {
+                        compile_time $current_compile_time
+                        runtime[
+                            json_kvs_between_braces($runtime_items)
+                            $(as $runtime_type)?
+                        ]
+                    }
+                ]
+                last_compile_time[
+                    right_brace()
+                ]
+            ]
+            after_value $after_value
+        }
+    };
+    // runtime_kvs_after_field_value + EOF
+    (
+        [
+            prev $prev:tt
+            current_compile_time $current_compile_time:tt
+            after_value $after_value:tt
+        ]
+        [after_object_field_value ($runtime_items:expr) $($runtime_type:ty)?]
+        // EOF
+    ) => {
+        $crate::__private_json_after_value! {
+            chunks[
+                prev_compile_runtime[
+                    prev $prev
+                    current {
+                        compile_time $current_compile_time
+                        runtime[
+                            json_kvs_after_field_value($runtime_items)
+                            $(as $runtime_type)?
+                        ]
+                    }
+                ]
+                last_compile_time[
+                    right_brace()
+                ]
+            ]
+            after_value $after_value
+        }
+    };
+    // runtime_kvs + runtime_kvs
+    (
+        $state:tt
+        [$kind:ident ($prev_runtime:expr) $($prev_runtime_type:ty)?]
+        ..($runtime:expr)
+        $(as $runtime_type:ty)?
+        $(; $($rest:tt)*)?
+    ) => {
+        $crate::__private_json_after_runtime_kvs! {
+            $state
+            [
+                $kind
+                (
+                    $crate::values::ChainObject($prev_runtime, $runtime)
+                )
+                $crate::values::ChainObject<
+                    $crate::__expand_or![[$($prev_runtime_type)?][_]],
+                    $crate::__expand_or![[$($runtime_type     )?][_]],
+                >
+            ]
+            $($($rest)*)?
+        }
+    };
+    // runtime_kvs + const_kvs
+    (
+        $state:tt
+        $runtime:tt
+        ..{ $($inner:tt)* }
+        $(;)?
+    ) => {
+        $crate::__private_json_after_runtime_kvs! {
+            $state
+            $runtime
+            $($inner)*
+        }
+    };
+    // runtime_kvs + const_kvs
+    (
+        $state:tt
+        $runtime:tt
+        ..[ $($inner:tt)* ]
+        ; $($rest:tt)+
+    ) => {
+        $crate::__private_json_object_detect_trailing_semi! {
+            {$($inner)*}
+            [
+                $crate::__private_json_after_runtime_items! {
+                    $state
+                    $runtime
+                    $($inner)*
+                    $($rest)+
+                }
+            ]
+            [
+                $crate::__private_json_after_runtime_items! {
+                    $state
+                    $runtime
+                    $($inner)*
+                    ;
+                    $($rest)+
+                }
+            ]
+        }
+    };
+    // runtime_kvs_after_object_start  + field_name
+    (
+        [
+            prev $prev:tt
+            current_compile_time $compile_time:tt
+            after_value $after_value:tt
+        ]
+        [after_object_start ($runtime:expr) $($runtime_type:ty)?]
+        $($rest:tt)+
+    ) => {
+        $crate::__private_json_object_field_name! {
+            {
+                before_field_name(
+                )
+            }
+            [
+                prev[
+                    prev $prev
+                    current {
+                        compile_time $compile_time
+                        runtime[
+                            json_kvs_after_object_start_before_field_name($runtime)
+                            $(as $runtime_type)?
+                        ]
+                    }
+                ]
+                current_compile_time[]
+                after_value $after_value
+            ]
+            $($rest)+
+        }
+    };
+    // runtime_kvs_after_field_value  + field_name
+    (
+        [
+            prev $prev:tt
+            current_compile_time $compile_time:tt
+            after_value $after_value:tt
+        ]
+        [after_object_field_value ($runtime:expr) $($runtime_type:ty)?]
+        $($rest:tt)+
+    ) => {
+        $crate::__private_json_object_field_name! {
+            {
+                before_field_name(
+                    comma()
+                )
+            }
+            [
+                prev[
+                    prev $prev
+                    current {
+                        compile_time $compile_time
+                        runtime[
+                            json_kvs_after_field_value($runtime)
+                            $(as $runtime_type)?
+                        ]
+                    }
+                ]
+                current_compile_time[]
+                after_value $after_value
+            ]
             $($rest)+
         }
     };
@@ -1728,75 +2042,16 @@ macro_rules! __private_json_after_object_field_value {
         }
 
     };
-    // runtime fields (merge prev)
+    // runtime kvs
     (
-        [
-            prev[
-                prev $prev:tt
-                current {
-                    compile_time $compile_time:tt
-                    runtime[
-                        json_fields($prev_runtime_fields:expr)
-                        $(as $prev_runtime_type:ty)?
-                    ]
-                }
-            ]
-            current_compile_time []
-            after_value $after_value:tt
-        ]
-        ..($runtime_fields:expr)
+        $state:tt
+        ..($runtime:expr)
         $(as $runtime_type:ty)?
         $(; $($rest:tt)*)?
     ) => {
-        $crate::__private_json_after_object_field_value! {
-            [
-                prev[
-                    prev $prev
-                    current {
-                        compile_time $compile_time
-                        runtime[
-                            json_fields(
-                                todo!() // TODO:
-                                // $prev_runtime_fields
-                                // $runtime_fields
-                            )
-                            // $(as $prev_runtime_type:ty)?
-                            // $(as $runtime_type)?
-                        ]
-                    }
-                ]
-                current_compile_time[]
-                after_value $after_value
-            ]
-            $($($rest)*)?
-        }
-    };
-    // runtime fields
-    (
-        [
-            prev $prev:tt
-            current_compile_time $compile_time:tt
-            after_value $after_value:tt
-        ]
-        ..($runtime_fields:expr)
-        $(as $runtime_type:ty)?
-        $(; $($rest:tt)*)?
-    ) => {
-        $crate::__private_json_after_object_field_value! {
-            [
-                prev[
-                    prev $prev
-                    current {
-                        compile_time $compile_time
-                        runtime[
-                            json_fields($runtime_fields)
-                            $(as $runtime_type)?
-                        ]
-                    }
-                ]
-                current_compile_time[]
-                after_value $after_value
-            ]
+        $crate::__private_json_after_runtime_items! {
+            $state
+            [after_object_field_value ($runtime) $($runtime_type:ty)?]
             $($($rest)*)?
         }
     };
@@ -1984,11 +2239,11 @@ macro_rules! __private_json_string_fragment {
                         compile_time $current_compile_time
                         runtime[
                             json_string_fragment(
-                                $crate::ser::texts::Chain(
+                                $crate::values::ChainString(
                                     $prev_fragment,
                                     $runtime_expr,
                                 )
-                                as $crate::ser::texts::Chain<
+                                as $crate::values::ChainString<
                                     $crate::__expand_or![[$($prev_runtime_type)?][_]],
                                     $crate::__expand_or![[$($runtime_type)?     ][_]],
                                 >
