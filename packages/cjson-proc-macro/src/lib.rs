@@ -107,9 +107,23 @@ fn push_top_level_attr_meta(
     match try_push_top_level_attr_meta(attr_meta, extend_attr_meta, errors) {
         Ok(v) => Some(v),
         Err(e) => {
-            errors.push(e);
+            match e {
+                TopLevelAttrError::Unexpected => { /* ignore */ }
+                TopLevelAttrError::Other(e) => errors.push(e),
+            }
             None
         }
+    }
+}
+
+enum TopLevelAttrError {
+    Unexpected,
+    Other(syn_generic::ParseError),
+}
+
+impl From<syn_generic::ParseError> for TopLevelAttrError {
+    fn from(value: syn_generic::ParseError) -> Self {
+        Self::Other(value)
     }
 }
 
@@ -117,7 +131,7 @@ fn try_push_top_level_attr_meta(
     attr_meta: TokenStream,
     extend_attr_meta: impl FnOnce(TokenStream, &mut ErrorCollector) -> Vec<IdentTree>,
     errors: &mut ErrorCollector,
-) -> Result<IdentTree, syn_generic::ParseError> {
+) -> Result<IdentTree, TopLevelAttrError> {
     let mut input: syn_generic::ParsingTokenStream = attr_meta.into();
     let input = &mut input;
 
@@ -125,10 +139,13 @@ fn try_push_top_level_attr_meta(
     let cjson = match cjson {
         TokenTree::Ident(ident) if ident_matches!(ident, b"cjson") => ident,
         _ => {
+            /* attributes enabled inside #[cfg_attr(...)] will get here
             return Err(syn_generic::ParseError::custom(
                 "expect `cjson`",
                 cjson.span_open_or_entire(),
             ));
+            */
+            return Err(TopLevelAttrError::Unexpected);
         }
     };
 
