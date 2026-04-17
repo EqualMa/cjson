@@ -1,4 +1,4 @@
-use alloc::string::String;
+use alloc::{rc::Rc, string::String};
 
 use crate::ser::{ToJson, ToJsonString};
 

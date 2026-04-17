@@ -33,3 +33,28 @@ impl<T: ToJson> ToJson for [T] {
         Self::to_json_array(self)
     }
 }
+
+impl<T: ToJson, const N: usize> ToJsonArray for [T; N] {
+    type ToJsonArray<'a>
+        = <[T] as ToJsonArray>::ToJsonArray<'a>
+    where
+        Self: 'a;
+
+    fn to_json_array(&self) -> Self::ToJsonArray<'_> {
+        <[T] as ToJsonArray>::to_json_array(self)
+    }
+}
+
+impl<T: ToJson, const N: usize> ToJson for [T; N] {
+    type ToJson<'a>
+        = <Self as ToJsonArray>::ToJsonArray<'a>
+    where
+        Self: 'a;
+
+    fn to_json(&self) -> Self::ToJson<'_> {
+        Self::to_json_array(self)
+    }
+}
+
+#[cfg(feature = "alloc")]
+mod alloc;

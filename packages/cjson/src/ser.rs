@@ -81,3 +81,6 @@ mod int;
 mod string;
 
 mod slice;
+
+#[cfg(feature = "alloc")]
+mod alloc;
