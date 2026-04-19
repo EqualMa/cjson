@@ -82,5 +82,7 @@ mod string;
 
 mod slice;
 
+mod tuple;
+
 #[cfg(feature = "alloc")]
 mod alloc;
