@@ -1,38 +1,196 @@
+///
+/// ```
+/// ```
+///
+/// `vis` default to `pub` if not specified.
+///
+/// ```compile_error
+/// pub enum Private {
+///     A,
+/// }
+///
+/// ::cjson::impl_to_json!(
+///     vis![],
+///     impl_generics![],
+///     where_clause![],
+///     |self: Private| match self {
+///         #[cjson(match_branch_name(A))]
+///         Self::A => json!("A"),
+///     }
+/// );
+/// ```
 #[macro_export]
 macro_rules! impl_to_json {
+    ($($t:tt)+) => {
+        $crate::__private_impl_to_json_options! {
+            {
+                vis[] // not specified
+                impl_generics[] // empty
+                where_clause[] // empty
+            }
+            {$($t)+}
+            {$($t)+}
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_impl_to_json_options {
     (
-        $(vis![$($vis:tt)*],)?
-        $(impl_generics![$($impl_generics:tt)*],)?
-        $(where_clause![$($where_clause:tt)*],)?
+        $options:tt
+        { $_option_name:ident !        $_option_bracketed:tt , $($_rest:tt)+ }
+        {  $option_name:ident $bang:tt  $option_bracketed:tt ,  $($rest:tt)+ }
+    ) => {
+        $crate::__private::impl_to_json_options::$option_name $bang {
+            $options
+            $option_bracketed
+            {$($_rest)+}
+            { $($rest)+}
+        }
+    };
+    (
+        $options:tt
+        $_rest:tt
+         $rest:tt
+    ) => {
+        $crate::__private_impl_to_json_options_resolved! {
+            $options
+            $rest
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_impl_to_json_option_vis {
+    (
+        {
+            vis[ /* not specified */ ]
+            impl_generics $impl_generics:tt
+            where_clause $where_clause:tt
+        }
+        $option_bracketed:tt
+        $_rest:tt
+         $rest:tt
+    ) => {
+        $crate::__private_impl_to_json_options! {
+            {
+                vis[ $option_bracketed ]
+                impl_generics $impl_generics
+                where_clause $where_clause
+            }
+            $_rest
+             $rest
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_impl_to_json_option_impl_generics {
+    (
+        {
+            vis $vis:tt
+            impl_generics[]
+            where_clause $where_clause:tt
+        }
+        $option_bracketed:tt
+        $_rest:tt
+         $rest:tt
+    ) => {
+        $crate::__private_impl_to_json_options! {
+            {
+                vis $vis
+                impl_generics $option_bracketed
+                where_clause $where_clause
+            }
+            $_rest
+             $rest
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_impl_to_json_option_where_clause {
+    (
+        {
+            vis $vis:tt
+            impl_generics $impl_generics:tt
+            where_clause[]
+        }
+        $option_bracketed:tt
+        $_rest:tt
+         $rest:tt
+    ) => {
+        $crate::__private_impl_to_json_options! {
+            {
+                vis $vis
+                impl_generics $impl_generics
+                where_clause $option_bracketed
+            }
+            $_rest
+             $rest
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_impl_to_json_options_resolved {
+    (
+        {
+            vis[] // not specified
+            $($options:tt)+
+        }
+        $rest:tt
+    ) => {
+        $crate::__private_impl_to_json_options_resolved! {
+            {
+                // vis default to pub
+                vis[ [pub] ]
+                $($options)+
+            }
+            $rest
+        }
+    };
+    (
+        {
+            vis[ [$($vis:tt)*] ]
+            impl_generics[ $($impl_generics:tt)* ]
+            where_clause[$($where_clause:tt)*]
+        }{
         $({$($used_const_generics:tt)*},)?
         |$_self:ident : $Type:ty|
         match $matched:tt $match_body:tt
+        }
     ) => {
         $crate::__private_impl_to_json_match! {
-            ($($($vis)*)?)
+            ($($vis)*)
             ($matched)
             $match_body
             {$($($used_const_generics)*)?}
             {
-                impl_generics($($($impl_generics)*)?)
-                where_clause($($($where_clause)*)?)
+                impl_generics($($impl_generics)*)
+                where_clause($($where_clause)*)
                 self($_self)
                 type($Type)
             }
         }
     };
     (
-        $(impl_generics![$($impl_generics:tt)*],)?
-        $(where_clause![$($where_clause:tt)*],)?
+        {
+            // TODO: not respected
+            vis[ [$($vis:tt)*] ]
+            impl_generics[ $($impl_generics:tt)* ]
+            where_clause[$($where_clause:tt)*]
+        }{
         $({$($used_const_generics:tt)*},)?
         |$_self:ident : $Type:ty| $($macro_body:tt)*
+        }
     ) => {
         $crate::__private_impl_to_json_parse! {
             ( $($macro_body)* )
             {$($($used_const_generics)*)?}
             {
-                impl_generics($($($impl_generics)*)?)
-                where_clause($($($where_clause)*)?)
+                impl_generics($($impl_generics)*)
+                where_clause($($where_clause)*)
                 self($_self)
                 type($Type)
             }

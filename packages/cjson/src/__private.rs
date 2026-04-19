@@ -35,6 +35,14 @@ pub trait ImplToJsonHelper {
         Self: 'a;
 }
 
+pub mod impl_to_json_options {
+    pub use crate::{
+        __private_impl_to_json_option_impl_generics as impl_generics,
+        __private_impl_to_json_option_vis as vis,
+        __private_impl_to_json_option_where_clause as where_clause,
+    };
+}
+
 #[cfg(feature = "proc-macro")]
 pub mod proc_macro {
     pub use ::core::{compile_error, primitive::str, stringify};
