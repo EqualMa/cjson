@@ -375,7 +375,7 @@ pub fn derive_to_json(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let mut config_ident_trees: Vec<IdentTree> = vec![];
 
     let ParseItemStart {
-        vis: _,
+        vis: item_vis,
         first_ident,
     } = match syn_generic::parse_item_start(&mut input, |_, tt| {
         match syn_generic::GroupBracket::parse_from_token_tree(tt) {
@@ -448,7 +448,13 @@ pub fn derive_to_json(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
     let use_item_attrs = item_ident_tree.into_tokens();
 
-    let ts = item.map(|item| item.into_tokens(crate_path));
+    let ts = item.map(|item| {
+        item.into_tokens(
+            //
+            crate_path,
+            item_vis.map(|vis| vis.into_tokens()),
+        )
+    });
 
     let errors = errors
         .ok()

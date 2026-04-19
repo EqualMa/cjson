@@ -1198,6 +1198,15 @@ pub struct SomeVisibility {
     paren: Option<SomeVisibilityParen>,
 }
 
+impl SomeVisibility {
+    pub fn into_tokens(self) -> impl IntoTokens {
+        let Self { r#pub, paren } = self;
+        let r#pub = r#pub.0;
+        let paren = paren.map(|p| p.group.0);
+        quote!( #r#pub #paren )
+    }
+}
+
 pub struct SomeVisibilityParen {
     group: GroupParen,
     kind: SomeVisibilityParenKind,

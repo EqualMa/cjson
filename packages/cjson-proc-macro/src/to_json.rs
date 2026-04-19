@@ -168,7 +168,11 @@ pub struct ToJsonItem {
     data: ToJsonItemData,
 }
 impl ToJsonItem {
-    pub fn into_tokens(self, crate_path: impl IntoTokens) -> impl IntoTokens {
+    pub fn into_tokens(
+        self,
+        crate_path: impl IntoTokens,
+        item_vis: impl IntoTokens,
+    ) -> impl IntoTokens {
         let Self {
             name,
             impl_generics,
@@ -195,6 +199,7 @@ impl ToJsonItem {
 
         quote!(
             #crate_path ::impl_to_json!(
+                vis![#item_vis],
                 impl_generics![#impl_generics],
                 where_clause![#where_clause],
                 |self: #name< #ty_generics >|
