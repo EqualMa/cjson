@@ -17,6 +17,17 @@ impl IntoTextChunks for Never {
     fn _private_into_text_chunks_vec(self) -> alloc::vec::Vec<u8> {
         match self {}
     }
+
+    fn write_into<W: ?Sized + traits::ConsumeTextChunk>(self, _: &mut W) {
+        match self {}
+    }
+
+    fn try_write_into<W: ?Sized + traits::TryConsumeTextChunk>(
+        self,
+        _: &mut W,
+    ) -> Result<(), W::Err> {
+        match self {}
+    }
 }
 
 impl traits::sealed::Text for Never {}
@@ -55,6 +66,17 @@ impl traits::IntoTextChunks for NeverElements {
 
     #[cfg(feature = "alloc")]
     fn _private_into_text_chunks_vec(self) -> alloc::vec::Vec<u8> {
+        match self {}
+    }
+
+    fn write_into<W: ?Sized + traits::ConsumeTextChunk>(self, _: &mut W) {
+        match self {}
+    }
+
+    fn try_write_into<W: ?Sized + traits::TryConsumeTextChunk>(
+        self,
+        _: &mut W,
+    ) -> Result<(), W::Err> {
         match self {}
     }
 }

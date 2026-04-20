@@ -1,5 +1,28 @@
-use super::iter_text_chunk::IterTextChunk;
+use super::iter_text_chunk::{HasConstChunk, IterTextChunk};
 
+#[cfg(feature = "alloc")]
+mod impl_alloc;
+
+pub trait ConsumeTextChunk {
+    fn consume_text_chunk(&mut self, chunk: &str);
+}
+
+pub trait TryConsumeTextChunk {
+    type Err;
+
+    fn try_consume_text_chunk(&mut self, chunk: &str) -> Result<(), Self::Err>;
+}
+
+impl<C: ?Sized + ConsumeTextChunk> TryConsumeTextChunk for C {
+    type Err = core::convert::Infallible;
+
+    fn try_consume_text_chunk(&mut self, chunk: &str) -> Result<(), Self::Err> {
+        self.consume_text_chunk(chunk);
+        Ok(())
+    }
+}
+
+// TODO: sealed
 pub trait IntoTextChunks {
     type IntoTextChunks: IterTextChunk;
     fn into_text_chunks(self) -> Self::IntoTextChunks;
@@ -12,13 +35,75 @@ pub trait IntoTextChunks {
     {
         IterTextChunk::_private_collect_into_vec(self.into_text_chunks())
     }
+
+    fn write_into<W: ?Sized + ConsumeTextChunk>(self, w: &mut W);
+
+    fn try_write_into<W: ?Sized + TryConsumeTextChunk>(self, w: &mut W) -> Result<(), W::Err>;
 }
 
-impl<T: IterTextChunk> IntoTextChunks for T {
+macro_rules! proxy_IntoTextChunks {
+    (|$self_:ident| -> $Proxy:ty $proxy:block ) => {
+        type IntoTextChunks = <$Proxy as crate::ser::traits::IntoTextChunks>::IntoTextChunks;
+        fn into_text_chunks($self_) -> Self::IntoTextChunks {
+            <$Proxy as crate::ser::traits::IntoTextChunks>::into_text_chunks($proxy)
+        }
+
+        #[doc(hidden)]
+        #[cfg(feature = "alloc")]
+        fn _private_into_text_chunks_vec($self_) -> alloc::vec::Vec<u8> {
+            <$Proxy as crate::ser::traits::IntoTextChunks>::_private_into_text_chunks_vec($proxy)
+        }
+
+        crate::ser::traits::proxy_IntoTextChunks_write! {
+            |$self_| -> $Proxy $proxy
+        }
+    };
+}
+
+macro_rules! proxy_IntoTextChunks_write {
+    (|$self_:ident| -> $Proxy:ty $proxy:block ) => {
+        fn write_into<W: ?Sized + crate::ser::traits::ConsumeTextChunk>($self_, w: &mut W) {
+            <$Proxy as crate::ser::traits::IntoTextChunks>::write_into($proxy, w)
+        }
+
+        fn try_write_into<W: ?Sized + crate::ser::traits::TryConsumeTextChunk>($self_, w: &mut W) -> Result<(), W::Err> {
+            <$Proxy as crate::ser::traits::IntoTextChunks>::try_write_into($proxy, w)
+        }
+    };
+}
+
+pub(crate) use {proxy_IntoTextChunks, proxy_IntoTextChunks_write};
+
+impl IntoTextChunks for &str {
     type IntoTextChunks = Self;
 
     fn into_text_chunks(self) -> Self::IntoTextChunks {
         self
+    }
+
+    fn write_into<W: ?Sized + ConsumeTextChunk>(self, w: &mut W) {
+        w.consume_text_chunk(self)
+    }
+
+    fn try_write_into<W: TryConsumeTextChunk + ?Sized>(self, w: &mut W) -> Result<(), W::Err> {
+        w.try_consume_text_chunk(self)
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl IntoTextChunks for alloc::string::String {
+    type IntoTextChunks = Self;
+
+    fn into_text_chunks(self) -> Self::IntoTextChunks {
+        self
+    }
+
+    fn write_into<W: ?Sized + ConsumeTextChunk>(self, w: &mut W) {
+        w.consume_text_chunk(&self)
+    }
+
+    fn try_write_into<W: ?Sized + TryConsumeTextChunk>(self, w: &mut W) -> Result<(), W::Err> {
+        w.try_consume_text_chunk(&self)
     }
 }
 

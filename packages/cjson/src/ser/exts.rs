@@ -7,6 +7,7 @@ use crate::ser::traits;
 
 pub trait TextExt: traits::Text {
     #[cfg(feature = "alloc")]
+    #[cfg(cjson_consumer_driven)]
     fn into_string(self) -> texts::Text<String>
     where
         Self: Sized,
@@ -14,6 +15,17 @@ pub trait TextExt: traits::Text {
         let bytes = self._private_into_text_chunks_vec();
         // SAFETY: traits::Text promised the emitted chunks are valid utf8 bytes.
         let s = unsafe { String::from_utf8_unchecked(bytes) };
+        texts::Text::new_without_validation(s)
+    }
+
+    #[cfg(feature = "alloc")]
+    #[cfg(not(cjson_consumer_driven))]
+    fn into_string(self) -> texts::Text<String>
+    where
+        Self: Sized,
+    {
+        let mut s = String::new();
+        self.write_into(&mut s);
         texts::Text::new_without_validation(s)
     }
 }

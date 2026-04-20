@@ -12,6 +12,19 @@ impl<A: IntoTextChunks, B: IntoTextChunks> IntoTextChunks for Chain<A, B> {
         let Self(a, b) = self;
         iter_text_chunk::Chain::new(a.into_text_chunks(), b.into_text_chunks())
     }
+
+    fn write_into<W: ?Sized + traits::ConsumeTextChunk>(self, w: &mut W) {
+        self.0.write_into(w);
+        self.1.write_into(w);
+    }
+
+    fn try_write_into<W: ?Sized + traits::TryConsumeTextChunk>(
+        self,
+        w: &mut W,
+    ) -> Result<(), W::Err> {
+        self.0.try_write_into(w)?;
+        self.1.try_write_into(w)
+    }
 }
 
 impl<A: traits::JsonStringFragment, B: traits::JsonStringFragment>

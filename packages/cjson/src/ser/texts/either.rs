@@ -38,6 +38,23 @@ impl<A: IntoTextChunks, B: IntoTextChunks> IntoTextChunks for Either<A, B> {
             Either::B(this) => B::_private_into_text_chunks_vec(this),
         }
     }
+
+    fn write_into<W: ?Sized + traits::ConsumeTextChunk>(self, w: &mut W) {
+        match self {
+            Either::A(this) => A::write_into(this, w),
+            Either::B(this) => B::write_into(this, w),
+        }
+    }
+
+    fn try_write_into<W: ?Sized + traits::TryConsumeTextChunk>(
+        self,
+        w: &mut W,
+    ) -> Result<(), W::Err> {
+        match self {
+            Either::A(this) => A::try_write_into(this, w),
+            Either::B(this) => B::try_write_into(this, w),
+        }
+    }
 }
 
 derive_either!(

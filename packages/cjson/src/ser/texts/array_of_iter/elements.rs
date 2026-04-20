@@ -186,6 +186,35 @@ impl<I: Iterator<Item: traits::Text>> IntoTextChunks for CommaSeparatedElementsO
     fn into_text_chunks(self) -> Self::IntoTextChunks {
         Chunks(Inner::new(MapIntoTextChunks { iter: self.0 }))
     }
+
+    fn write_into<W: ?Sized + traits::ConsumeTextChunk>(self, w: &mut W) {
+        let mut items = self.0;
+
+        if let Some(first) = items.next() {
+            first.write_into(w);
+            items.for_each(|item| {
+                w.consume_text_chunk(",");
+                item.write_into(w)
+            })
+        }
+    }
+
+    fn try_write_into<W: ?Sized + traits::TryConsumeTextChunk>(
+        self,
+        w: &mut W,
+    ) -> Result<(), W::Err> {
+        let mut items = self.0;
+
+        if let Some(first) = items.next() {
+            first.try_write_into(w)?;
+            items.try_for_each(|item| {
+                w.try_consume_text_chunk(",")?;
+                item.try_write_into(w)
+            })
+        } else {
+            Ok(())
+        }
+    }
 }
 
 impl<I: Iterator<Item: traits::Text>> traits::sealed::Text for CommaSeparatedElementsOfIter<I> {}
@@ -212,6 +241,7 @@ impl<I: Iterator<Item: traits::Text>> traits::EmptyOrCommaSeparatedElements
         AppendTrailingCommaIfNotEmpty(self.0)
     }
 
+    // TODO: should it be replaced with Chain<I::AppendTrailingCommaIfNotEmpty, Other>
     type ChainWithComma<Other: traits::EmptyOrCommaSeparatedElements> = ChainWithComma<I, Other>;
 
     fn chain_with_comma<Other: traits::EmptyOrCommaSeparatedElements>(
@@ -259,6 +289,23 @@ impl<I: Iterator<Item: traits::Text>> IntoTextChunks for PrependLeadingCommaIfNo
 
     fn into_text_chunks(self) -> Self::IntoTextChunks {
         PrependLeadingCommaIfNotEmptyChunks(Inner::new(MapIntoTextChunks { iter: self.0 }))
+    }
+
+    fn write_into<W: ?Sized + traits::ConsumeTextChunk>(self, w: &mut W) {
+        self.0.for_each(|item| {
+            w.consume_text_chunk(",");
+            item.write_into(w)
+        })
+    }
+
+    fn try_write_into<W: ?Sized + traits::TryConsumeTextChunk>(
+        mut self,
+        w: &mut W,
+    ) -> Result<(), W::Err> {
+        self.0.try_for_each(|item| {
+            w.try_consume_text_chunk(",")?;
+            item.try_write_into(w)
+        })
     }
 }
 
@@ -393,6 +440,23 @@ impl<I: Iterator<Item: traits::Text>> IntoTextChunks for AppendTrailingCommaIfNo
             MapIntoTextChunks { iter: self.0 },
         )))
     }
+
+    fn write_into<W: ?Sized + traits::ConsumeTextChunk>(self, w: &mut W) {
+        self.0.for_each(|item| {
+            item.write_into(w);
+            w.consume_text_chunk(",")
+        })
+    }
+
+    fn try_write_into<W: ?Sized + traits::TryConsumeTextChunk>(
+        mut self,
+        w: &mut W,
+    ) -> Result<(), W::Err> {
+        self.0.try_for_each(|item| {
+            item.try_write_into(w)?;
+            w.try_consume_text_chunk(",")
+        })
+    }
 }
 
 impl<I: Iterator<Item: traits::Text>> traits::sealed::EmptyOrCommaSeparatedElementsWithTrailingComma
@@ -416,6 +480,19 @@ impl<I: Iterator<Item: traits::Text>, Other: traits::EmptyOrCommaSeparatedElemen
 
     fn into_text_chunks(self) -> Self::IntoTextChunks {
         ChainWithCommaChunks::new(self.0, self.1)
+    }
+
+    fn write_into<W: ?Sized + traits::ConsumeTextChunk>(self, w: &mut W) {
+        AppendTrailingCommaIfNotEmpty(self.0).write_into(w);
+        self.1.write_into(w)
+    }
+
+    fn try_write_into<W: ?Sized + traits::TryConsumeTextChunk>(
+        self,
+        w: &mut W,
+    ) -> Result<(), W::Err> {
+        AppendTrailingCommaIfNotEmpty(self.0).try_write_into(w)?;
+        self.1.try_write_into(w)
     }
 }
 

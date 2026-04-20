@@ -751,8 +751,9 @@ mod ser {
     use core::{iter, marker::PhantomData};
 
     use crate::ser::{
-        iter_text_chunk::{ConstChunk, HasConstChunk, IterNonLending},
-        traits::IntoTextChunks,
+        iter_text_chunk::{HasConstChunk, IterNonLending},
+        texts::ConstChunk,
+        traits::{IntoTextChunks, proxy_IntoTextChunks},
     };
 
     use super::{CompileTimeChunk, HasConstCompileTimeChunk};
@@ -764,11 +765,7 @@ mod ser {
     }
 
     impl<T: ?Sized + HasConstCompileTimeChunk> IntoTextChunks for CompileTimeChunk<T> {
-        type IntoTextChunks = ConstChunk<Chunk<T>>;
-
-        fn into_text_chunks(self) -> Self::IntoTextChunks {
-            ConstChunk::DEFAULT
-        }
+        proxy_IntoTextChunks!(|self| -> ConstChunk<Chunk<T>> { ConstChunk::DEFAULT });
     }
 }
 

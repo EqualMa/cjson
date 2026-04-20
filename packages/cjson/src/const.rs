@@ -90,8 +90,8 @@ mod ser {
     use crate::{
         ser::{
             ToJson,
-            iter_text_chunk::{ConstChunk, IterNonLending},
-            texts::{self, Empty},
+            iter_text_chunk::IterNonLending,
+            texts::{self, ConstChunk, Empty},
             traits::{self, IntoTextChunks},
         },
         values::Either,
@@ -124,6 +124,10 @@ mod ser {
         fn into_text_chunks(self) -> Self::IntoTextChunks {
             IterNonLending(core::iter::once(Chunk(PhantomData)))
         }
+
+        crate::ser::traits::proxy_IntoTextChunks_write!(|self| -> texts::Value<&'static str> {
+            T::JSON_VALUE
+        });
     }
 
     impl<T: ?Sized + HasConstJsonValue> traits::sealed::Text for ConstJsonValue<T> {}

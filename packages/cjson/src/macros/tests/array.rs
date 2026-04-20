@@ -129,6 +129,188 @@ fn test_chunks() {
 
     {
         let v = json!([true, [(1), [(json!([null]))], ("hello\tworld")]]);
+        let v = crate::r#const::array::NonEmptyArray::new(crate::r#const::value::Value::new({
+            enum HasConstCompileTimeChunk {}
+
+            impl HasConstCompileTimeChunk {
+                const STATED_CHUNK_STRING: crate::r#const::StatedChunkString<
+                    {
+                        crate::r#const::ChunkLen::DEFAULT
+                            .left_bracket()
+                            .json_value(crate::__private_json_expand_token_args_for_len! {
+                                json_value true
+                            })
+                            .comma()
+                            .left_bracket()
+                            .len()
+                    },
+                > = {
+                    let mut buf =
+                        crate::r#const::StatedChunkBuf::new((crate::r#const::State::INIT));
+                    buf = buf.left_bracket();
+                    buf = crate::r#const::ConstIntoJsonValueString(
+                        crate::r#const::ConstIntoJson(true).const_into_json(),
+                    )
+                    .const_concat_after_stated_chunk_buf(buf);
+                    buf = buf.comma();
+                    buf = buf.left_bracket();
+                    buf.assert()
+                };
+            }
+            impl crate::r#const::HasConstCompileTimeChunk for HasConstCompileTimeChunk {
+                const CHUNK: crate::r#const::StatedChunkStr<'static> =
+                    Self::STATED_CHUNK_STRING.as_str();
+            }
+            let cjson_prev_compile_runtime = crate::__private::runtime_kinds::json_value(
+                crate::r#const::CompileTimeChunk::<HasConstCompileTimeChunk>::DEFAULT,
+                1,
+            );
+            enum PrevState {}
+
+            impl PrevState {
+                const STATE: crate::r#const::State =
+                    <HasConstCompileTimeChunk as crate::r#const::HasConstCompileTimeChunk>::CHUNK
+                        .next_state()
+                        .json_value();
+            }
+            {
+                enum HasConstCompileTimeChunk {}
+
+                impl HasConstCompileTimeChunk {
+                    const STATED_CHUNK_STRING: crate::r#const::StatedChunkString<
+                        {
+                            crate::r#const::ChunkLen::DEFAULT
+                                .comma()
+                                .left_bracket()
+                                .len()
+                        },
+                    > = {
+                        let mut buf = crate::r#const::StatedChunkBuf::new((PrevState::STATE));
+                        buf = buf.comma();
+                        buf = buf.left_bracket();
+                        buf.assert()
+                    };
+                }
+                impl crate::r#const::HasConstCompileTimeChunk for HasConstCompileTimeChunk {
+                    const CHUNK: crate::r#const::StatedChunkStr<'static> =
+                        Self::STATED_CHUNK_STRING.as_str();
+                }
+                let cjson_prev_compile_runtime = crate::r#const::ChunkConcat(
+                    cjson_prev_compile_runtime,
+                    crate::__private::runtime_kinds::json_value(
+                        crate::r#const::CompileTimeChunk::<HasConstCompileTimeChunk>::DEFAULT,
+                        ({
+                            enum HasConstCompileTimeChunk {}
+
+                            impl HasConstCompileTimeChunk {
+                                const STATED_CHUNK_STRING: crate::r#const::StatedChunkString<
+                                    {
+                                        crate::r#const::ChunkLen::DEFAULT
+                                    .left_bracket()
+                                    .json_value(
+                                        crate::__private_json_expand_token_args_for_len! {
+                                            json_value crate::__private::well_known_ident::null
+                                        },
+                                    )
+                                    .right_bracket()
+                                    .len()
+                                    },
+                                > = {
+                                    let mut buf = crate::r#const::StatedChunkBuf::new(
+                                        (crate::r#const::State::INIT),
+                                    );
+                                    buf = buf.left_bracket();
+                                    buf = crate::r#const::ConstIntoJsonValueString(
+                                        crate::r#const::ConstIntoJson(
+                                            (crate::__private::well_known_ident::null),
+                                        )
+                                        .const_into_json(),
+                                    )
+                                    .const_concat_after_stated_chunk_buf(buf);
+                                    buf = buf.right_bracket();
+                                    buf.assert()
+                                };
+                            }
+                            impl crate::r#const::HasConstCompileTimeChunk for HasConstCompileTimeChunk {
+                                const CHUNK: crate::r#const::StatedChunkStr<'static> =
+                                    Self::STATED_CHUNK_STRING.as_str();
+                            }
+                            crate::r#const::CompileTimeChunk:: <HasConstCompileTimeChunk::< >> ::JSON_ARRAY_NON_EMPTY
+                        }),
+                    ),
+                );
+                {
+                    enum PrevState {}
+
+                    impl PrevState {
+                        const STATE:crate::r#const::State =  <HasConstCompileTimeChunk as crate::r#const::HasConstCompileTimeChunk>::CHUNK.next_state().json_value();
+                    }
+                    {
+                        enum HasConstCompileTimeChunk {}
+
+                        impl HasConstCompileTimeChunk {
+                            const STATED_CHUNK_STRING: crate::r#const::StatedChunkString<
+                                {
+                                    crate::r#const::ChunkLen::DEFAULT
+                                        .right_bracket()
+                                        .comma()
+                                        .len()
+                                },
+                            > = {
+                                let mut buf =
+                                    crate::r#const::StatedChunkBuf::new((PrevState::STATE));
+                                buf = buf.right_bracket();
+                                buf = buf.comma();
+                                buf.assert()
+                            };
+                        }
+                        impl crate::r#const::HasConstCompileTimeChunk for HasConstCompileTimeChunk {
+                            const CHUNK: crate::r#const::StatedChunkStr<'static> =
+                                Self::STATED_CHUNK_STRING.as_str();
+                        }
+                        let cjson_prev_compile_runtime = crate::r#const::ChunkConcat(
+                    cjson_prev_compile_runtime,
+                    crate::__private::runtime_kinds::json_value(
+                        crate::r#const::CompileTimeChunk::<HasConstCompileTimeChunk>::DEFAULT,
+                        "hello\tworld",
+                    ),
+                );
+                        {
+                            enum PrevState {}
+
+                            impl PrevState {
+                                const STATE:crate::r#const::State =  <HasConstCompileTimeChunk as crate::r#const::HasConstCompileTimeChunk>::CHUNK.next_state().json_value();
+                            }
+                            crate::r#const::ChunkConcat(cjson_prev_compile_runtime, {
+                                enum HasConstCompileTimeChunk {}
+
+                                impl HasConstCompileTimeChunk {
+                                    const STATED_CHUNK_STRING: crate::r#const::StatedChunkString<
+                                        {
+                                            crate::r#const::ChunkLen::DEFAULT
+                                                .right_bracket()
+                                                .right_bracket()
+                                                .len()
+                                        },
+                                    > = {
+                                        let mut buf =
+                                            crate::r#const::StatedChunkBuf::new((PrevState::STATE));
+                                        buf = buf.right_bracket();
+                                        buf = buf.right_bracket();
+                                        buf.assert()
+                                    };
+                                }
+                                impl crate::r#const::HasConstCompileTimeChunk for HasConstCompileTimeChunk {
+                                    const CHUNK: crate::r#const::StatedChunkStr<'static> =
+                                        Self::STATED_CHUNK_STRING.as_str();
+                                }
+                                crate::r#const::CompileTimeChunk::<HasConstCompileTimeChunk>::DEFAULT
+                            })
+                        }
+                    }
+                }
+            }
+        }));
         let mut v = v.to_json().into_text_chunks();
 
         assert_eq!(next!(v), Some(b"[true,[".as_slice()));

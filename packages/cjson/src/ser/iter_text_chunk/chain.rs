@@ -23,38 +23,21 @@ impl<A: IterTextChunk, B: IterTextChunk> IterTextChunk for Chain<A, B> {
             self,
             |this: &mut _| -> PoloniusResult<BorrowingOutput!['_], AssignNoneToSelf0> {
                 match &mut this.0 {
-                    Some((a_opt, b)) => {
-                        struct AssignNoneToAOpt(bool);
+                    Some((a_done, a, b)) => {
+                        if !*a_done {
+                            match a.next_text_chunk() {
+                                Some(chunk) => {
+                                    return PoloniusResult::Borrowing(Some(Chunk::A(chunk)));
+                                }
+                                None => {
+                                    *a_done = true;
+                                }
+                            }
+                        }
 
-                        match polonius::<
-                            Option<A>,
-                            AssignNoneToAOpt,
-                            ForLt![<'r> = BorrowingOutput!['r]],
-                        >(a_opt, |a_opt| -> _ {
-                            match a_opt {
-                                Some(a) => match a.next_text_chunk() {
-                                    Some(chunk) => {
-                                        return PoloniusResult::Borrowing(Some(Chunk::A(chunk)));
-                                    }
-                                    None => PoloniusResult::Owned(AssignNoneToAOpt(true)),
-                                },
-                                None => PoloniusResult::Owned(AssignNoneToAOpt(false)),
-                            }
-                        }) {
-                            PoloniusResult::Borrowing(v) => PoloniusResult::Borrowing(v),
-                            PoloniusResult::Owned {
-                                value: AssignNoneToAOpt(assign_none_to_a_opt),
-                                input_borrow: a_opt,
-                            } => {
-                                if assign_none_to_a_opt {
-                                    *a_opt = None;
-                                }
-                                debug_assert!(a_opt.is_none());
-                                match b.next_text_chunk() {
-                                    Some(chunk) => PoloniusResult::Borrowing(Some(Chunk::B(chunk))),
-                                    None => PoloniusResult::Owned(AssignNoneToSelf0),
-                                }
-                            }
+                        match b.next_text_chunk() {
+                            Some(chunk) => PoloniusResult::Borrowing(Some(Chunk::B(chunk))),
+                            None => PoloniusResult::Owned(AssignNoneToSelf0),
                         }
                     }
                     None => PoloniusResult::Borrowing(None),
@@ -74,10 +57,13 @@ impl<A: IterTextChunk, B: IterTextChunk> IterTextChunk for Chain<A, B> {
 
     fn bytes_len_hint(&self) -> (usize, Option<usize>) {
         match &self.0 {
-            Some((a, b)) => match a {
-                Some(a) => (SizeHint(a.bytes_len_hint()) + SizeHint(b.bytes_len_hint())).0,
-                None => b.bytes_len_hint(),
-            },
+            Some((a_done, a, b)) => {
+                if !*a_done {
+                    (SizeHint(a.bytes_len_hint()) + SizeHint(b.bytes_len_hint())).0
+                } else {
+                    b.bytes_len_hint()
+                }
+            }
             None => (0, Some(0)),
         }
     }

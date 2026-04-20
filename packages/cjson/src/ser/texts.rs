@@ -56,14 +56,9 @@ macro_rules! define_refined_type {
         }
 
         impl<T: $Bounds> traits::IntoTextChunks for $Type<T> {
-            type IntoTextChunks = T::IntoTextChunks;
-
-            fn into_text_chunks(self) -> Self::IntoTextChunks {
-                self.0.into_text_chunks()
-            }
-
-            // TODO:
-            // fn _private_into_text_chunks_vec(self)
+            crate::ser::traits::proxy_IntoTextChunks!(
+                |self| -> T { self.0 }
+            );
         }
 
         $(
@@ -143,3 +138,9 @@ define_refined_type!(
 );
 
 mod non_empty_kvs;
+
+pub struct ConstChunk<T: ?Sized + super::iter_text_chunk::HasConstChunk>(
+    core::marker::PhantomData<T>,
+);
+
+mod const_chunk;

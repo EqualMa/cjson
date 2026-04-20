@@ -22,11 +22,28 @@ impl AsRef<[u8]> for Chunk {
     }
 }
 
+impl Boolean {
+    const fn as_ref_str(&self) -> &'static str {
+        if self.0 { "true" } else { "false" }
+    }
+}
+
 impl IntoTextChunks for Boolean {
     type IntoTextChunks = IterNonLending<core::iter::Once<Chunk>>;
 
     fn into_text_chunks(self) -> Self::IntoTextChunks {
         IterNonLending(core::iter::once(Chunk(self.0)))
+    }
+
+    fn write_into<W: ?Sized + traits::ConsumeTextChunk>(self, w: &mut W) {
+        w.consume_text_chunk(self.as_ref_str())
+    }
+
+    fn try_write_into<W: ?Sized + traits::TryConsumeTextChunk>(
+        self,
+        w: &mut W,
+    ) -> Result<(), W::Err> {
+        w.try_consume_text_chunk(self.as_ref_str())
     }
 }
 

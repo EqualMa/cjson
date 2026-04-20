@@ -57,6 +57,7 @@ impl<T: ?Sized> Number<T> {
 
 mod number;
 
+#[derive(Debug, Clone, Copy)]
 pub struct Finite<T>(T);
 
 impl Finite<f64> {

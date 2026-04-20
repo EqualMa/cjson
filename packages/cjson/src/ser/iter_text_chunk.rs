@@ -66,12 +66,12 @@ impl<I: Iterator<Item: AsRef<[u8]>>> IterTextChunk for IterNonLending<I> {
 
 /// [`core::iter::Chain`]
 #[derive(Debug, Clone, Copy)]
-pub struct Chain<A: IterTextChunk, B: IterTextChunk>(Option<(Option<A>, B)>);
+pub struct Chain<A: IterTextChunk, B: IterTextChunk>(Option<(bool, A, B)>);
 mod chain;
 
 impl<A: IterTextChunk, B: IterTextChunk> Chain<A, B> {
     pub const fn new(a: A, b: B) -> Self {
-        Self(Some((Some(a), b)))
+        Self(Some((false, a, b)))
     }
 }
 

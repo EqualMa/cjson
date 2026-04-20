@@ -13,6 +13,7 @@ impl ToJson for Number<str> {
     }
 }
 
+#[cfg(todo)]
 impl ToJson for Number<[u8]> {
     type ToJson<'a>
         = texts::Number<&'a [u8]>
@@ -24,6 +25,7 @@ impl ToJson for Number<[u8]> {
     }
 }
 
+#[cfg(todo)]
 impl<const LEN: usize> ToJson for Number<[u8; LEN]> {
     type ToJson<'a>
         = texts::Number<IterNonLending<core::iter::Once<&'a [u8; LEN]>>>

@@ -1,14 +1,25 @@
-use core::fmt::Write as _;
-
-use arrayvec::ArrayString;
+use core::{fmt::Write as _, mem::MaybeUninit};
 
 use crate::utils::impl_many;
 
-pub(super) fn int_to_string<const CAP: usize>(v: &impl core::fmt::Display) -> ArrayString<CAP> {
-    let mut ret = ArrayString::new();
-    write!(ret, "{}", *v).unwrap();
+type ArrayString<const CAP: usize> = crate::r#const::array_string::ArrayString<u8, CAP>;
+
+pub(super) fn int_to_string<const CAP: usize>(v: impl core::fmt::Display) -> ArrayString<CAP> {
+    let mut ret = ArrayString::NEW;
+    write!(ret, "{}", v).unwrap();
 
     ret
+}
+
+pub(super) fn format<const CAP: usize>(
+    // MaybeUninit to make sure we create the empty ArrayString manually
+    buf: &mut MaybeUninit<ArrayString<CAP>>,
+    i: impl core::fmt::Display,
+) -> &str {
+    let buf = buf.write(ArrayString::NEW);
+    write!(buf, "{}", i).unwrap();
+
+    buf.as_str()
 }
 
 pub(super) trait Integer {
@@ -58,7 +69,7 @@ mod tests {
             let _: $Ty = $v;
             assert_eq!(
                 int_to_string::<CAP1>(&$v).as_str(),
-                impl_itoa::int_to_string::<CAP2>(&$v).as_str()
+                impl_itoa::int_to_string::<CAP2>($v).as_str()
             )
         }};
     }

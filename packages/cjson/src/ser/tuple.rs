@@ -1,7 +1,11 @@
 use polonius_the_crab::{ForLt, PoloniusResult, polonius};
 
 use crate::{
-    ser::{iter_text_chunk::IterTextChunk, texts::Bracketed, traits::IntoTextChunks},
+    ser::{
+        iter_text_chunk::IterTextChunk,
+        texts::Bracketed,
+        traits::{IntoTextChunks, proxy_IntoTextChunks},
+    },
     utils::size_hint::SizeHint,
 };
 
@@ -206,6 +210,24 @@ macro_rules! impl_IntoTextChunks_for_NonEmptyTupleItemsChunks {
 
                 // TODO:
                 // fn _private_into_text_chunks_vec(self) -> alloc::vec::Vec<u8> {}
+
+                fn write_into<W: ?Sized + traits::ConsumeTextChunk>(self, w: &mut W) {
+                    let ($($tn,)+) = self.0;
+                    $(
+                        $TN::write_into($tn, w);
+                    )+
+                }
+
+                fn try_write_into<W: ?Sized + traits::TryConsumeTextChunk>(
+                    self,
+                    w: &mut W,
+                ) -> Result<(), W::Err> {
+                    let ($($tn,)+) = self.0;
+                    $(
+                        $TN::try_write_into($tn, w)?;
+                    )+
+                    Ok(())
+                }
             }
         };
     };
@@ -250,28 +272,11 @@ impl<Items: NonEmptyTuple> traits::sealed::NonEmptyCommaSeparatedElements
 impl<Items: NonEmptyTuple> traits::NonEmptyCommaSeparatedElements for NonEmptyTupleToItems<Items> {}
 
 impl<Items: NonEmptyTuple> IntoTextChunks for NonEmptyTupleToItems<Items> {
-    type IntoTextChunks = <Items::IntoTextChunks as IntoTextChunks>::IntoTextChunks;
-
-    fn into_text_chunks(self) -> Self::IntoTextChunks {
-        Items::into_text_chunks(self.0).into_text_chunks()
-    }
-
-    #[cfg(feature = "alloc")]
-    fn _private_into_text_chunks_vec(self) -> alloc::vec::Vec<u8> {
-        Items::into_text_chunks(self.0)._private_into_text_chunks_vec()
-    }
+    proxy_IntoTextChunks!(|self| -> Items::IntoTextChunks { Items::into_text_chunks(self.0) });
 }
 
 pub struct NonEmptyTupleItemsChunks<Items>(Items);
 
 impl<T0: traits::Text> IntoTextChunks for NonEmptyTupleItemsChunks<(T0,)> {
-    type IntoTextChunks = T0::IntoTextChunks;
-
-    fn into_text_chunks(self) -> Self::IntoTextChunks {
-        T0::into_text_chunks(self.0.0)
-    }
-
-    fn _private_into_text_chunks_vec(self) -> alloc::vec::Vec<u8> {
-        T0::_private_into_text_chunks_vec(self.0.0)
-    }
+    proxy_IntoTextChunks!(|self| -> T0 { self.0.0 });
 }

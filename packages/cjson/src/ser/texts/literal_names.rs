@@ -24,6 +24,17 @@ macro_rules! impl_for_literal_name {
             fn into_text_chunks(self) -> Self::IntoTextChunks {
                 IterNonLending(core::iter::once($Chunk))
             }
+
+            fn write_into<W: ?Sized + traits::ConsumeTextChunk>(self, w: &mut W) {
+                w.consume_text_chunk($Chunk::JSON_STR.inner())
+            }
+
+            fn try_write_into<W: ?Sized + traits::TryConsumeTextChunk>(
+                self,
+                w: &mut W,
+            ) -> Result<(), W::Err> {
+                w.try_consume_text_chunk($Chunk::JSON_STR.inner())
+            }
         }
 
         impl traits::sealed::Text for $For {}

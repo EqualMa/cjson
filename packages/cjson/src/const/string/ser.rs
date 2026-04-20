@@ -2,7 +2,7 @@ use crate::{
     r#const::{RuntimeChunkSurroundedWithCompileTime, State, TextChunksReadyToUngroup},
     ser::{
         texts,
-        traits::{self, IntoTextChunks},
+        traits::{self, IntoTextChunks, proxy_IntoTextChunks},
     },
 };
 
@@ -30,16 +30,7 @@ impl<S: TextChunksReadyToUngroup> JsonStringSer<S> {
 }
 
 impl<S: TextChunksReadyToUngroup> IntoTextChunks for JsonStringSer<S> {
-    type IntoTextChunks = <S as IntoTextChunks>::IntoTextChunks;
-
-    fn into_text_chunks(self) -> Self::IntoTextChunks {
-        self.0.into_text_chunks()
-    }
-
-    #[cfg(feature = "alloc")]
-    fn _private_into_text_chunks_vec(self) -> alloc::vec::Vec<u8> {
-        self.0._private_into_text_chunks_vec()
-    }
+    proxy_IntoTextChunks!(|self| -> S { self.0 });
 }
 
 impl<S: TextChunksReadyToUngroup> traits::sealed::Text for JsonStringSer<S> {}

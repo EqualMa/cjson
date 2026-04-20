@@ -8,6 +8,15 @@ impl IntoTextChunks for Empty {
     fn into_text_chunks(self) -> Self::IntoTextChunks {
         iter_text_chunk::Empty
     }
+
+    fn write_into<W: ?Sized + traits::ConsumeTextChunk>(self, _: &mut W) {}
+
+    fn try_write_into<W: ?Sized + traits::TryConsumeTextChunk>(
+        self,
+        _: &mut W,
+    ) -> Result<(), W::Err> {
+        Ok(())
+    }
 }
 impl traits::sealed::JsonStringFragment for Empty {}
 impl traits::JsonStringFragment for Empty {}

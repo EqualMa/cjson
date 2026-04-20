@@ -158,6 +158,39 @@ impl<I: Iterator<Item: traits::Text>> traits::IntoTextChunks for ArrayOfIter<I> 
     fn into_text_chunks(self) -> Self::IntoTextChunks {
         Chunks(Inner::Init(MapIntoTextChunks { iter: self.0 }))
     }
+
+    fn write_into<W: ?Sized + traits::ConsumeTextChunk>(self, w: &mut W) {
+        let mut items = self.0;
+        if let Some(first) = items.next() {
+            w.consume_text_chunk("[");
+            first.write_into(w);
+            items.for_each(|text| {
+                w.consume_text_chunk(",");
+                text.write_into(w)
+            });
+            w.consume_text_chunk("]");
+        } else {
+            w.consume_text_chunk(const { super::Value::EMPTY_ARRAY.inner() })
+        }
+    }
+
+    fn try_write_into<W: ?Sized + traits::TryConsumeTextChunk>(
+        self,
+        w: &mut W,
+    ) -> Result<(), W::Err> {
+        let mut items = self.0;
+        if let Some(first) = items.next() {
+            w.try_consume_text_chunk("[")?;
+            first.try_write_into(w)?;
+            items.try_for_each(|text| {
+                w.try_consume_text_chunk(",")?;
+                text.try_write_into(w)
+            });
+            w.try_consume_text_chunk("]")
+        } else {
+            w.try_consume_text_chunk(const { super::Value::EMPTY_ARRAY.inner() })
+        }
+    }
 }
 impl<I: Iterator<Item: traits::Text>> traits::sealed::Text for ArrayOfIter<I> {}
 impl<I: Iterator<Item: traits::Text>> traits::Text for ArrayOfIter<I> {}
