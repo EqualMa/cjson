@@ -28,6 +28,14 @@ pub trait TextExt: traits::Text {
         self.write_into(&mut s);
         texts::Text::new_without_validation(s)
     }
+
+    #[cfg(feature = "std")]
+    fn write_into_io(self, w: impl std::io::Write) -> std::io::Result<()>
+    where
+        Self: Sized,
+    {
+        self.try_write_into(&mut traits::impl_std::IoWrite(w))
+    }
 }
 
 impl<T: ?Sized + traits::Text> TextExt for T {}

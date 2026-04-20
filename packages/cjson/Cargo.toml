@@ -15,8 +15,10 @@ cjson-proc-macro = { version = "0.1.0", path = "../cjson-proc-macro", optional =
 either = { version = "1.15.0", default-features = false, optional = true }
 
 [features]
-default = ["alloc", "itoa", "proc-macro"]
+default = ["std", "default_no_std"]
+default_no_std = ["itoa", "proc-macro"]
 alloc = []
+std = ["alloc"]
 itoa = ["dep:itoa"]
 proc-macro = ["dep:cjson-proc-macro"]
 either = ["dep:either"]

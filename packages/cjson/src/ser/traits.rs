@@ -3,6 +3,9 @@ use super::iter_text_chunk::{HasConstChunk, IterTextChunk};
 #[cfg(feature = "alloc")]
 mod impl_alloc;
 
+#[cfg(feature = "std")]
+pub(crate) mod impl_std;
+
 pub trait ConsumeTextChunk {
     fn consume_text_chunk(&mut self, chunk: &str);
 }
