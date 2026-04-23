@@ -6,7 +6,10 @@ use crate::{
     ser::{
         ToJson, ToJsonArray, ToJsonString,
         texts::{self, Chain},
-        traits::{self, Array, EmptyOrCommaSeparatedElements, IntoTextChunks, JsonString},
+        traits::{
+            self, Array, ConsumeTextChunk, EmptyOrCommaSeparatedElements, IntoTextChunks,
+            JsonString, TryConsumeTextChunk,
+        },
     },
     utils::impl_many,
 };
@@ -527,6 +530,18 @@ impl<A: RuntimeChunk, B: RuntimeChunk> RuntimeChunk for ChunkConcat<A, B> {
             self.1.to_into_text_chunks(),
         )
     }
+
+    fn runtime_chunk_write_into<W: ?Sized + ConsumeTextChunk>(self, w: &mut W) {
+        self.0.runtime_chunk_write_into(w);
+        self.1.runtime_chunk_write_into(w)
+    }
+    fn runtime_chunk_try_write_into<W: ?Sized + TryConsumeTextChunk>(
+        self,
+        w: &mut W,
+    ) -> Result<(), W::Err> {
+        self.0.runtime_chunk_try_write_into(w)?;
+        self.1.runtime_chunk_try_write_into(w)
+    }
 }
 
 impl<A: RuntimeChunkStartingWithCompileTime, B: RuntimeChunk> RuntimeChunkStartingWithCompileTime
@@ -642,8 +657,15 @@ pub trait RuntimeChunk {
     where
         Self: 'a;
     fn to_into_text_chunks(&self) -> Self::ToIntoTextChunks<'_>;
+
+    fn runtime_chunk_write_into<W: ?Sized + ConsumeTextChunk>(self, w: &mut W);
+    fn runtime_chunk_try_write_into<W: ?Sized + TryConsumeTextChunk>(
+        self,
+        w: &mut W,
+    ) -> Result<(), W::Err>;
 }
 
+#[cfg(todo)]
 impl<'this, C: ?Sized + RuntimeChunk> RuntimeChunk for &'this C {
     const PREV_STATE: State = C::PREV_STATE;
     const NEXT_STATE: State = C::NEXT_STATE;
@@ -714,6 +736,17 @@ impl<T: ?Sized + HasConstCompileTimeChunk> RuntimeChunk for CompileTimeChunk<T> 
 
     fn to_into_text_chunks(&self) -> Self::ToIntoTextChunks<'_> {
         Self::DEFAULT
+    }
+
+    fn runtime_chunk_write_into<W: ?Sized + ConsumeTextChunk>(self, w: &mut W) {
+        w.consume_text_chunk(const { T::CHUNK.chunk });
+    }
+
+    fn runtime_chunk_try_write_into<W: ?Sized + TryConsumeTextChunk>(
+        self,
+        w: &mut W,
+    ) -> Result<(), W::Err> {
+        w.try_consume_text_chunk(const { T::CHUNK.chunk })
     }
 }
 
@@ -957,6 +990,18 @@ impl_many!({
                 self.0.to_into_text_chunks(),
                 runtime_chunk_to_text_chunk(&self.1),
             )
+        }
+
+        fn runtime_chunk_write_into<W: ?Sized + ConsumeTextChunk>(self, w: &mut W) {
+            self.0.runtime_chunk_write_into(w);
+            runtime_chunk_to_text_chunk(&self.1).write_into(w)
+        }
+        fn runtime_chunk_try_write_into<W: ?Sized + TryConsumeTextChunk>(
+            self,
+            w: &mut W,
+        ) -> Result<(), W::Err> {
+            self.0.runtime_chunk_try_write_into(w)?;
+            runtime_chunk_to_text_chunk(&self.1).try_write_into(w)
         }
     }
 
