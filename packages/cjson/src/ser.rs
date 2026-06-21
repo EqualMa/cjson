@@ -1,3 +1,4 @@
+pub mod consumers;
 pub mod iter_text_chunk;
 pub mod texts;
 pub mod traits;

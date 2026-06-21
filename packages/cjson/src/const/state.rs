@@ -16,8 +16,31 @@ impl fmt::Debug for State {
 }
 
 impl State {
+    pub(crate) const fn as_u128(&self) -> u128 {
+        self.0.as_u128()
+    }
+
+    pub(crate) const fn try_from_u128(v: u128) -> Option<Self> {
+        crate::utils::option_map!(StateInner::try_from_u128(v), Self)
+    }
+
     pub(crate) const fn assert_same(self, other: Self) {
         self.0.assert_same(other.0);
+    }
+
+    pub(crate) const fn assert_eof(self) {
+        match self.0 {
+            StateInner::Eof => {}
+            _ => panic!("expect state to be Eof"),
+        }
+    }
+
+    pub(crate) const fn is_init(&self) -> bool {
+        matches!(self, Self(StateInner::Init))
+    }
+
+    pub(crate) const fn is_eof(&self) -> bool {
+        matches!(self, Self(StateInner::Eof))
     }
 
     pub const INIT: Self = Self(StateInner::Init);
@@ -358,6 +381,68 @@ enum StateInner {
 }
 
 impl StateInner {
+    const fn as_u128(&self) -> u128 {
+        match self {
+            StateInner::Init => 0,
+            // 10XXXXXX XXXXXXXX XXXXXXXX XXXXXXXX
+            // XXXXXXXX XXXXXXXX state    stack_2
+            // stack_1 (8 bytes)
+            StateInner::Intermediate(Intermediate { stack, state }) => {
+                let (stack_1, stack_2) = stack.as_u64_u8();
+                let state = state.copied().into_u8();
+
+                let mut bytes = [0u8; 16];
+
+                {
+                    #[rustfmt::skip]
+                    let [
+                        tag_mut, _, _, _,
+                        _, _, state_mut, stack_2_mut,
+                        stack_1_mut @ ..
+                    ] = &mut bytes;
+
+                    *tag_mut = Self::INTERMEDIATE_TAG;
+                    *state_mut = state;
+                    *stack_2_mut = stack_2;
+                    *stack_1_mut = stack_1.to_le_bytes();
+                }
+
+                u128::from_le_bytes(bytes)
+            }
+            StateInner::Eof => Self::EOF_AS_U128,
+        }
+    }
+
+    const INTERMEDIATE_TAG: u8 = 0b10_000_000;
+    const EOF_AS_U128: u128 = !0;
+
+    const fn try_from_u128(v: u128) -> Option<Self> {
+        Some(match v {
+            0 => Self::Init,
+            Self::EOF_AS_U128 => Self::Eof,
+            v => {
+                #[rustfmt::skip]
+                let [
+                    Self::INTERMEDIATE_TAG, 0, 0, 0,
+                    0, 0, state, stack_2,
+                    stack_1 @ ..
+                ] = v.to_le_bytes() else {
+                    return None;
+                };
+
+                let Some(state) = IntermediateState::try_from_u8(state) else {
+                    return None;
+                };
+                let Some(stack) = Stack::try_from_u64_u8(u64::from_le_bytes(stack_1), stack_2)
+                else {
+                    return None;
+                };
+
+                Self::Intermediate(Intermediate { stack, state })
+            }
+        })
+    }
+
     const fn assert_same(self, other: Self) {
         match (self, other) {
             (StateInner::Init, StateInner::Init) => {}
@@ -403,6 +488,28 @@ impl fmt::Debug for Stack {
 }
 
 impl Stack {
+    const fn as_u64_u8(&self) -> (u64, u8) {
+        (self.inner, {
+            assert!(self.len <= u8::MAX as usize);
+            self.len as u8
+        })
+    }
+
+    const fn try_from_u64_u8(inner: u64, len: u8) -> Option<Self> {
+        if (len as u32) > u64::BITS {
+            return None;
+        }
+
+        if (inner >> (len as usize)) != 0 {
+            return None;
+        }
+
+        Some(Self {
+            inner,
+            len: len as usize,
+        })
+    }
+
     const INIT: Self = Self { inner: 0, len: 0 };
 
     const fn is_in_array_or_object(&self) -> Option<bool> {
@@ -526,7 +633,7 @@ macro_rules! define_inter_state {
     (
         $(#$attr:tt)*
         $vis:vis enum $IntermediateState:ident {
-            $($Var:ident),+ $(,)?
+            $($Var:ident = $discriminant:expr),+ $(,)?
         }
 
         #[assert_same]
@@ -534,6 +641,12 @@ macro_rules! define_inter_state {
 
         #[copied]
         fn $copied:ident();
+
+        #[try_from_u8]
+        fn $try_from_u8:ident();
+
+        #[into_u8]
+        fn $into_u8:ident();
     ) => {
         $(#$attr)*
         $vis enum $IntermediateState {
@@ -555,6 +668,19 @@ macro_rules! define_inter_state {
                     $(Self::$Var => Self::$Var,)+
                 }
             }
+
+            const fn $into_u8(self) -> u8 {
+                match self {
+                    $(Self::$Var => $discriminant,)+
+                }
+            }
+
+            const fn $try_from_u8(v: u8) -> Option<Self> {
+                match v {
+                    $($discriminant => Some(Self::$Var),)+
+                    _ => None,
+                }
+            }
         }
     };
 }
@@ -562,20 +688,21 @@ macro_rules! define_inter_state {
 define_inter_state!(
     #[derive(Debug)]
     enum IntermediateState {
-        InString,
-        AfterArrayStart,
-        AfterArrayStartOrComma,
-        AfterArrayStartOrItem,
-        AfterArrayItem,
-        AfterArrayComma,
-        AfterObjectStart,
-        AfterObjectStartOrComma,
-        AfterObjectStartOrFieldValue,
-        InObjectFieldName,
-        AfterObjectFieldName,
-        AfterObjectFieldColon,
-        AfterObjectFieldValue,
-        AfterObjectComma,
+        // Note the discriminants are not stable across versions
+        InString = 0,
+        AfterArrayStart = 1,
+        AfterArrayStartOrComma = 2,
+        AfterArrayStartOrItem = 3,
+        AfterArrayItem = 4,
+        AfterArrayComma = 5,
+        AfterObjectStart = 6,
+        AfterObjectStartOrComma = 7,
+        AfterObjectStartOrFieldValue = 8,
+        InObjectFieldName = 9,
+        AfterObjectFieldName = 10,
+        AfterObjectFieldColon = 11,
+        AfterObjectFieldValue = 12,
+        AfterObjectComma = 13,
     }
 
     #[assert_same]
@@ -583,6 +710,11 @@ define_inter_state!(
 
     #[copied]
     fn copied();
+
+    #[try_from_u8]
+    fn try_from_u8();
+    #[into_u8]
+    fn into_u8();
 );
 
 impl IntermediateState {

@@ -235,6 +235,14 @@ impl<'a> StatedChunkStr<'a> {
     pub const fn next_state(self) -> State {
         self.next_state
     }
+
+    pub(crate) const fn prev_state(self) -> State {
+        self.prev_state
+    }
+
+    pub(crate) const fn as_str(&self) -> &'a str {
+        self.chunk
+    }
 }
 
 pub struct StatedChunkString<const LEN: usize> {
