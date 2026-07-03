@@ -92,23 +92,23 @@ pub(crate) trait MakeChunks<const OPEN_CLOSE: u8> {
 impl<T: ?Sized + HasConstCompileTimeChunk, const OPEN_CLOSE: u8> MakeChunks<OPEN_CLOSE> for T {
     const MADE_CHUNKS: MadeChunks = {
         let OpenClose { open, close } = OpenClose::try_from_u8(OPEN_CLOSE).unwrap();
-        if T::CHUNK.prev_state().is_init() {
-            if T::CHUNK.next_state().is_eof() {
+        if T::CHUNK.into_prev_state().is_init() {
+            if T::CHUNK.into_next_state().is_eof() {
                 // This chunk starts from init and ends with eof
                 MadeChunks {
                     append_comma: open.is_comma(),
                     prepend_comma: close.is_comma(),
                     chunk: match (open, close) {
-                        (GroupOrComma::Group, GroupOrComma::Group) => T::CHUNK.as_str(),
+                        (GroupOrComma::Group, GroupOrComma::Group) => T::CHUNK.into_inner(),
                         (
                             GroupOrComma::Nothing | GroupOrComma::Comma,
                             GroupOrComma::Nothing | GroupOrComma::Comma,
-                        ) => T::CHUNK.remove_surrounding_group().as_str(),
+                        ) => T::CHUNK.remove_surrounding_group().into_inner(),
                         (GroupOrComma::Nothing | GroupOrComma::Comma, GroupOrComma::Group) => {
-                            T::CHUNK.remove_group_open().as_str()
+                            T::CHUNK.remove_group_open().into_inner()
                         }
                         (GroupOrComma::Group, GroupOrComma::Nothing | GroupOrComma::Comma) => {
-                            T::CHUNK.remove_group_close().as_str()
+                            T::CHUNK.remove_group_close().into_inner()
                         }
                     },
                 }
@@ -119,15 +119,15 @@ impl<T: ?Sized + HasConstCompileTimeChunk, const OPEN_CLOSE: u8> MakeChunks<OPEN
                 let prepend_comma;
                 match open {
                     GroupOrComma::Nothing => {
-                        chunk = T::CHUNK.remove_group_open().as_str();
+                        chunk = T::CHUNK.remove_group_open().into_inner();
                         prepend_comma = false;
                     }
                     GroupOrComma::Group => {
-                        chunk = T::CHUNK.as_str();
+                        chunk = T::CHUNK.into_inner();
                         prepend_comma = false;
                     }
                     GroupOrComma::Comma => {
-                        chunk = T::CHUNK.remove_group_open().as_str();
+                        chunk = T::CHUNK.remove_group_open().into_inner();
                         prepend_comma = true;
                     }
                 }
@@ -139,22 +139,22 @@ impl<T: ?Sized + HasConstCompileTimeChunk, const OPEN_CLOSE: u8> MakeChunks<OPEN
                 }
             }
         } else {
-            if const { T::CHUNK.next_state().is_eof() } {
+            if const { T::CHUNK.into_next_state().is_eof() } {
                 // only eof
 
                 let chunk;
                 let append_comma;
                 match close {
                     GroupOrComma::Nothing => {
-                        chunk = T::CHUNK.remove_group_close().as_str();
+                        chunk = T::CHUNK.remove_group_close().into_inner();
                         append_comma = false;
                     }
                     GroupOrComma::Group => {
-                        chunk = T::CHUNK.as_str();
+                        chunk = T::CHUNK.into_inner();
                         append_comma = false;
                     }
                     GroupOrComma::Comma => {
-                        chunk = T::CHUNK.remove_group_close().as_str();
+                        chunk = T::CHUNK.remove_group_close().into_inner();
                         append_comma = true;
                     }
                 }
@@ -168,7 +168,7 @@ impl<T: ?Sized + HasConstCompileTimeChunk, const OPEN_CLOSE: u8> MakeChunks<OPEN
                 // intermediate chunk
                 MadeChunks {
                     prepend_comma: false,
-                    chunk: T::CHUNK.as_str(),
+                    chunk: T::CHUNK.into_inner(),
                     append_comma: true,
                 }
             }

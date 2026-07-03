@@ -4,12 +4,17 @@ use super::super::{iter_text_chunk::IterNonLending, traits};
 
 macro_rules! impl_for_literal_name {
     ($For:ty = $Chunk:ident = $v_str:expr) => {
+        impl $For {
+            pub(crate) const JSON_VALUE_STR: crate::ser::texts::Value<&'static str> =
+                crate::ser::texts::Value::new_without_validation($v_str);
+        }
+
         #[derive(Debug)]
         pub struct $Chunk;
 
         impl $Chunk {
             pub(crate) const JSON_STR: crate::ser::texts::Value<&'static str> =
-                crate::ser::texts::Value::new_without_validation($v_str);
+                <$For>::JSON_VALUE_STR;
         }
 
         impl AsRef<[u8]> for $Chunk {

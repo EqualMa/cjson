@@ -11,8 +11,8 @@ use super::NonEmptyArray;
 impl<ARR: RuntimeChunkSurroundedWithCompileTime> NonEmptyArray<ARR> {
     pub(super) const ASSERT: () = {
         let (prev_state, next_state) = ARR::UNGROUPED_STATES;
-        prev_state.assert_same(State::INIT_AFTER_ARRAY_START);
-        next_state.assert_same(State::INIT_AFTER_ARRAY_ITEM);
+        prev_state.assert_same(&State::INIT_AFTER_ARRAY_START);
+        next_state.assert_same(&State::INIT_AFTER_ARRAY_ITEM);
     };
 }
 

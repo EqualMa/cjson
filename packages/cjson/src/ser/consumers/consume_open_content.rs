@@ -62,6 +62,7 @@ impl<W: ConsumeTextChunk> ConsumeArrayOpenItemsIfNotEmpty<'_, W> {
 impl<W: ConsumeTextChunk> ConsumeJson for ConsumeArrayOpenItemsIfNotEmpty<'_, W> {
     type ConsumeJsonKind = json_kinds::Array;
 
+    not_any_value! {}
     not_string! {}
     not_object! {}
 
@@ -113,6 +114,7 @@ impl<W: ConsumeTextChunk> ConsumeChainedArrays for ConsumeArrayOpenItemsIfNotEmp
 impl<W: ConsumeTextChunk> ConsumeJson for ConsumeStringOpenFragmentIfNotEmpty<'_, W> {
     type ConsumeJsonKind = json_kinds::JsonString;
 
+    not_any_value! {}
     not_object! {}
     not_array! {}
 

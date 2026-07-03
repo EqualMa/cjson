@@ -27,6 +27,7 @@ impl<'a, W: ConsumeTextChunk> ConsumeArrayItemsAndRecord<'a, W> {
 impl<'a, W: ConsumeTextChunk> ConsumeJson for ConsumeArrayItemsAndRecord<'a, W> {
     type ConsumeJsonKind = json_kinds::Array;
 
+    not_any_value! {}
     not_string! {}
 
     fn consume_empty_array(

@@ -24,8 +24,8 @@ impl State {
         crate::utils::option_map!(StateInner::try_from_u128(v), Self)
     }
 
-    pub(crate) const fn assert_same(self, other: Self) {
-        self.0.assert_same(other.0);
+    pub(crate) const fn assert_same(&self, other: &Self) {
+        self.0.assert_same(&other.0)
     }
 
     pub(crate) const fn assert_eof(self) {
@@ -56,17 +56,17 @@ impl State {
     pub(crate) const INIT_IN_STRING: Self = Self::INIT.double_quote();
 
     pub(crate) const fn assert_is_top_level_after_array_start(self) {
-        self.assert_same(Self::INIT_AFTER_ARRAY_START);
+        self.assert_same(&Self::INIT_AFTER_ARRAY_START);
     }
     pub(crate) const fn assert_is_before_top_level_right_bracket(self) {
-        self.right_bracket().assert_same(Self::EOF);
+        self.right_bracket().assert_same(&Self::EOF);
     }
 
     pub(crate) const fn assert_is_top_level_after_object_start(self) {
-        self.assert_same(Self::INIT_AFTER_OBJECT_START);
+        self.assert_same(&Self::INIT_AFTER_OBJECT_START);
     }
     pub(crate) const fn assert_is_before_top_level_right_brace(self) {
-        self.right_brace().assert_same(Self::EOF);
+        self.right_brace().assert_same(&Self::EOF);
     }
 
     pub const fn json_value(self) -> Self {
@@ -443,7 +443,7 @@ impl StateInner {
         })
     }
 
-    const fn assert_same(self, other: Self) {
+    const fn assert_same(&self, other: &Self) {
         match (self, other) {
             (StateInner::Init, StateInner::Init) => {}
             (
@@ -734,128 +734,19 @@ impl IntermediateState {
     }
 }
 
-impl<'a> StatedChunkStr<'a> {
-    pub(crate) const fn assert(self) {
-        let s = deserializer::Deserializer::new(self.chunk);
-        let next_state = match s.parse_till_eof_with_state(self.prev_state.0) {
-            Ok(v) => v,
-            Err(msg) => panic!("{}", msg),
-        };
+pub(crate) const fn check(prev_state: State, next_state: State, s: &str) {
+    let s = deserializer::Deserializer::new(s);
+    let expected_next_state = match s.parse_till_eof_with_state(prev_state.0) {
+        Ok(v) => v,
+        Err(msg) => panic!("{}", msg),
+    };
 
-        self.next_state.0.assert_same(next_state);
-    }
-
-    pub(crate) const fn remove_surrounding_group(self) -> Self {
-        assert!(matches!(self.prev_state.0, StateInner::Init));
-        assert!(matches!(self.next_state.0, StateInner::Eof));
-
-        match self.chunk.as_bytes() {
-            [b'[', inner @ .., b']'] => Self {
-                prev_state: State::INIT_AFTER_ARRAY_START,
-                next_state: if inner.is_empty() {
-                    State::INIT_AFTER_ARRAY_START
-                } else {
-                    State::INIT_AFTER_ARRAY_ITEM
-                },
-                chunk: unsafe { str::from_utf8_unchecked(inner) },
-            },
-            [b'{', inner @ .., b'}'] => Self {
-                prev_state: State::INIT_AFTER_OBJECT_START,
-                next_state: if inner.is_empty() {
-                    State::INIT_AFTER_OBJECT_START
-                } else {
-                    State::INIT_AFTER_OBJECT_FIELD_VALUE
-                },
-                chunk: unsafe { str::from_utf8_unchecked(inner) },
-            },
-            [b'"', inner @ .., b'"'] => Self {
-                prev_state: State::INIT_IN_STRING,
-                next_state: State::INIT_IN_STRING,
-                chunk: unsafe { str::from_utf8_unchecked(inner) },
-            },
-            _ => panic!("no valid surrounding group"),
-        }
-    }
-
-    pub(crate) const fn remove_group_open(self) -> Self {
-        assert!(matches!(self.prev_state.0, StateInner::Init));
-
-        match self.chunk.as_bytes() {
-            [b'[', rest @ ..] => Self {
-                prev_state: State::INIT_AFTER_ARRAY_START,
-                next_state: self.next_state,
-                chunk: unsafe { str::from_utf8_unchecked(rest) },
-            },
-            [b'{', rest @ ..] => Self {
-                prev_state: State::INIT_AFTER_OBJECT_START,
-                next_state: self.next_state,
-                chunk: unsafe { str::from_utf8_unchecked(rest) },
-            },
-            [b'"', rest @ ..] => Self {
-                prev_state: State::INIT_IN_STRING,
-                next_state: self.next_state,
-                chunk: unsafe { str::from_utf8_unchecked(rest) },
-            },
-            _ => panic!("no valid group open"),
-        }
-    }
-
-    pub(crate) const fn remove_group_close(self) -> Self {
-        assert!(matches!(self.next_state.0, StateInner::Eof));
-        match self.chunk.as_bytes() {
-            [head @ .., b']'] => Self {
-                prev_state: self.prev_state.copied(),
-                next_state: if head.is_empty() {
-                    self.prev_state
-                } else {
-                    match self.prev_state {
-                        State(StateInner::Init) => match head {
-                            [b'['] => State::INIT_AFTER_ARRAY_START,
-                            [b'[', ..] => State::INIT_AFTER_ARRAY_ITEM,
-                            _ => panic!(),
-                        },
-                        _ => State::INIT_AFTER_ARRAY_ITEM,
-                    }
-                },
-                chunk: unsafe { str::from_utf8_unchecked(head) },
-            },
-            [head @ .., b'}'] => Self {
-                prev_state: self.prev_state.copied(),
-                next_state: if head.is_empty() {
-                    self.prev_state
-                } else {
-                    match self.prev_state {
-                        State(StateInner::Init) => match head {
-                            [b'{'] => State::INIT_AFTER_OBJECT_START,
-                            [b'{', ..] => State::INIT_AFTER_OBJECT_FIELD_VALUE,
-                            _ => panic!(),
-                        },
-                        _ => State::INIT_AFTER_OBJECT_FIELD_VALUE,
-                    }
-                },
-                chunk: unsafe { str::from_utf8_unchecked(head) },
-            },
-            [head @ .., b'"'] => {
-                const IN_STRING: State = State(StateInner::Init).double_quote();
-                Self {
-                    prev_state: self.prev_state.copied(),
-                    next_state: IN_STRING,
-                    chunk: unsafe { str::from_utf8_unchecked(head) },
-                }
-            }
-            _ => panic!("no valid group close"),
-        }
-    }
+    next_state.0.assert_same(&expected_next_state);
 }
 
 /// Panics if `s` is not a json value or `s` contains json whitespaces.
 pub(crate) const fn assert_json_value<'a>(s: &'a str) {
-    StatedChunkStr {
-        prev_state: State::INIT,
-        next_state: State(StateInner::Eof),
-        chunk: s,
-    }
-    .assert();
+    _ = StatedChunkStr::new_checked(State::INIT, State::EOF, s);
 }
 
 pub trait HasConstCompileTimeChunk {
@@ -893,7 +784,7 @@ mod ser {
     pub struct Chunk<T: ?Sized + HasConstCompileTimeChunk>(PhantomData<T>);
 
     impl<T: ?Sized + HasConstCompileTimeChunk> HasConstChunk for Chunk<T> {
-        const CHUNK: &'static str = T::CHUNK.chunk;
+        const CHUNK: &'static str = T::CHUNK.into_inner();
     }
 
     impl<T: ?Sized + HasConstCompileTimeChunk> IntoTextChunks for CompileTimeChunk<T> {
@@ -908,7 +799,7 @@ pub struct CompileTimeChunkIsJsonValue<T: ?Sized + HasConstCompileTimeChunk>(Nev
 impl<T: ?Sized + HasConstCompileTimeChunk> HasConstJsonValue for CompileTimeChunkIsJsonValue<T> {
     const JSON_VALUE: crate::ser::texts::Value<&'static str> = {
         _ = CompileTimeChunk::<T>::JSON_VALUE;
-        crate::ser::texts::Value::new_without_validation(T::CHUNK.chunk)
+        crate::ser::texts::Value::new_without_validation(T::CHUNK.into_inner())
     };
 }
 

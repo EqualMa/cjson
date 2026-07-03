@@ -14,11 +14,27 @@ use crate::{
     utils::impl_many,
 };
 
+pub use self::{
+    constrained_types::{NonEmptyArrayAsArray, NonEmptyArrayAsArrayVec, NonEmptyArrayAsStr},
+    stated_str::StatedChunkStr,
+    stated_str_as_array::StatedChunkString,
+    stated_str_as_array_vec::StatedChunkBuf,
+};
+
 pub mod value;
 
 pub mod array;
 pub mod object;
 pub mod string;
+
+mod str_as_array;
+mod str_as_array_vec;
+
+mod stated_str;
+mod stated_str_as_array;
+mod stated_str_as_array_vec;
+
+mod constrained_types;
 
 pub struct ConstIntoJson<T>(pub T);
 
@@ -224,64 +240,9 @@ pub use self::state::{
 
 pub(crate) use self::state::assert_json_value;
 
-#[derive(Debug)]
-pub struct StatedChunkStr<'a> {
-    prev_state: State,
-    next_state: State,
-    chunk: &'a str,
-}
-
-impl<'a> StatedChunkStr<'a> {
-    pub const fn next_state(self) -> State {
-        self.next_state
-    }
-
-    pub(crate) const fn prev_state(self) -> State {
-        self.prev_state
-    }
-
-    pub(crate) const fn as_str(&self) -> &'a str {
-        self.chunk
-    }
-}
-
-pub struct StatedChunkString<const LEN: usize> {
-    prev_state: State,
-    next_state: State,
-    chunk: [u8; LEN],
-}
-
-impl<const LEN: usize> StatedChunkString<LEN> {
-    pub const fn as_str(&self) -> StatedChunkStr<'_> {
-        StatedChunkStr {
-            prev_state: self.prev_state.copied(),
-            next_state: self.next_state.copied(),
-            chunk: unsafe { str::from_utf8_unchecked(&self.chunk) },
-        }
-    }
-}
-
-pub struct StatedChunkBuf<const CAP: usize> {
-    prev_state: State,
-    cur_state: State,
-    buf: ChunkBuf<CAP>,
-}
-
-impl<const CAP: usize> StatedChunkBuf<CAP> {
-    pub const fn new(prev_state: State) -> Self {
-        Self {
-            prev_state: prev_state.copied(),
-            cur_state: prev_state,
-            buf: ChunkBuf::DEFAULT,
-        }
-    }
-}
+pub struct StatedChunkStr2<'a, const PREV_STATE: u128, const NEXT_STATE: u128>(&'a str);
 
 pub struct ChunkLen(usize);
-struct ChunkBuf<const CAP: usize> {
-    buf: [u8; CAP],
-    len: usize,
-}
 
 impl ChunkLen {
     pub const DEFAULT: Self = Self(0);
@@ -337,160 +298,6 @@ impl ChunkLen {
     }
 }
 
-impl<const CAP: usize> ChunkBuf<CAP> {
-    pub const DEFAULT: Self = Self {
-        buf: [0u8; CAP],
-        len: 0,
-    };
-
-    const fn with_byte(mut self, b: u8) -> Self {
-        let (_, rest) = self.buf.split_at_mut(self.len);
-        let (insert, _) = rest.split_first_mut().expect("not full");
-        *insert = b;
-
-        self.len += 1;
-
-        self
-    }
-
-    pub const fn left_bracket(self) -> Self {
-        self.with_byte(b'[')
-    }
-
-    pub const fn right_bracket(self) -> Self {
-        self.with_byte(b']')
-    }
-
-    pub const fn left_brace(self) -> Self {
-        self.with_byte(b'{')
-    }
-
-    pub const fn right_brace(self) -> Self {
-        self.with_byte(b'}')
-    }
-
-    pub const fn comma(self) -> Self {
-        self.with_byte(b',')
-    }
-
-    pub const fn colon(self) -> Self {
-        self.with_byte(b':')
-    }
-
-    const fn with_bytes(mut self, bytes: &[u8]) -> Self {
-        let (_, rest) = self.buf.split_at_mut(self.len);
-        let (insert, _) = rest.split_at_mut(bytes.len());
-        insert.copy_from_slice(bytes);
-        self.len += bytes.len();
-        self
-    }
-
-    const fn with_str(self, s: &str) -> Self {
-        self.with_bytes(s.as_bytes())
-    }
-
-    const fn json_value(self, value: texts::Value<&'_ str>) -> Self {
-        self.with_str(value.inner())
-    }
-
-    pub const fn double_quote(self) -> Self {
-        self.with_byte(b'"')
-    }
-
-    const fn json_string_fragments(self, chunk: &[u8]) -> Self {
-        self.with_bytes(chunk)
-    }
-
-    const fn assert(self) -> [u8; CAP] {
-        assert!(self.len == CAP);
-        debug_assert!(str::from_utf8(&self.buf).is_ok());
-        self.buf
-    }
-}
-
-impl<const CAP: usize> StatedChunkBuf<CAP> {
-    pub const fn left_bracket(self) -> Self {
-        Self {
-            prev_state: self.prev_state,
-            cur_state: self.cur_state.left_bracket(),
-            buf: self.buf.left_bracket(),
-        }
-    }
-
-    pub const fn right_bracket(self) -> Self {
-        Self {
-            prev_state: self.prev_state,
-            cur_state: self.cur_state.right_bracket(),
-            buf: self.buf.right_bracket(),
-        }
-    }
-
-    pub const fn left_brace(self) -> Self {
-        Self {
-            prev_state: self.prev_state,
-            cur_state: self.cur_state.left_brace(),
-            buf: self.buf.left_brace(),
-        }
-    }
-
-    pub const fn right_brace(self) -> Self {
-        Self {
-            prev_state: self.prev_state,
-            cur_state: self.cur_state.right_brace(),
-            buf: self.buf.right_brace(),
-        }
-    }
-
-    pub const fn comma(self) -> Self {
-        Self {
-            prev_state: self.prev_state,
-            cur_state: self.cur_state.comma(),
-            buf: self.buf.comma(),
-        }
-    }
-
-    pub const fn colon(self) -> Self {
-        Self {
-            prev_state: self.prev_state,
-            cur_state: self.cur_state.colon(),
-            buf: self.buf.colon(),
-        }
-    }
-
-    pub(crate) const fn json_value(self, value: texts::Value<&'_ str>) -> Self {
-        Self {
-            prev_state: self.prev_state,
-            cur_state: self.cur_state.json_value(),
-            buf: self.buf.json_value(value),
-        }
-    }
-
-    pub const fn double_quote(self) -> Self {
-        Self {
-            prev_state: self.prev_state,
-            cur_state: self.cur_state.double_quote(),
-            buf: self.buf.double_quote(),
-        }
-    }
-
-    /// `chunk` must be valid string fragment
-    pub(crate) const fn json_string_fragments(self, chunk: &[u8]) -> Self {
-        Self {
-            prev_state: self.prev_state,
-            cur_state: self.cur_state.json_string_fragment(),
-            buf: self.buf.json_string_fragments(chunk),
-        }
-    }
-
-    pub const fn assert(self) -> StatedChunkString<CAP> {
-        StatedChunkString {
-            prev_state: self.prev_state,
-            next_state: self.cur_state,
-            chunk: self.buf.assert(),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct ChunkConcatJsonValue<C: RuntimeChunk, V: ToJson>(pub C, pub V);
 
@@ -510,7 +317,7 @@ pub struct ChunkConcat<A: RuntimeChunk, B: RuntimeChunk>(pub A, pub B);
 
 impl<A: RuntimeChunk, B: RuntimeChunk> ChunkConcat<A, B> {
     const ASSERT: () = {
-        A::NEXT_STATE.assert_same(B::PREV_STATE);
+        A::NEXT_STATE.assert_same(&B::PREV_STATE);
     };
 }
 
@@ -629,7 +436,7 @@ impl<A: RuntimeChunkStartingWithCompileTime, B: RuntimeChunkEndingWithCompileTim
         Self: 'a;
 
     const UNGROUPED_STATES: (State, State) = {
-        A::NEXT_STATE.assert_same(B::PREV_STATE);
+        A::NEXT_STATE.assert_same(&B::PREV_STATE);
         (
             A::PREV_STATE_REMOVE_GROUP_OPEN,
             B::NEXT_STATE_REMOVE_GROUP_CLOSE,
@@ -734,8 +541,8 @@ pub trait RuntimeChunkSurroundedWithCompileTime: RuntimeChunk {
 }
 
 impl<T: ?Sized + HasConstCompileTimeChunk> RuntimeChunk for CompileTimeChunk<T> {
-    const PREV_STATE: State = T::CHUNK.prev_state;
-    const NEXT_STATE: State = T::CHUNK.next_state;
+    const PREV_STATE: State = T::CHUNK.into_prev_state();
+    const NEXT_STATE: State = T::CHUNK.into_next_state();
 
     type ToIntoTextChunks<'a>
         = Self
@@ -747,14 +554,14 @@ impl<T: ?Sized + HasConstCompileTimeChunk> RuntimeChunk for CompileTimeChunk<T> 
     }
 
     fn runtime_chunk_write_into<W: ?Sized + ConsumeTextChunk>(self, w: &mut W) {
-        w.consume_text_chunk(const { T::CHUNK.chunk });
+        w.consume_text_chunk(const { T::CHUNK.into_inner() });
     }
 
     fn runtime_chunk_try_write_into<W: ?Sized + TryConsumeTextChunk>(
         self,
         w: &mut W,
     ) -> Result<(), W::Err> {
-        w.try_consume_text_chunk(const { T::CHUNK.chunk })
+        w.try_consume_text_chunk(const { T::CHUNK.into_inner() })
     }
 }
 
@@ -792,9 +599,9 @@ impl<T: ?Sized + HasConstCompileTimeChunk> RuntimeChunkStartingWithCompileTime
     const PREV_STATE_REMOVE_GROUP_OPEN: State = {
         let chunk = <ConstRemoveGroupOpen<T> as HasConstCompileTimeChunk>::CHUNK;
 
-        chunk.next_state.assert_same(Self::NEXT_STATE);
+        chunk.next_state().assert_same(&Self::NEXT_STATE);
 
-        chunk.prev_state
+        chunk.into_prev_state()
     };
 
     type ChunksReadyToRemoveGroupOpen<'a>
@@ -816,9 +623,9 @@ impl<T: ?Sized + HasConstCompileTimeChunk> RuntimeChunkEndingWithCompileTime
     const NEXT_STATE_REMOVE_GROUP_CLOSE: State = {
         let chunk = <ConstRemoveGroupClose<T> as HasConstCompileTimeChunk>::CHUNK;
 
-        chunk.prev_state.assert_same(Self::PREV_STATE);
+        chunk.prev_state().assert_same(&Self::PREV_STATE);
 
-        chunk.next_state
+        chunk.into_next_state()
     };
 
     type ChunksReadyToRemoveGroupClose<'a>
@@ -848,7 +655,7 @@ impl<T: ?Sized + HasConstCompileTimeChunk> RuntimeChunkSurroundedWithCompileTime
     const UNGROUPED_STATES: (State, State) = {
         let chunk = <ConstRemoveSurroundingGroup<T> as HasConstCompileTimeChunk>::CHUNK;
 
-        (chunk.prev_state, chunk.next_state)
+        (chunk.prev_state().copied(), chunk.into_next_state())
     };
 
     fn to_text_chunks_ready_to_ungroup(&self) -> Self::ChunksReadyToUngroup<'_> {

@@ -8,7 +8,8 @@ use crate::{
             open_close::{MakeChunks, OpenClose},
             runtime_chunks::RuntimeChunks,
         },
-        traits::{ConsumeTextChunk, IntoTextChunks as _},
+        texts,
+        traits::{self, ConsumeTextChunk, IntoTextChunks as _},
     },
     utils::impl_many,
 };
@@ -22,6 +23,20 @@ use self::{
 };
 
 pub use self::consumed::Consumed;
+
+macro_rules! not_any_value {
+    () => {
+        fn consume_any_value(
+            self,
+            _: crate::ser::texts::Value<impl crate::ser::traits::IntoTextChunks>,
+            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKind>::Contains<
+                json_kinds::AnyValue,
+            >,
+        ) -> Consumed<json_kinds::AnyValue, Self> {
+            match yes {}
+        }
+    };
+}
 
 macro_rules! not_string {
     () => {
@@ -122,6 +137,12 @@ mod never_consume;
 
 pub trait ConsumeJson {
     type ConsumeJsonKind: JsonKind;
+
+    fn consume_any_value(
+        self,
+        value: texts::Value<impl traits::IntoTextChunks>,
+        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::AnyValue>,
+    ) -> Consumed<json_kinds::AnyValue, Self>;
 
     fn consume_empty_string(
         self,
@@ -235,12 +256,21 @@ mod states {
     pub struct NextStateOf<T: ?Sized + HasConstCompileTimeChunk>(Never, PhantomData<T>);
 
     impl<T: ?Sized + HasConstCompileTimeChunk> HasConstState for NextStateOf<T> {
-        const STATE: State = T::CHUNK.next_state();
+        const STATE: State = T::CHUNK.into_next_state();
     }
 }
 
 impl<W: ConsumeTextChunk> ConsumeJson for ConsumeJsonText<W> {
     type ConsumeJsonKind = json_kinds::AnyValue;
+
+    fn consume_any_value(
+        mut self,
+        value: texts::Value<impl traits::IntoTextChunks>,
+        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::AnyValue>,
+    ) -> Consumed<json_kinds::AnyValue, Self> {
+        value.into_inner().write_into(&mut self.0);
+        Consumed::ASSERT_ANY_VALUE
+    }
 
     fn consume_empty_string(
         mut self,
@@ -332,7 +362,7 @@ impl<W: ConsumeTextChunk, S: ?Sized + HasConstState> ConsumeJsonChunks<json_kind
                 T::CHUNK
                     .remove_group_open()
                     .prev_state()
-                    .assert_same(State::INIT_AFTER_ARRAY_START)
+                    .assert_same(&State::INIT_AFTER_ARRAY_START)
             }
         }
         ConsumeChunksOfJsonArray(self.0, PhantomData)
@@ -368,7 +398,7 @@ impl<W: ConsumeTextChunk, S: ?Sized + HasConstState> ConsumeJsonChunks<json_kind
                 T::CHUNK
                     .remove_group_open()
                     .prev_state()
-                    .assert_same(State::INIT_AFTER_OBJECT_START)
+                    .assert_same(&State::INIT_AFTER_OBJECT_START)
             }
         }
         ConsumeChunksOfJsonObject(self.0, PhantomData)
@@ -448,11 +478,11 @@ impl_many!({
                 S::STATE.assert_same(T::CHUNK.prev_state());
 
                 if T::CHUNK.prev_state().is_init() {
-                    assert_start(T::CHUNK.remove_group_open().prev_state());
+                    assert_start(T::CHUNK.remove_group_open().into_prev_state());
                 }
 
-                if T::CHUNK.next_state().is_eof() {
-                    assert_end(T::CHUNK.remove_group_close().next_state());
+                if T::CHUNK.into_next_state().is_eof() {
+                    assert_end(T::CHUNK.remove_group_close().into_next_state());
                 }
             }
 
@@ -509,6 +539,7 @@ impl_many!({
     impl<W: ConsumeTextChunk> ConsumeJson for CONSUME<W> {
         type ConsumeJsonKind = json_kinds::Array;
 
+        not_any_value! {}
         not_string! {}
         not_object! {}
 
@@ -571,6 +602,7 @@ impl_many!({
     impl<W: ConsumeTextChunk> ConsumeJson for CONSUME<W> {
         type ConsumeJsonKind = json_kinds::Object;
 
+        not_any_value! {}
         not_string! {}
         not_array! {}
 
@@ -599,6 +631,7 @@ struct ConsumeArrayCommaItemsClose<W: ConsumeTextChunk>(W);
 impl<W: ConsumeTextChunk> ConsumeJson for ConsumeArrayCommaItemsClose<W> {
     type ConsumeJsonKind = json_kinds::Array;
 
+    not_any_value! {}
     not_string! {}
 
     fn consume_empty_array(

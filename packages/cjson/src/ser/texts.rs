@@ -90,6 +90,7 @@ define_refined_type!(
     pub struct Value<T: traits::IntoTextChunks>(T);
 );
 
+mod value;
 mod value_const;
 
 define_refined_type!(

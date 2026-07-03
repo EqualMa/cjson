@@ -564,7 +564,7 @@ macro_rules! __private_impl_to_json_impl_resolve {
                     used_const_names $used_const_names
                     prefix_path(cjson_macro_generated_types:: $($next_list::)*)
                 ] as $crate::r#const::HasConstCompileTimeChunk
-            >::CHUNK.next_state().$runtime_kind())
+            >::CHUNK.into_next_state().$runtime_kind())
             $impl_generics
             $used_const_names
             ($($next_list)* next)

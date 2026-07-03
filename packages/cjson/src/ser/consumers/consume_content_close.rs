@@ -10,6 +10,7 @@ pub(super) struct ConsumeStringFragmentClose<W: ConsumeTextChunk>(pub W);
 impl<W: ConsumeTextChunk> ConsumeJson for ConsumeStringFragmentClose<W> {
     type ConsumeJsonKind = json_kinds::JsonString;
 
+    not_any_value! {}
     not_array! {}
     not_object! {}
 

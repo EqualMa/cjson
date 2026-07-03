@@ -23,6 +23,10 @@ pub struct ConsumeObjectKvs<W: ConsumeTextChunk>(pub W);
 impl<W: ConsumeTextChunk> ConsumeJson for ConsumeStringFragment<W> {
     type ConsumeJsonKind = json_kinds::JsonString;
 
+    not_any_value! {}
+    not_array! {}
+    not_object! {}
+
     fn consume_empty_string(
         self,
         (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
@@ -47,9 +51,6 @@ impl<W: ConsumeTextChunk> ConsumeJson for ConsumeStringFragment<W> {
     ) -> Self::ConsumeChainedStrings {
         self
     }
-
-    not_array! {}
-    not_object! {}
 }
 
 impl<W: ConsumeTextChunk> ConsumeChainedStrings for ConsumeStringFragment<W> {
@@ -70,6 +71,7 @@ impl<W: ConsumeTextChunk> ConsumeChainedStrings for ConsumeStringFragment<W> {
 impl<W: ConsumeTextChunk> ConsumeJson for ConsumeArrayItems<W> {
     type ConsumeJsonKind = json_kinds::Array;
 
+    not_any_value! {}
     not_string! {}
     not_object! {}
 
@@ -101,6 +103,7 @@ impl<W: ConsumeTextChunk> ConsumeJson for ConsumeArrayItems<W> {
 impl<W: ConsumeTextChunk> ConsumeJson for ConsumeObjectKvs<W> {
     type ConsumeJsonKind = json_kinds::Object;
 
+    not_any_value! {}
     not_string! {}
     not_array! {}
 

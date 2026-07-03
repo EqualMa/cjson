@@ -11,8 +11,8 @@ use super::JsonString;
 impl<S: RuntimeChunkSurroundedWithCompileTime> JsonString<S> {
     pub(super) const ASSERT: () = {
         let (prev_state, next_state) = S::UNGROUPED_STATES;
-        prev_state.assert_same(State::INIT_IN_STRING);
-        next_state.assert_same(State::INIT_IN_STRING);
+        prev_state.assert_same(&State::INIT_IN_STRING);
+        next_state.assert_same(&State::INIT_IN_STRING);
     };
 }
 

@@ -170,7 +170,7 @@ fn test_chunks() {
             impl PrevState {
                 const STATE: crate::r#const::State =
                     <HasConstCompileTimeChunk as crate::r#const::HasConstCompileTimeChunk>::CHUNK
-                        .next_state()
+                        .into_next_state()
                         .json_value();
             }
             {
@@ -243,7 +243,7 @@ fn test_chunks() {
                     enum PrevState {}
 
                     impl PrevState {
-                        const STATE:crate::r#const::State =  <HasConstCompileTimeChunk as crate::r#const::HasConstCompileTimeChunk>::CHUNK.next_state().json_value();
+                        const STATE:crate::r#const::State =  <HasConstCompileTimeChunk as crate::r#const::HasConstCompileTimeChunk>::CHUNK.into_next_state().json_value();
                     }
                     {
                         enum HasConstCompileTimeChunk {}
@@ -279,7 +279,7 @@ fn test_chunks() {
                             enum PrevState {}
 
                             impl PrevState {
-                                const STATE:crate::r#const::State =  <HasConstCompileTimeChunk as crate::r#const::HasConstCompileTimeChunk>::CHUNK.next_state().json_value();
+                                const STATE:crate::r#const::State =  <HasConstCompileTimeChunk as crate::r#const::HasConstCompileTimeChunk>::CHUNK.into_next_state().json_value();
                             }
                             crate::r#const::ChunkConcat(cjson_prev_compile_runtime, {
                                 enum HasConstCompileTimeChunk {}

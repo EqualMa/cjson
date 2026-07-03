@@ -6,6 +6,10 @@ use super::json_kinds::JsonKind;
 
 pub struct Consumed<K: JsonKind, W: ?Sized>(K, PhantomData<W>);
 
+impl<W: ?Sized> Consumed<json_kinds::AnyValue, W> {
+    pub(super) const ASSERT_ANY_VALUE: Self = Consumed(json_kinds::AnyValue, PhantomData);
+}
+
 impl<W: ?Sized> Consumed<json_kinds::JsonString, W> {
     pub(super) const ASSERT_STRING: Self = Consumed(json_kinds::JsonString, PhantomData);
 }

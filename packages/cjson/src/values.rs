@@ -1,6 +1,9 @@
 use ref_cast::{RefCastCustom, ref_cast_custom};
 
-use crate::ser::{ToJson, ToJsonArray, ToJsonObject, ToJsonString};
+use crate::ser::{
+    ConsumeJson, Consumed, IntoJson, ToJson, ToJsonArray, ToJsonObject, ToJsonString,
+    json_kinds::{self, JsonKind},
+};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Never {}
@@ -38,6 +41,22 @@ crate::utils::impl_many!(
         fn to_json(&self) -> Self::ToJson<'_> {
             *self
         }
+    }
+);
+
+crate::utils::impl_many!(
+    impl<__> IntoJson for each_of![Null, False, True] {
+        type JsonKind = json_kinds::AnyValue;
+        fn json_provide_into<
+            W: ConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::JsonKind> = ()>>,
+        >(
+            self,
+            w: W,
+        ) -> Consumed<Self::JsonKind, W> {
+            w.consume_any_value(Self::JSON_VALUE_STR, ())
+        }
+
+        const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false;
     }
 );
 

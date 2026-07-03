@@ -11,8 +11,8 @@ use super::NonEmptyObject;
 impl<OBJ: RuntimeChunkSurroundedWithCompileTime> NonEmptyObject<OBJ> {
     pub(super) const ASSERT: () = {
         let (prev_state, next_state) = OBJ::UNGROUPED_STATES;
-        prev_state.assert_same(State::INIT_AFTER_OBJECT_START);
-        next_state.assert_same(State::INIT_AFTER_OBJECT_FIELD_VALUE);
+        prev_state.assert_same(&State::INIT_AFTER_OBJECT_START);
+        next_state.assert_same(&State::INIT_AFTER_OBJECT_FIELD_VALUE);
     };
 }
 

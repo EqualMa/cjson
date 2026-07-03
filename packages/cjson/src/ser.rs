@@ -1,4 +1,6 @@
-pub use self::consumers::{ConsumeChainedArrays, ConsumeJson, Consumed, json_kinds};
+pub use self::consumers::{
+    ConsumeChainedArrays, ConsumeJson, ConsumeJsonChunks, Consumed, json_kinds,
+};
 
 use json_kinds::JsonKind;
 

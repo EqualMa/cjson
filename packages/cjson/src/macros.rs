@@ -1130,6 +1130,26 @@ macro_rules! __private_json_after_value {
             )
         }
     };
+    (
+        chunks $chunks:tt
+        after_value {
+            write_end(
+                $json_value_kind:tt
+                $maybe_try:tt
+                $consumer:tt
+            )
+        }
+    ) => {
+        $crate::__private_json_eof_normalize! {
+            kind($json_value_kind)
+            chunks $chunks
+            then_macro_bang( $crate::__private_json_write_eof! )
+            then_macro_rest(
+                $maybe_try
+                $consumer
+            )
+        }
+    };
 }
 
 #[macro_export]
@@ -1234,7 +1254,7 @@ macro_rules! __private_json_concat_chunks_then {
                 impl PrevState {
                     const STATE: $crate::r#const::State =
                         <HasConstCompileTimeChunk as $crate::r#const::HasConstCompileTimeChunk>::CHUNK
-                            .next_state()
+                            .into_next_state()
                             .$runtime_kind();
                 }
 
@@ -1285,7 +1305,7 @@ macro_rules! __private_json_concat_chunks_then {
                     impl PrevState {
                         const STATE: $crate::r#const::State =
                             <HasConstCompileTimeChunk as $crate::r#const::HasConstCompileTimeChunk>::CHUNK
-                                .next_state()
+                                .into_next_state()
                                 .$runtime_kind();
                     }
 
