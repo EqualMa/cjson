@@ -1,6 +1,9 @@
-use alloc::{rc::Rc, string::String};
+use alloc::string::String;
 
-use crate::ser::{ToJson, ToJsonString};
+use crate::ser::{
+    ConsumeJson, Consumed, IntoJson, ToJson, ToJsonString,
+    json_kinds::{self, JsonKind},
+};
 
 impl ToJson for String {
     type ToJson<'a>
@@ -22,4 +25,19 @@ impl ToJsonString for String {
     fn to_json_string(&self) -> Self::ToJsonString<'_> {
         str::to_json_string(self)
     }
+}
+
+impl IntoJson for String {
+    type JsonKind = json_kinds::JsonString;
+
+    fn json_provide_into<
+        W: ConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::JsonKind> = ()>>,
+    >(
+        self,
+        w: W,
+    ) -> Consumed<Self::JsonKind, W> {
+        w.consume_str(&self, ())
+    }
+
+    const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false;
 }

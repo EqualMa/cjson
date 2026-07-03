@@ -3,226 +3,143 @@ use core::marker::PhantomData;
 use crate::{
     r#const::{HasConstCompileTimeChunk, State},
     ser::{
-        consumers::open_close::{MakeChunks, OpenClose},
-        traits::ConsumeTextChunk,
+        consumers::{
+            consume_chained_full::ConsumeChainedStringsFull,
+            open_close::{MakeChunks, OpenClose},
+            runtime_chunks::RuntimeChunks,
+        },
+        traits::{ConsumeTextChunk, IntoTextChunks as _},
     },
+    utils::impl_many,
 };
 
-pub mod json_kinds {
-    use core::convert::Infallible;
+use super::IntoJson;
 
-    pub struct AnyValue;
-    pub struct JsonString;
-    pub struct Array;
-    pub struct Object;
+use self::{
+    consume_chained_full::ConsumeChainedArraysFull,
+    consume_open_content::ConsumeArrayOpenItemsIfNotEmpty, json_kinds::JsonKind,
+    never_consume::NeverConsume,
+};
 
-    pub trait YesOrNo {}
+pub use self::consumed::Consumed;
 
-    impl YesOrNo for () {}
-    impl YesOrNo for Infallible {}
-
-    pub trait JsonKind: Sized {
-        fn into_kind_of_any_value(self) -> AnyValue {
-            AnyValue
+macro_rules! not_string {
+    () => {
+        fn consume_empty_string(
+            self,
+            yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+        ) -> Consumed<json_kinds::JsonString, Self> {
+            match yes {}
         }
 
-        type Union<Other: JsonKind>;
-        fn union<Other: JsonKind>(self, other: Other) -> Self::Union<Other>;
-
-        type UnionString;
-        fn union_string(self, other: JsonString) -> Self::UnionString;
-
-        type UnionArray;
-        fn union_array(self, other: Array) -> Self::UnionArray;
-
-        type UnionObject;
-        fn union_object(self, other: Object) -> Self::UnionObject;
-
-        type Contains<Other: JsonKind>: YesOrNo;
-
-        type StringContainsSelf: YesOrNo;
-        type ArrayContainsSelf: YesOrNo;
-        type ObjectContainsSelf: YesOrNo;
-    }
-
-    impl JsonKind for AnyValue {
-        type Union<Other: JsonKind> = Self;
-
-        fn union<Other: JsonKind>(self, _: Other) -> Self::Union<Other> {
-            self
+        fn consume_str(
+            self,
+            _: &str,
+            yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+        ) -> Consumed<json_kinds::JsonString, Self> {
+            match yes {}
         }
 
-        type UnionString = Self;
-
-        fn union_string(self, _: JsonString) -> Self::UnionString {
-            self
+        type ConsumeChainedStrings =
+            crate::ser::consumers::never_consume::NeverConsumeChained<Self>;
+        fn start_to_consume_chained_strings(
+            self,
+            yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+        ) -> Self::ConsumeChainedStrings {
+            match yes {}
         }
-
-        type UnionArray = Self;
-
-        fn union_array(self, _: Array) -> Self::UnionArray {
-            self
-        }
-
-        type UnionObject = Self;
-
-        fn union_object(self, _: Object) -> Self::UnionObject {
-            self
-        }
-
-        type Contains<Other: JsonKind> = ();
-
-        type StringContainsSelf = Infallible;
-        type ArrayContainsSelf = Infallible;
-        type ObjectContainsSelf = Infallible;
-    }
-
-    impl JsonKind for JsonString {
-        type Union<Other: JsonKind> = Other::UnionString;
-
-        fn union<Other: JsonKind>(self, other: Other) -> Self::Union<Other> {
-            other.union_string(self)
-        }
-
-        type UnionString = Self;
-
-        fn union_string(self, _: JsonString) -> Self::UnionString {
-            self
-        }
-
-        type UnionArray = AnyValue;
-
-        fn union_array(self, Array: Array) -> Self::UnionArray {
-            AnyValue
-        }
-
-        type UnionObject = AnyValue;
-
-        fn union_object(self, Object: Object) -> Self::UnionObject {
-            AnyValue
-        }
-
-        type Contains<Other: JsonKind> = Other::StringContainsSelf;
-
-        type StringContainsSelf = ();
-        type ArrayContainsSelf = Infallible;
-        type ObjectContainsSelf = Infallible;
-    }
-
-    impl JsonKind for Array {
-        type Union<Other: JsonKind> = Other::UnionArray;
-
-        fn union<Other: JsonKind>(self, other: Other) -> Self::Union<Other> {
-            other.union_array(self)
-        }
-
-        type UnionString = AnyValue;
-
-        fn union_string(self, JsonString: JsonString) -> Self::UnionString {
-            AnyValue
-        }
-
-        type UnionArray = Array;
-
-        fn union_array(self, Array: Array) -> Self::UnionArray {
-            Array
-        }
-
-        type UnionObject = AnyValue;
-
-        fn union_object(self, Object: Object) -> Self::UnionObject {
-            AnyValue
-        }
-
-        type Contains<Other: JsonKind> = Other::ArrayContainsSelf;
-
-        type StringContainsSelf = Infallible;
-        type ArrayContainsSelf = ();
-        type ObjectContainsSelf = Infallible;
-    }
-
-    impl JsonKind for Object {
-        type Union<Other: JsonKind> = Other::UnionObject;
-
-        fn union<Other: JsonKind>(self, other: Other) -> Self::Union<Other> {
-            other.union_object(self)
-        }
-
-        type UnionString = AnyValue;
-
-        fn union_string(self, JsonString: JsonString) -> Self::UnionString {
-            AnyValue
-        }
-
-        type UnionArray = AnyValue;
-
-        fn union_array(self, Array: Array) -> Self::UnionArray {
-            AnyValue
-        }
-
-        type UnionObject = Self;
-
-        fn union_object(self, Object: Object) -> Self::UnionObject {
-            self
-        }
-
-        type Contains<Other: JsonKind> = Other::ObjectContainsSelf;
-
-        type StringContainsSelf = Infallible;
-        type ArrayContainsSelf = Infallible;
-        type ObjectContainsSelf = ();
-    }
+    };
 }
 
-use json_kinds::JsonKind;
+macro_rules! not_array {
+    () => {
+        fn consume_empty_array(
+            self,
+            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKind>::Contains<
+                json_kinds::Array,
+            >,
+        ) -> Consumed<json_kinds::Array, Self> {
+            match yes {}
+        }
 
-pub trait IntoJson {
-    type JsonKind: JsonKind;
-    fn json_provide_into<W: ConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::JsonKind> = ()>>>(
-        self,
-        w: W,
-    ) -> Consumed<Self::JsonKind, W>;
+        type ConsumeChunksOfNonEmptyArray = crate::ser::consumers::never_consume::NeverConsume;
+
+        fn start_to_consume_chunks_of_non_empty_array(
+            self,
+            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKind>::Contains<
+                json_kinds::Array,
+            >,
+        ) -> Self::ConsumeChunksOfNonEmptyArray {
+            match yes {}
+        }
+
+        type ConsumeChainedArrays = crate::ser::consumers::never_consume::NeverConsumeChained<Self>;
+        fn start_to_consume_chained_arrays(
+            self,
+            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKind>::Contains<
+                json_kinds::Array,
+            >,
+        ) -> Self::ConsumeChainedArrays {
+            match yes {}
+        }
+    };
 }
 
-pub struct Consumed<K: JsonKind, W: ?Sized>(K, PhantomData<W>);
+macro_rules! not_object {
+    () => {
+        fn consume_empty_object(
+            self,
+            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKind>::Contains<
+                json_kinds::Object,
+            >,
+        ) -> Consumed<json_kinds::Object, Self> {
+            match yes {}
+        }
 
-pub struct ConsumerExpectingJsonText<W: ConsumeTextChunk>(pub W);
-
-impl<W: ConsumeTextChunk> ConsumerExpectingJsonText<W> {
-    //
+        type ConsumeChunksOfNonEmptyObject = crate::ser::consumers::never_consume::NeverConsume;
+        fn start_to_consume_chunks_of_non_empty_object(
+            self,
+            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKind>::Contains<
+                json_kinds::Object,
+            >,
+        ) -> Self::ConsumeChunksOfNonEmptyObject {
+            match yes {}
+        }
+    };
 }
 
-pub struct EmptyArray;
-pub struct EmptyObject;
+pub mod json_kinds;
+pub mod runtime_chunks;
 
-impl IntoJson for EmptyArray {
-    type JsonKind = json_kinds::Array;
-
-    fn json_provide_into<
-        W: ConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::JsonKind> = ()>>,
-    >(
-        self,
-        w: W,
-    ) -> Consumed<Self::JsonKind, W> {
-        w.consume_empty_array(())
-    }
-}
-
-impl IntoJson for EmptyObject {
-    type JsonKind = json_kinds::Object;
-
-    fn json_provide_into<
-        W: ConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::JsonKind> = ()>>,
-    >(
-        self,
-        w: W,
-    ) -> Consumed<Self::JsonKind, W> {
-        w.consume_empty_object(())
-    }
-}
+mod consume_chained_content;
+mod consume_chained_full;
+mod consume_content;
+mod consume_content_and_record;
+mod consume_content_close;
+mod consume_open_content;
+mod consumed;
+mod never_consume;
 
 pub trait ConsumeJson {
     type ConsumeJsonKind: JsonKind;
+
+    fn consume_empty_string(
+        self,
+        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+    ) -> Consumed<json_kinds::JsonString, Self>;
+
+    fn consume_str(
+        self,
+        s: &str,
+        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+    ) -> Consumed<json_kinds::JsonString, Self>;
+
+    type ConsumeChainedStrings: ConsumeChainedStrings<InitialConsumer = Self>;
+    fn start_to_consume_chained_strings(
+        self,
+        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+    ) -> Self::ConsumeChainedStrings;
+
     fn consume_empty_array(
         self,
         yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
@@ -234,10 +151,43 @@ pub trait ConsumeJson {
         yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
     ) -> Self::ConsumeChunksOfNonEmptyArray;
 
+    type ConsumeChainedArrays: ConsumeChainedArrays<InitialConsumer = Self>;
+
+    fn start_to_consume_chained_arrays(
+        self,
+        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
+    ) -> Self::ConsumeChainedArrays;
+
     fn consume_empty_object(
         self,
         yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
     ) -> Consumed<json_kinds::Object, Self>;
+
+    type ConsumeChunksOfNonEmptyObject: ConsumeJsonChunks<json_kinds::Object>;
+    fn start_to_consume_chunks_of_non_empty_object(
+        self,
+        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+    ) -> Self::ConsumeChunksOfNonEmptyObject;
+}
+
+pub trait ConsumeChainedStrings {
+    fn extend(&mut self, s: impl IntoJson<JsonKind = json_kinds::JsonString>);
+
+    type InitialConsumer: ?Sized;
+    fn end_with(
+        self,
+        s: impl IntoJson<JsonKind = json_kinds::JsonString>,
+    ) -> Consumed<json_kinds::JsonString, Self::InitialConsumer>;
+}
+
+pub trait ConsumeChainedArrays {
+    fn extend(&mut self, arr: impl IntoJson<JsonKind = json_kinds::Array>);
+
+    type InitialConsumer: ?Sized;
+    fn end_with(
+        self,
+        arr: impl IntoJson<JsonKind = json_kinds::Array>,
+    ) -> Consumed<json_kinds::Array, Self::InitialConsumer>;
 }
 
 pub trait ConsumeJsonChunks<K: JsonKind> {
@@ -246,11 +196,20 @@ pub trait ConsumeJsonChunks<K: JsonKind> {
         self,
     ) -> Self::ConsumeConstChunk<T>;
 
+    type ConsumeRuntimeChunk<C: RuntimeChunks>: ConsumeJsonChunks<K>;
+    fn consume_runtime_chunk<C: RuntimeChunks>(self, chunk: C) -> Self::ConsumeRuntimeChunk<C>;
+
     fn end(self) -> Consumed<K, Self>;
 }
 
 pub struct ConsumeJsonText<W: ConsumeTextChunk>(pub W);
+
+// TODO: remove
 pub struct ConsumeChunksOfJsonArray<W: ConsumeTextChunk, S: ?Sized + HasConstState>(
+    W,
+    PhantomData<S>,
+);
+pub struct ConsumeChunksOfJsonObject<W: ConsumeTextChunk, S: ?Sized + HasConstState>(
     W,
     PhantomData<S>,
 );
@@ -282,20 +241,61 @@ mod states {
 
 impl<W: ConsumeTextChunk> ConsumeJson for ConsumeJsonText<W> {
     type ConsumeJsonKind = json_kinds::AnyValue;
+
+    fn consume_empty_string(
+        mut self,
+        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+    ) -> Consumed<json_kinds::JsonString, Self> {
+        self.0.consume_text_chunk("\"\"");
+        Consumed::ASSERT_STRING
+    }
+
+    fn consume_str(
+        mut self,
+        s: &str,
+        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+    ) -> Consumed<json_kinds::JsonString, Self> {
+        if s.is_empty() {
+            self.consume_empty_string(())
+        } else {
+            self.0.consume_text_chunk("\"");
+            super::texts::StrToJsonStringFragment(s).write_into(&mut self.0);
+            self.0.consume_text_chunk("\"");
+            Consumed::ASSERT_STRING
+        }
+    }
+
+    type ConsumeChainedStrings = ConsumeChainedStringsFull<W>;
+    fn start_to_consume_chained_strings(
+        self,
+        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+    ) -> Self::ConsumeChainedStrings {
+        ConsumeChainedStringsFull::new(self.0)
+    }
+
     fn consume_empty_array(
         mut self,
         (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
     ) -> Consumed<json_kinds::Array, Self> {
         self.0.consume_text_chunk("[]");
-        Consumed(json_kinds::Array, PhantomData)
+        Consumed::ASSERT_ARRAY
     }
 
-    type ConsumeChunksOfNonEmptyArray = ConsumeChunksOfJsonArray<W, states::Init>;
+    type ConsumeChunksOfNonEmptyArray =
+        ConsumeChunksOfNonEmptyArray<W, states::Init, { OpenClose::BOTH_GROUP.as_u8() }>;
     fn start_to_consume_chunks_of_non_empty_array(
         self,
         (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
     ) -> Self::ConsumeChunksOfNonEmptyArray {
-        ConsumeChunksOfJsonArray(self.0, PhantomData)
+        ConsumeChunksOfNonEmptyArray(self.0, PhantomData)
+    }
+
+    type ConsumeChainedArrays = ConsumeChainedArraysFull<W>;
+    fn start_to_consume_chained_arrays(
+        self,
+        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
+    ) -> Self::ConsumeChainedArrays {
+        ConsumeChainedArraysFull::new(self.0)
     }
 
     fn consume_empty_object(
@@ -303,7 +303,17 @@ impl<W: ConsumeTextChunk> ConsumeJson for ConsumeJsonText<W> {
         (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
     ) -> Consumed<json_kinds::Object, Self> {
         self.0.consume_text_chunk("{}");
-        Consumed(json_kinds::Object, PhantomData)
+        Consumed::ASSERT_OBJECT
+    }
+
+    type ConsumeChunksOfNonEmptyObject =
+        ConsumeChunksOfNonEmptyObject<W, states::Init, { OpenClose::BOTH_GROUP.as_u8() }>;
+
+    fn start_to_consume_chunks_of_non_empty_object(
+        self,
+        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+    ) -> Self::ConsumeChunksOfNonEmptyObject {
+        ConsumeChunksOfNonEmptyObject(self.0, PhantomData)
     }
 }
 
@@ -328,87 +338,10 @@ impl<W: ConsumeTextChunk, S: ?Sized + HasConstState> ConsumeJsonChunks<json_kind
         ConsumeChunksOfJsonArray(self.0, PhantomData)
     }
 
-    fn end(self) -> Consumed<json_kinds::Array, Self> {
-        const {
-            S::STATE.assert_eof();
-        }
-        Consumed(json_kinds::Array, PhantomData)
-    }
-}
-
-mod open_close;
-
-pub struct ConsumeArrayItems<W: ConsumeTextChunk>(pub W);
-pub struct ConsumeChunksOfNonEmptyArray<
-    W: ConsumeTextChunk,
-    S: ?Sized + HasConstState,
-    const OPEN_CLOSE: u8,
->(W, PhantomData<S>);
-
-impl<W: ConsumeTextChunk> ConsumeJson for ConsumeArrayItems<W> {
-    type ConsumeJsonKind = json_kinds::Array;
-    fn consume_empty_array(
-        self,
-        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
-    ) -> Consumed<json_kinds::Array, Self> {
-        Consumed(json_kinds::Array, PhantomData)
-    }
-    type ConsumeChunksOfNonEmptyArray =
-        ConsumeChunksOfNonEmptyArray<W, states::Init, { OpenClose::BOTH_GROUP.as_u8() }>;
-    fn start_to_consume_chunks_of_non_empty_array(
-        self,
-        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
-    ) -> Self::ConsumeChunksOfNonEmptyArray {
-        ConsumeChunksOfNonEmptyArray(self.0, PhantomData)
-    }
-
-    fn consume_empty_object(
-        self,
-        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
-    ) -> Consumed<json_kinds::Object, Self> {
-        match yes {}
-    }
-}
-
-impl<W: ConsumeTextChunk, S: ?Sized + HasConstState, const OPEN_CLOSE: u8>
-    ConsumeJsonChunks<json_kinds::Array> for ConsumeChunksOfNonEmptyArray<W, S, OPEN_CLOSE>
-{
-    type ConsumeConstChunk<T: ?Sized + HasConstCompileTimeChunk> =
-        ConsumeChunksOfJsonArray<W, states::NextStateOf<T>>;
-    fn consume_const_chunk<T: ?Sized + HasConstCompileTimeChunk>(
-        mut self,
-    ) -> Self::ConsumeConstChunk<T> {
-        const {
-            S::STATE.assert_same(T::CHUNK.prev_state());
-
-            if T::CHUNK.prev_state().is_init() {
-                T::CHUNK
-                    .remove_group_open()
-                    .prev_state()
-                    .assert_is_top_level_after_array_start();
-            }
-
-            if T::CHUNK.next_state().is_eof() {
-                T::CHUNK
-                    .remove_group_close()
-                    .next_state()
-                    .assert_is_before_top_level_right_bracket();
-            }
-        }
-
-        if const { <T as MakeChunks<OPEN_CLOSE>>::MADE_CHUNKS.prepend_comma } {
-            self.0.consume_text_chunk(",");
-        }
-
-        if const { !(<T as MakeChunks<OPEN_CLOSE>>::MADE_CHUNKS.chunk.is_empty()) } {
-            self.0
-                .consume_text_chunk(<T as MakeChunks<OPEN_CLOSE>>::MADE_CHUNKS.chunk);
-        }
-
-        if const { <T as MakeChunks<OPEN_CLOSE>>::MADE_CHUNKS.append_comma } {
-            self.0.consume_text_chunk(",");
-        }
-
+    type ConsumeRuntimeChunk<C: RuntimeChunks> = ConsumeChunksOfJsonArray<W, C::NextState<S>>;
+    fn consume_runtime_chunk<C: RuntimeChunks>(mut self, chunk: C) -> Self::ConsumeRuntimeChunk<C> {
+        const { _ = C::NextState::<S>::STATE }
+        chunk.runtime_chunks_write_into(&mut self.0);
         ConsumeChunksOfJsonArray(self.0, PhantomData)
     }
 
@@ -416,23 +349,271 @@ impl<W: ConsumeTextChunk, S: ?Sized + HasConstState, const OPEN_CLOSE: u8>
         const {
             S::STATE.assert_eof();
         }
-        Consumed(json_kinds::Array, PhantomData)
+        Consumed::ASSERT_ARRAY
     }
 }
 
-pub struct ConsumeArrayItemsPrependCommaIfNotEmpty<W: ConsumeTextChunk>(pub W);
-
-impl<W: ConsumeTextChunk> ConsumeJson for ConsumeArrayItemsPrependCommaIfNotEmpty<W> {
-    type ConsumeJsonKind = json_kinds::Array;
-    fn consume_empty_array(
+impl<W: ConsumeTextChunk, S: ?Sized + HasConstState> ConsumeJsonChunks<json_kinds::Object>
+    for ConsumeChunksOfJsonObject<W, S>
+{
+    type ConsumeConstChunk<T: ?Sized + HasConstCompileTimeChunk> =
+        ConsumeChunksOfJsonObject<W, states::NextStateOf<T>>;
+    fn consume_const_chunk<T: ?Sized + HasConstCompileTimeChunk>(
         self,
-        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
-    ) -> Consumed<json_kinds::Array, Self> {
-        Consumed(json_kinds::Array, PhantomData)
+    ) -> Self::ConsumeConstChunk<T> {
+        const {
+            S::STATE.assert_same(T::CHUNK.prev_state());
+
+            if S::STATE.is_init() {
+                T::CHUNK
+                    .remove_group_open()
+                    .prev_state()
+                    .assert_same(State::INIT_AFTER_OBJECT_START)
+            }
+        }
+        ConsumeChunksOfJsonObject(self.0, PhantomData)
     }
 
-    type ConsumeChunksOfNonEmptyArray =
-        ConsumeChunksOfNonEmptyArray<W, states::Init, { OpenClose::PREPEND_COMMA.as_u8() }>;
+    type ConsumeRuntimeChunk<C: RuntimeChunks> = ConsumeChunksOfJsonObject<W, C::NextState<S>>;
+    fn consume_runtime_chunk<C: RuntimeChunks>(mut self, chunk: C) -> Self::ConsumeRuntimeChunk<C> {
+        const { _ = C::NextState::<S>::STATE }
+        chunk.runtime_chunks_write_into(&mut self.0);
+        ConsumeChunksOfJsonObject(self.0, PhantomData)
+    }
+
+    fn end(self) -> Consumed<json_kinds::Object, Self> {
+        const {
+            S::STATE.assert_eof();
+        }
+        Consumed::ASSERT_OBJECT
+    }
+}
+
+mod open_close;
+
+pub struct ConsumeChunksOfNonEmptyArray<
+    W: ConsumeTextChunk,
+    S: ?Sized + HasConstState,
+    const OPEN_CLOSE: u8,
+>(W, PhantomData<S>);
+pub struct ConsumeChunksOfNonEmptyObject<
+    W: ConsumeTextChunk,
+    S: ?Sized + HasConstState,
+    const OPEN_CLOSE: u8,
+>(W, PhantomData<S>);
+
+impl_many!({
+    {
+        {
+            use ConsumeChunksOfNonEmptyArray as CONSUME;
+            use json_kinds::Array as K;
+
+            const fn assert_consumed<W: ?Sized>() -> Consumed<K, W> {
+                Consumed::ASSERT_ARRAY
+            }
+
+            const fn assert_start(state: State) {
+                state.assert_is_top_level_after_array_start()
+            }
+            const fn assert_end(state: State) {
+                state.assert_is_before_top_level_right_bracket()
+            }
+        }
+        {
+            use ConsumeChunksOfNonEmptyObject as CONSUME;
+            use json_kinds::Object as K;
+
+            const fn assert_consumed<W: ?Sized>() -> Consumed<K, W> {
+                Consumed::ASSERT_OBJECT
+            }
+
+            const fn assert_start(state: State) {
+                state.assert_is_top_level_after_object_start()
+            }
+            const fn assert_end(state: State) {
+                state.assert_is_before_top_level_right_brace()
+            }
+        }
+    }
+
+    impl<W: ConsumeTextChunk, S: ?Sized + HasConstState, const OPEN_CLOSE: u8> ConsumeJsonChunks<K>
+        for CONSUME<W, S, OPEN_CLOSE>
+    {
+        type ConsumeConstChunk<T: ?Sized + HasConstCompileTimeChunk> =
+            CONSUME<W, states::NextStateOf<T>, OPEN_CLOSE>;
+        fn consume_const_chunk<T: ?Sized + HasConstCompileTimeChunk>(
+            mut self,
+        ) -> Self::ConsumeConstChunk<T> {
+            const {
+                S::STATE.assert_same(T::CHUNK.prev_state());
+
+                if T::CHUNK.prev_state().is_init() {
+                    assert_start(T::CHUNK.remove_group_open().prev_state());
+                }
+
+                if T::CHUNK.next_state().is_eof() {
+                    assert_end(T::CHUNK.remove_group_close().next_state());
+                }
+            }
+
+            if const { <T as MakeChunks<OPEN_CLOSE>>::MADE_CHUNKS.prepend_comma } {
+                self.0.consume_text_chunk(",");
+            }
+
+            if const { !(<T as MakeChunks<OPEN_CLOSE>>::MADE_CHUNKS.chunk.is_empty()) } {
+                self.0
+                    .consume_text_chunk(const { <T as MakeChunks<OPEN_CLOSE>>::MADE_CHUNKS.chunk });
+            }
+
+            if const { <T as MakeChunks<OPEN_CLOSE>>::MADE_CHUNKS.append_comma } {
+                self.0.consume_text_chunk(",");
+            }
+
+            CONSUME(self.0, PhantomData)
+        }
+
+        type ConsumeRuntimeChunk<C: RuntimeChunks> = CONSUME<W, C::NextState<S>, OPEN_CLOSE>;
+        fn consume_runtime_chunk<C: RuntimeChunks>(
+            mut self,
+            chunk: C,
+        ) -> Self::ConsumeRuntimeChunk<C> {
+            const { _ = C::NextState::<S>::STATE }
+            chunk.runtime_chunks_write_into(&mut self.0);
+            CONSUME(self.0, PhantomData)
+        }
+
+        fn end(self) -> Consumed<K, Self> {
+            const {
+                S::STATE.assert_eof();
+            }
+            assert_consumed()
+        }
+    }
+});
+
+pub struct ConsumeArrayItemsPrependCommaIfNotEmpty<W: ConsumeTextChunk>(pub W);
+pub struct ConsumeArrayItemsAppendCommaIfNotEmpty<W: ConsumeTextChunk>(pub W);
+
+impl_many!({
+    {
+        {
+            use ConsumeArrayItemsPrependCommaIfNotEmpty as CONSUME;
+            const OC: OpenClose = OpenClose::PREPEND_COMMA;
+        }
+        {
+            use ConsumeArrayItemsAppendCommaIfNotEmpty as CONSUME;
+            const OC: OpenClose = OpenClose::APPEND_COMMA;
+        }
+    }
+
+    impl<W: ConsumeTextChunk> ConsumeJson for CONSUME<W> {
+        type ConsumeJsonKind = json_kinds::Array;
+
+        not_string! {}
+        not_object! {}
+
+        fn consume_empty_array(
+            self,
+            (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
+        ) -> Consumed<json_kinds::Array, Self> {
+            Consumed::ASSERT_ARRAY
+        }
+
+        type ConsumeChunksOfNonEmptyArray =
+            ConsumeChunksOfNonEmptyArray<W, states::Init, { OC.as_u8() }>;
+        fn start_to_consume_chunks_of_non_empty_array(
+            self,
+            (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
+        ) -> Self::ConsumeChunksOfNonEmptyArray {
+            ConsumeChunksOfNonEmptyArray(self.0, PhantomData)
+        }
+
+        type ConsumeChainedArrays = Self;
+        fn start_to_consume_chained_arrays(
+            self,
+            (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
+        ) -> Self::ConsumeChainedArrays {
+            self
+        }
+    }
+
+    impl<W: ConsumeTextChunk> ConsumeChainedArrays for CONSUME<W> {
+        fn extend(&mut self, arr: impl IntoJson<JsonKind = json_kinds::Array>) {
+            let Consumed { .. } =
+                arr.json_provide_into(CONSUME(self.0.as_mut_consume_text_chunk()));
+        }
+
+        type InitialConsumer = Self;
+        fn end_with(
+            self,
+            arr: impl IntoJson<JsonKind = json_kinds::Array>,
+        ) -> Consumed<json_kinds::Array, Self::InitialConsumer> {
+            arr.json_provide_into(self)
+        }
+    }
+});
+
+pub struct ConsumeObjectKvsPrependCommaIfNotEmpty<W: ConsumeTextChunk>(pub W);
+pub struct ConsumeObjectKvsAppendCommaIfNotEmpty<W: ConsumeTextChunk>(pub W);
+
+impl_many!({
+    {
+        {
+            use ConsumeObjectKvsPrependCommaIfNotEmpty as CONSUME;
+            const OC: OpenClose = OpenClose::PREPEND_COMMA;
+        }
+        {
+            use ConsumeObjectKvsAppendCommaIfNotEmpty as CONSUME;
+            const OC: OpenClose = OpenClose::APPEND_COMMA;
+        }
+    }
+
+    impl<W: ConsumeTextChunk> ConsumeJson for CONSUME<W> {
+        type ConsumeJsonKind = json_kinds::Object;
+
+        not_string! {}
+        not_array! {}
+
+        fn consume_empty_object(
+            self,
+            (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+        ) -> Consumed<json_kinds::Object, Self> {
+            Consumed::ASSERT_OBJECT
+        }
+
+        type ConsumeChunksOfNonEmptyObject =
+            ConsumeChunksOfNonEmptyObject<W, states::Init, { OC.as_u8() }>;
+
+        fn start_to_consume_chunks_of_non_empty_object(
+            self,
+            (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+        ) -> Self::ConsumeChunksOfNonEmptyObject {
+            ConsumeChunksOfNonEmptyObject(self.0, PhantomData)
+        }
+    }
+});
+
+/// `$(, $item)* ]`
+struct ConsumeArrayCommaItemsClose<W: ConsumeTextChunk>(W);
+
+impl<W: ConsumeTextChunk> ConsumeJson for ConsumeArrayCommaItemsClose<W> {
+    type ConsumeJsonKind = json_kinds::Array;
+
+    not_string! {}
+
+    fn consume_empty_array(
+        mut self,
+        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
+    ) -> Consumed<json_kinds::Array, Self> {
+        self.0.consume_text_chunk("]");
+        Consumed::ASSERT_ARRAY
+    }
+
+    type ConsumeChunksOfNonEmptyArray = ConsumeChunksOfNonEmptyArray<
+        W,
+        states::Init,
+        { OpenClose::PREPEND_COMMA_CLOSE_GROUP.as_u8() },
+    >;
     fn start_to_consume_chunks_of_non_empty_array(
         self,
         (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
@@ -440,10 +621,43 @@ impl<W: ConsumeTextChunk> ConsumeJson for ConsumeArrayItemsPrependCommaIfNotEmpt
         ConsumeChunksOfNonEmptyArray(self.0, PhantomData)
     }
 
+    type ConsumeChainedArrays = Self;
+    fn start_to_consume_chained_arrays(
+        self,
+        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
+    ) -> Self::ConsumeChainedArrays {
+        self
+    }
+
     fn consume_empty_object(
         self,
         yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
     ) -> Consumed<json_kinds::Object, Self> {
         match yes {}
+    }
+
+    type ConsumeChunksOfNonEmptyObject = NeverConsume;
+    fn start_to_consume_chunks_of_non_empty_object(
+        self,
+        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+    ) -> Self::ConsumeChunksOfNonEmptyObject {
+        match yes {}
+    }
+}
+
+impl<W: ConsumeTextChunk> ConsumeChainedArrays for ConsumeArrayCommaItemsClose<W> {
+    fn extend(&mut self, arr: impl IntoJson<JsonKind = json_kinds::Array>) {
+        let Consumed { .. } = arr.json_provide_into(ConsumeArrayItemsPrependCommaIfNotEmpty(
+            self.0.as_mut_consume_text_chunk(),
+        ));
+    }
+
+    type InitialConsumer = Self; // TODO:
+    fn end_with(
+        self,
+        arr: impl IntoJson<JsonKind = json_kinds::Array>,
+    ) -> Consumed<json_kinds::Array, Self::InitialConsumer> {
+        // TODO: infinite recursion?
+        arr.json_provide_into(self)
     }
 }

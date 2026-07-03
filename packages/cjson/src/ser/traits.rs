@@ -8,6 +8,10 @@ pub(crate) mod impl_std;
 
 pub trait ConsumeTextChunk {
     fn consume_text_chunk(&mut self, chunk: &str);
+
+    fn as_mut_consume_text_chunk(&mut self) -> impl ConsumeTextChunk
+    where
+        Self: Sized;
 }
 
 pub trait TryConsumeTextChunk {
@@ -22,6 +26,29 @@ impl<C: ?Sized + ConsumeTextChunk> TryConsumeTextChunk for C {
     fn try_consume_text_chunk(&mut self, chunk: &str) -> Result<(), Self::Err> {
         self.consume_text_chunk(chunk);
         Ok(())
+    }
+}
+
+struct MutConsume<'a, T: ?Sized + ConsumeTextChunk>(&'a mut T);
+
+impl<'a, T: ?Sized + ConsumeTextChunk> ConsumeTextChunk for MutConsume<'a, T> {
+    fn consume_text_chunk(&mut self, chunk: &str) {
+        T::consume_text_chunk(self.0, chunk)
+    }
+
+    fn as_mut_consume_text_chunk(&mut self) -> impl ConsumeTextChunk
+    where
+        Self: Sized,
+    {
+        MutConsume(self.0)
+    }
+}
+pub struct MutTryConsume<'a, T: ?Sized + TryConsumeTextChunk>(pub &'a mut T);
+
+impl<'a, T: ?Sized + TryConsumeTextChunk> TryConsumeTextChunk for MutTryConsume<'a, T> {
+    type Err = T::Err;
+    fn try_consume_text_chunk(&mut self, chunk: &str) -> Result<(), Self::Err> {
+        T::try_consume_text_chunk(self.0, chunk)
     }
 }
 

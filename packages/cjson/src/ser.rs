@@ -1,9 +1,28 @@
-pub mod consumers;
+pub use self::consumers::{ConsumeChainedArrays, ConsumeJson, Consumed, json_kinds};
+
+use json_kinds::JsonKind;
+
+mod consumers;
 pub mod iter_text_chunk;
 pub mod texts;
 pub mod traits;
+pub mod values;
 
 pub mod exts;
+
+pub trait IntoJson {
+    type JsonKind: JsonKind;
+    fn json_provide_into<W: ConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::JsonKind> = ()>>>(
+        self,
+        w: W,
+    ) -> Consumed<Self::JsonKind, W>;
+
+    /// If implemented as `true`, chaining with another json value is optimized.
+    /// Note that it is always correct to implement as `false`.
+    ///
+    /// Wrong implementations will not affect json validity.
+    const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool;
+}
 
 pub trait ToJson {
     type ToJson<'a>: traits::Text
@@ -87,3 +106,7 @@ mod tuple;
 
 #[cfg(feature = "alloc")]
 mod alloc;
+
+pub fn write_json_text(value: impl IntoJson, w: impl traits::ConsumeTextChunk) {
+    let Consumed { .. } = value.json_provide_into(consumers::ConsumeJsonText(w));
+}

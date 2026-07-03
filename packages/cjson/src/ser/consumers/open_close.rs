@@ -54,8 +54,23 @@ impl OpenClose {
         (self.open.as_u4() << 4) | (self.close.as_u4())
     }
 
+    pub const BOTH_NOTHING: Self = Self {
+        open: GroupOrComma::Nothing,
+        close: GroupOrComma::Nothing,
+    };
+
     pub const BOTH_GROUP: Self = Self {
         open: GroupOrComma::Group,
+        close: GroupOrComma::Group,
+    };
+
+    pub const OPEN_GROUP: Self = Self {
+        open: GroupOrComma::Group,
+        close: GroupOrComma::Nothing,
+    };
+
+    pub const PREPEND_COMMA_CLOSE_GROUP: Self = Self {
+        open: GroupOrComma::Comma,
         close: GroupOrComma::Group,
     };
 
