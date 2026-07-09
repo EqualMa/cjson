@@ -12,6 +12,27 @@ pub mod values;
 pub use ::cjson_proc_macro::ToJson;
 pub use ser::ToJson;
 
+#[macro_export]
+macro_rules! json_to {
+    ($($json:tt)+) => {{
+        let mut s = $crate::__private::Default::default();
+        let w = $crate::ser::ConsumeJsonText(
+            <_ as $crate::ser::traits::ConsumeTextChunk>::as_mut_consume_text_chunk(&mut s)
+        );
+        let $crate::ser::Consumed { .. } = $crate::json_write! { w, $($json)+ };
+        s
+    }};
+}
+
+#[cfg(feature = "alloc")]
+#[macro_export]
+macro_rules! json_to_string {
+    ($($json:tt)+) => {{
+        let s: $crate::__private::String = $crate::json_to!($($json)+);
+        s
+    }};
+}
+
 mod utils;
 /*
 macro_rules! json_string {

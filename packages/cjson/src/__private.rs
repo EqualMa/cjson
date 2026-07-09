@@ -1,5 +1,12 @@
 pub use str;
 
+/// used by [`crate::json_to!`]
+pub use Default;
+
+#[cfg(feature = "alloc")]
+/// used by [`crate::json_to!`]
+pub use ::alloc::string::String;
+
 pub use crate::__expand_or;
 
 pub mod well_known_ident {
@@ -8,6 +15,13 @@ pub mod well_known_ident {
 
 pub mod well_known_macro {
     pub use crate::__private_json_well_known_macro_json_string as json_string;
+}
+
+pub mod state_then_runtime {
+    pub use crate::r#const::states::{
+        ThenItemsAfterArrayStartBeforeItem as json_items_after_array_start_before_item,
+        ThenItemsAfterItem as json_items_after_item, ThenValue as json_value,
+    };
 }
 
 pub mod runtime_kinds {
@@ -42,6 +56,8 @@ pub mod impl_to_json_options {
         __private_impl_to_json_option_where_clause as where_clause,
     };
 }
+
+pub mod only_compile_time;
 
 #[cfg(feature = "proc-macro")]
 pub mod proc_macro {

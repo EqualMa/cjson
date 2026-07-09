@@ -1,6 +1,10 @@
 use crate::utils::iter_map::impl_iter_map;
 
-use super::{ToJson, ToJsonArray, texts};
+use super::{
+    ConsumeJson, Consumed, IntoJson, ToJson, ToJsonArray,
+    json_kinds::{self, JsonKind},
+    texts,
+};
 
 pub struct IterMapToJson<'a, T: 'a + ToJson> {
     iter: core::slice::Iter<'a, T>,
@@ -54,6 +58,21 @@ impl<T: ToJson, const N: usize> ToJson for [T; N] {
     fn to_json(&self) -> Self::ToJson<'_> {
         Self::to_json_array(self)
     }
+}
+
+impl<T: IntoJson, const N: usize> IntoJson for [T; N] {
+    type JsonKind = json_kinds::Array;
+
+    fn json_provide_into<
+        W: ConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::JsonKind> = ()>>,
+    >(
+        self,
+        w: W,
+    ) -> Consumed<Self::JsonKind, W> {
+        crate::values::ArrayOfIter(self).json_provide_into(w)
+    }
+
+    const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false;
 }
 
 #[cfg(feature = "alloc")]

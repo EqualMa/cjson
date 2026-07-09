@@ -8,6 +8,7 @@ pub(crate) mod impl_std;
 
 pub trait ConsumeTextChunk {
     fn consume_text_chunk(&mut self, chunk: &str);
+    fn consume_2_text_chunks(&mut self, chunk1: &str, chunk2: &str);
 
     fn as_mut_consume_text_chunk(&mut self) -> impl ConsumeTextChunk
     where
@@ -34,6 +35,9 @@ struct MutConsume<'a, T: ?Sized + ConsumeTextChunk>(&'a mut T);
 impl<'a, T: ?Sized + ConsumeTextChunk> ConsumeTextChunk for MutConsume<'a, T> {
     fn consume_text_chunk(&mut self, chunk: &str) {
         T::consume_text_chunk(self.0, chunk)
+    }
+    fn consume_2_text_chunks(&mut self, chunk1: &str, chunk2: &str) {
+        T::consume_2_text_chunks(self.0, chunk1, chunk2)
     }
 
     fn as_mut_consume_text_chunk(&mut self) -> impl ConsumeTextChunk

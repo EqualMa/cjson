@@ -11,7 +11,7 @@ impl<C: RuntimeChunk> Value<C> {
     pub const fn new(chunk: C) -> Self {
         const {
             C::PREV_STATE.assert_same(&State::INIT);
-            C::NEXT_STATE.assert_same(&State::EOF);
+            C::NEXT_STATE.assert_eof();
         }
         Self(chunk)
     }

@@ -7,6 +7,7 @@ use super::{
 
 use self::IntermediateState::*;
 
+#[derive(PartialEq, Eq)]
 pub struct State(StateInner);
 
 impl fmt::Debug for State {
@@ -15,11 +16,24 @@ impl fmt::Debug for State {
     }
 }
 
+macro_rules! end_array_or_object {
+    ($stack:ident . $end_group:ident (), $kind:expr $(,)?) => {
+        match $stack.$end_group() {
+            AfterEndArrayOrObject::Intermediate(intermediate) => {
+                StateInner::Intermediate(intermediate)
+            }
+            AfterEndArrayOrObject::Eof => StateInner::Eof($kind),
+        }
+    };
+}
+
 impl State {
-    pub(crate) const fn as_u128(&self) -> u128 {
+    #[cfg(remove)]
+    pub const fn as_u128(&self) -> u128 {
         self.0.as_u128()
     }
 
+    #[cfg(remove)]
     pub(crate) const fn try_from_u128(v: u128) -> Option<Self> {
         crate::utils::option_map!(StateInner::try_from_u128(v), Self)
     }
@@ -28,9 +42,16 @@ impl State {
         self.0.assert_same(&other.0)
     }
 
-    pub(crate) const fn assert_eof(self) {
+    pub(crate) const fn assert_init(&self) {
         match self.0 {
-            StateInner::Eof => {}
+            StateInner::Init => {}
+            _ => panic!("expect state to be Init"),
+        }
+    }
+
+    pub(crate) const fn assert_eof(&self) {
+        match self.0 {
+            StateInner::Eof(..) => {}
             _ => panic!("expect state to be Eof"),
         }
     }
@@ -40,11 +61,10 @@ impl State {
     }
 
     pub(crate) const fn is_eof(&self) -> bool {
-        matches!(self, Self(StateInner::Eof))
+        matches!(self, Self(StateInner::Eof(..)))
     }
 
     pub const INIT: Self = Self(StateInner::Init);
-    pub(crate) const EOF: Self = Self(StateInner::Eof);
     pub(crate) const INIT_AFTER_ARRAY_START: Self = Self::INIT.left_bracket();
     pub(crate) const INIT_AFTER_ARRAY_ITEM: Self = Self::INIT_AFTER_ARRAY_START.json_value();
     pub(crate) const INIT_AFTER_OBJECT_START: Self = Self::INIT.left_brace();
@@ -59,19 +79,19 @@ impl State {
         self.assert_same(&Self::INIT_AFTER_ARRAY_START);
     }
     pub(crate) const fn assert_is_before_top_level_right_bracket(self) {
-        self.right_bracket().assert_same(&Self::EOF);
+        self.right_bracket().assert_eof();
     }
 
     pub(crate) const fn assert_is_top_level_after_object_start(self) {
         self.assert_same(&Self::INIT_AFTER_OBJECT_START);
     }
     pub(crate) const fn assert_is_before_top_level_right_brace(self) {
-        self.right_brace().assert_same(&Self::EOF);
+        self.right_brace().assert_eof();
     }
 
     pub const fn json_value(self) -> Self {
         Self(match self.0 {
-            StateInner::Init => StateInner::Eof,
+            StateInner::Init => StateInner::Eof(ValueKind::Unknown),
             StateInner::Intermediate(Intermediate { stack, state }) => {
                 let new_state = match state {
                     InString => panic!(),
@@ -89,9 +109,7 @@ impl State {
                     state: new_state,
                 })
             }
-            StateInner::Eof => {
-                panic!()
-            }
+            StateInner::Eof(..) => panic!(),
         })
     }
 
@@ -108,7 +126,7 @@ impl State {
                         InString => match stack.is_in_array_or_object() {
                             Some(true) => AfterArrayItem,
                             Some(false) => AfterObjectFieldValue,
-                            None => return Self::EOF,
+                            None => return Self(StateInner::Eof(ValueKind::String)),
                         },
                         AfterArrayStart | AfterArrayComma | AfterArrayStartOrComma => InString,
                         AfterArrayItem => panic!(),
@@ -125,7 +143,7 @@ impl State {
                     stack,
                 })
             }
-            StateInner::Eof => panic!(),
+            StateInner::Eof(..) => panic!(),
         })
     }
 
@@ -144,7 +162,7 @@ impl State {
                     },
                 })
             }
-            StateInner::Eof => {
+            StateInner::Eof(..) => {
                 panic!()
             }
         })
@@ -173,7 +191,7 @@ impl State {
                     },
                 })
             }
-            StateInner::Eof => {
+            StateInner::Eof(..) => {
                 panic!()
             }
         })
@@ -189,7 +207,7 @@ impl State {
                 }),
                 _ => panic!(),
             },
-            StateInner::Eof => panic!(),
+            StateInner::Eof(..) => panic!(),
         })
     }
 
@@ -206,7 +224,7 @@ impl State {
                     state: AfterArrayStart,
                 })
             }
-            StateInner::Eof => panic!(),
+            StateInner::Eof(..) => panic!(),
         })
     }
 
@@ -215,8 +233,14 @@ impl State {
             StateInner::Init => panic!(),
             StateInner::Intermediate(Intermediate { stack, state }) => match state {
                 InString => panic!(),
-                AfterArrayStart | AfterArrayItem | AfterArrayStartOrItem => {
-                    stack.end_array().into_state_inner()
+                AfterArrayStart => {
+                    end_array_or_object!(stack.end_array(), ValueKind::ArrayWithEmptyContent)
+                }
+                AfterArrayItem => {
+                    end_array_or_object!(stack.end_array(), ValueKind::ArrayWithNonEmptyContent)
+                }
+                AfterArrayStartOrItem => {
+                    end_array_or_object!(stack.end_array(), ValueKind::ArrayWithUnknownContent)
                 }
                 AfterArrayComma => panic!(),
                 AfterArrayStartOrComma => panic!(),
@@ -228,7 +252,7 @@ impl State {
                 AfterObjectStartOrComma => panic!(),
                 AfterObjectStartOrFieldValue => panic!(),
             },
-            StateInner::Eof => panic!(),
+            StateInner::Eof(..) => panic!(),
         })
     }
 
@@ -245,7 +269,7 @@ impl State {
                     state: AfterObjectStart,
                 })
             }
-            StateInner::Eof => panic!(),
+            StateInner::Eof(..) => panic!(),
         })
     }
 
@@ -253,8 +277,14 @@ impl State {
         Self(match self.0 {
             StateInner::Init => panic!(),
             StateInner::Intermediate(Intermediate { stack, state }) => match state {
-                AfterObjectStart | AfterObjectFieldValue | AfterObjectStartOrFieldValue => {
-                    stack.end_object().into_state_inner()
+                AfterObjectStart => {
+                    end_array_or_object!(stack.end_object(), ValueKind::ObjectWithEmptyContent)
+                }
+                AfterObjectFieldValue => {
+                    end_array_or_object!(stack.end_object(), ValueKind::ObjectWithNonEmptyContent)
+                }
+                AfterObjectStartOrFieldValue => {
+                    end_array_or_object!(stack.end_object(), ValueKind::ObjectWithUnknownContent)
                 }
                 InString => panic!(),
                 AfterArrayStart => panic!(),
@@ -268,7 +298,7 @@ impl State {
                 AfterObjectComma => panic!(),
                 AfterObjectStartOrComma => panic!(),
             },
-            StateInner::Eof => panic!(),
+            StateInner::Eof(..) => panic!(),
         })
     }
 
@@ -291,7 +321,7 @@ impl State {
                 AfterObjectStartOrComma => panic!(),
                 AfterObjectStartOrFieldValue => panic!(),
             },
-            StateInner::Eof => panic!(),
+            StateInner::Eof(..) => panic!(),
         }
     }
 
@@ -317,7 +347,32 @@ impl State {
                 AfterObjectStartOrComma => panic!(),
                 AfterObjectStartOrFieldValue => panic!(),
             },
-            StateInner::Eof => panic!(),
+            StateInner::Eof(..) => panic!(),
+        }
+    }
+
+    pub const fn json_kvs_after_object_start_before_kv(self) -> State {
+        match self.0 {
+            StateInner::Init | StateInner::Eof(..) => panic!(),
+            StateInner::Intermediate(Intermediate { stack, state }) => match state {
+                AfterObjectStart => Self(StateInner::Intermediate(Intermediate {
+                    stack,
+                    state: AfterObjectStartOrComma,
+                })),
+                InString
+                | AfterArrayStart
+                | AfterArrayItem
+                | AfterArrayComma
+                | AfterArrayStartOrComma
+                | AfterArrayStartOrItem
+                | InObjectFieldName
+                | AfterObjectFieldName
+                | AfterObjectFieldColon
+                | AfterObjectFieldValue
+                | AfterObjectComma
+                | AfterObjectStartOrComma
+                | AfterObjectStartOrFieldValue => panic!(),
+            },
         }
     }
 
@@ -343,7 +398,7 @@ impl State {
                 AfterObjectStartOrComma => panic!(),
                 AfterObjectStartOrFieldValue => panic!(),
             },
-            StateInner::Eof => panic!(),
+            StateInner::Eof(..) => panic!(),
         }
     }
 
@@ -353,12 +408,176 @@ impl State {
             StateInner::Intermediate(intermediate) => {
                 StateInner::Intermediate(intermediate.copied())
             }
-            StateInner::Eof => StateInner::Eof,
+            StateInner::Eof(kind) => StateInner::Eof(*kind),
         })
+    }
+
+    pub(crate) const fn remove_group_open(init: State, next: State) -> u8 {
+        init.assert_init();
+
+        let kind = match next.0 {
+            StateInner::Init => panic!("cannot remove group because chunk is empty"),
+            StateInner::Intermediate(intermediate) => intermediate.estimated_top_level_value_kind(),
+            StateInner::Eof(kind) => kind,
+        };
+
+        match kind {
+            ValueKind::ArrayWithUnknownContent
+            | ValueKind::ArrayWithEmptyContent
+            | ValueKind::ArrayWithNonEmptyContent => b'[',
+            ValueKind::ObjectWithUnknownContent
+            | ValueKind::ObjectWithEmptyContent
+            | ValueKind::ObjectWithNonEmptyContent => b'{',
+            ValueKind::String => b'"',
+            ValueKind::Unknown => panic!("chunk is not known to start as a group"),
+        }
+    }
+
+    pub(crate) const fn remove_group_close(prev: State, eof: State) -> u8 {
+        let State(StateInner::Eof(kind)) = eof else {
+            panic!("expect next state to be Eof")
+        };
+
+        let estimated_kind = match prev.0 {
+            StateInner::Init => None,
+            StateInner::Intermediate(intermediate) => {
+                Some(intermediate.estimated_top_level_value_kind())
+            }
+            StateInner::Eof(_) => panic!("chunk is expected not to be empty"),
+        };
+
+        match kind {
+            ValueKind::ArrayWithUnknownContent => {
+                if let Some(estimated_kind) = estimated_kind {
+                    assert!(matches!(
+                        estimated_kind,
+                        ValueKind::ArrayWithEmptyContent | ValueKind::ArrayWithUnknownContent
+                    ));
+                }
+                b']'
+            }
+            ValueKind::ArrayWithEmptyContent => {
+                if let Some(estimated_kind) = estimated_kind {
+                    assert!(matches!(estimated_kind, ValueKind::ArrayWithEmptyContent));
+                }
+                b']'
+            }
+            ValueKind::ArrayWithNonEmptyContent => {
+                if let Some(estimated_kind) = estimated_kind {
+                    assert!(matches!(
+                        estimated_kind,
+                        ValueKind::ArrayWithEmptyContent
+                            | ValueKind::ArrayWithNonEmptyContent
+                            | ValueKind::ArrayWithUnknownContent
+                    ));
+                }
+                b']'
+            }
+            ValueKind::ObjectWithUnknownContent => {
+                if let Some(estimated_kind) = estimated_kind {
+                    assert!(matches!(
+                        estimated_kind,
+                        ValueKind::ObjectWithEmptyContent | ValueKind::ObjectWithUnknownContent
+                    ));
+                }
+                b'}'
+            }
+            ValueKind::ObjectWithEmptyContent => {
+                if let Some(estimated_kind) = estimated_kind {
+                    assert!(matches!(estimated_kind, ValueKind::ObjectWithEmptyContent));
+                }
+                b'}'
+            }
+            ValueKind::ObjectWithNonEmptyContent => {
+                if let Some(estimated_kind) = estimated_kind {
+                    assert!(matches!(
+                        estimated_kind,
+                        ValueKind::ObjectWithEmptyContent
+                            | ValueKind::ObjectWithNonEmptyContent
+                            | ValueKind::ObjectWithUnknownContent
+                    ));
+                }
+                b'}'
+            }
+            ValueKind::String => {
+                if let Some(estimated_kind) = estimated_kind {
+                    assert!(matches!(estimated_kind, ValueKind::String));
+                }
+                b'"'
+            }
+            ValueKind::Unknown => panic!("chunk is not known to end as a group"),
+        }
+    }
+
+    pub(crate) const fn remove_surrounding_group(init: State, eof: State) -> (u8, u8, bool) {
+        init.assert_init();
+        let State(StateInner::Eof(kind)) = eof else {
+            panic!("expect next state to be Eof")
+        };
+        match kind {
+            ValueKind::ArrayWithEmptyContent => (b'[', b']', true),
+            ValueKind::ArrayWithUnknownContent | ValueKind::ArrayWithNonEmptyContent => {
+                (b'[', b']', false)
+            }
+            ValueKind::ObjectWithEmptyContent => (b'{', b'}', true),
+            ValueKind::ObjectWithUnknownContent | ValueKind::ObjectWithNonEmptyContent => {
+                (b'{', b'}', false)
+            }
+            ValueKind::String => (b'"', b'"', false),
+            ValueKind::Unknown => panic!("chunk is not known to be a group"),
+        }
+    }
+
+    pub(crate) const fn assert_is_contentful_first_chunk_of_array(self) {
+        let next = self;
+        match next.0 {
+            StateInner::Init | StateInner::Eof(..) => panic!("expect first chunk"),
+            StateInner::Intermediate(intermediate) => {
+                match intermediate.estimated_top_level_value_kind() {
+                    ValueKind::ArrayWithNonEmptyContent => {
+                        // ok
+                    }
+                    ValueKind::ArrayWithEmptyContent | ValueKind::ArrayWithUnknownContent => {
+                        panic!("expect first chunk to be what a non-empty array would start with")
+                    }
+                    ValueKind::ObjectWithUnknownContent
+                    | ValueKind::ObjectWithEmptyContent
+                    | ValueKind::ObjectWithNonEmptyContent
+                    | ValueKind::String
+                    | ValueKind::Unknown => {
+                        panic!("expect first chunk to be what an array would start with")
+                    }
+                }
+            }
+        }
+    }
+
+    pub(crate) const fn assert_is_contentful_first_chunk_of_object(self) {
+        let next = self;
+        match next.0 {
+            StateInner::Init | StateInner::Eof(..) => panic!("expect first chunk"),
+            StateInner::Intermediate(intermediate) => {
+                match intermediate.estimated_top_level_value_kind() {
+                    ValueKind::ObjectWithNonEmptyContent => {
+                        // ok
+                    }
+                    ValueKind::ObjectWithEmptyContent | ValueKind::ObjectWithUnknownContent => {
+                        panic!("expect first chunk to be what a non-empty object would start with")
+                    }
+                    ValueKind::ArrayWithUnknownContent
+                    | ValueKind::ArrayWithEmptyContent
+                    | ValueKind::ArrayWithNonEmptyContent
+                    | ValueKind::String
+                    | ValueKind::Unknown => {
+                        panic!("expect first chunk to be what an object would start with")
+                    }
+                }
+            }
+        }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 struct Intermediate {
     stack: Stack,
     state: IntermediateState,
@@ -371,14 +590,137 @@ impl Intermediate {
             state: self.state.copied(),
         }
     }
+
+    const fn estimated_top_level_value_kind(&self) -> ValueKind {
+        match self.stack.len {
+            0 => match self.state {
+                InString => ValueKind::String,
+                AfterArrayStart
+                | AfterArrayStartOrComma
+                | AfterArrayStartOrItem
+                | AfterArrayItem
+                | AfterArrayComma
+                | AfterObjectStart
+                | AfterObjectStartOrComma
+                | AfterObjectStartOrFieldValue
+                | InObjectFieldName
+                | AfterObjectFieldName
+                | AfterObjectFieldColon
+                | AfterObjectFieldValue
+                | AfterObjectComma => {
+                    panic!("unexpected state: stack.len is 0 but state is not in string")
+                }
+            },
+            1 => {
+                if (self.stack.inner & 1) == 1 {
+                    // array
+                    match self.state {
+                        InString | AfterArrayItem | AfterArrayComma => {
+                            ValueKind::ArrayWithNonEmptyContent
+                        }
+                        AfterArrayStart => ValueKind::ArrayWithEmptyContent,
+                        AfterArrayStartOrComma | AfterArrayStartOrItem => {
+                            ValueKind::ArrayWithUnknownContent
+                        }
+                        AfterObjectStart
+                        | AfterObjectStartOrComma
+                        | AfterObjectStartOrFieldValue
+                        | InObjectFieldName
+                        | AfterObjectFieldName
+                        | AfterObjectFieldColon
+                        | AfterObjectFieldValue
+                        | AfterObjectComma => {
+                            panic!("unexpected state: expect state in top level array")
+                        }
+                    }
+                } else {
+                    // object
+                    match self.state {
+                        InString
+                        | InObjectFieldName
+                        | AfterObjectFieldName
+                        | AfterObjectFieldColon
+                        | AfterObjectFieldValue
+                        | AfterObjectComma => ValueKind::ObjectWithNonEmptyContent,
+                        AfterObjectStart => ValueKind::ObjectWithEmptyContent,
+                        AfterObjectStartOrComma | AfterObjectStartOrFieldValue => {
+                            ValueKind::ObjectWithUnknownContent
+                        }
+                        AfterArrayStart
+                        | AfterArrayStartOrComma
+                        | AfterArrayStartOrItem
+                        | AfterArrayItem
+                        | AfterArrayComma => {
+                            panic!("unexpected state: expect state in top level object")
+                        }
+                    }
+                }
+            }
+            len => {
+                if ((self.stack.inner >> (len - 1)) & 1) == 1 {
+                    // array
+                    ValueKind::ArrayWithNonEmptyContent
+                } else {
+                    // object
+                    ValueKind::ObjectWithNonEmptyContent
+                }
+            }
+        }
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum StateInner {
     Init,
     Intermediate(Intermediate),
-    Eof,
+    Eof(ValueKind),
 }
+
+macro_rules! define_value_kind {
+    (
+        $(#$attr:tt)*
+        $vis:vis enum $ValueKind:ident {
+            $($Var:ident),+ $(,)?
+        }
+
+        #[assert_same]
+        fn $assert_same:ident();
+    ) => {
+        $(#$attr)*
+        $vis enum $ValueKind {
+            $($Var),+
+        }
+
+        impl $ValueKind {
+            const fn $assert_same(&self, other_state: &Self) {
+                match (self, other_state) {
+                    $((Self::$Var, Self::$Var) => {})+
+                    _ => {
+                        panic!("state mismatch")
+                    }
+                }
+            }
+        }
+    };
+}
+
+define_value_kind!(
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum ValueKind {
+        // The content is not known to be empty or non-empty.
+        ArrayWithUnknownContent,
+        ArrayWithEmptyContent,
+        ArrayWithNonEmptyContent,
+        ObjectWithUnknownContent,
+        ObjectWithEmptyContent,
+        ObjectWithNonEmptyContent,
+        String,
+        Unknown,
+    }
+
+    #[assert_same]
+    fn assert_same();
+);
 
 impl StateInner {
     const fn as_u128(&self) -> u128 {
@@ -409,13 +751,14 @@ impl StateInner {
 
                 u128::from_le_bytes(bytes)
             }
-            StateInner::Eof => Self::EOF_AS_U128,
+            StateInner::Eof(..) => Self::EOF_AS_U128,
         }
     }
 
     const INTERMEDIATE_TAG: u8 = 0b10_000_000;
     const EOF_AS_U128: u128 = !0;
 
+    #[cfg(remove)]
     const fn try_from_u128(v: u128) -> Option<Self> {
         Some(match v {
             0 => Self::Init,
@@ -456,7 +799,9 @@ impl StateInner {
                 stack.assert_same(&other_stack);
                 state.assert_same(&other_state);
             }
-            (StateInner::Eof, StateInner::Eof) => {}
+            (StateInner::Eof(this_kind), StateInner::Eof(other_kind)) => {
+                this_kind.assert_same(other_kind)
+            }
             _ => panic!("State mismatch"),
         }
     }
@@ -464,6 +809,7 @@ impl StateInner {
 
 type StackInner = u64;
 
+#[derive(PartialEq, Eq)]
 struct Stack {
     // bit 1 means in array
     // bit 0 means in object
@@ -620,15 +966,6 @@ enum AfterEndArrayOrObject {
     Eof,
 }
 
-impl AfterEndArrayOrObject {
-    const fn into_state_inner(self) -> StateInner {
-        match self {
-            Self::Intermediate(intermediate) => StateInner::Intermediate(intermediate),
-            Self::Eof => StateInner::Eof,
-        }
-    }
-}
-
 macro_rules! define_inter_state {
     (
         $(#$attr:tt)*
@@ -686,7 +1023,7 @@ macro_rules! define_inter_state {
 }
 
 define_inter_state!(
-    #[derive(Debug)]
+    #[derive(Debug, PartialEq, Eq)]
     enum IntermediateState {
         // Note the discriminants are not stable across versions
         InString = 0,
@@ -746,7 +1083,17 @@ pub(crate) const fn check(prev_state: State, next_state: State, s: &str) {
 
 /// Panics if `s` is not a json value or `s` contains json whitespaces.
 pub(crate) const fn assert_json_value<'a>(s: &'a str) {
-    _ = StatedChunkStr::new_checked(State::INIT, State::EOF, s);
+    let s = deserializer::Deserializer::new(s);
+
+    let next_state = match s.parse_till_eof_with_state(StateInner::Init) {
+        Ok(v) => v,
+        Err(msg) => panic!("{}", msg),
+    };
+
+    match next_state {
+        StateInner::Eof(_) => {}
+        _ => panic!("invalid json value"),
+    }
 }
 
 pub trait HasConstCompileTimeChunk {

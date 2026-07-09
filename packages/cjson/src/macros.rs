@@ -792,6 +792,10 @@ macro_rules! __private_json_eof_normalize {
                     $($rest)+
                 ]
                 CONST_ASSOC(JSON_ARRAY_NON_EMPTY)
+                write {
+                    consume_non_empty_array_as_str
+                    try_consume_non_empty_array_as_str
+                }
             }
             $($then_macro_rest)*
         }
@@ -878,6 +882,9 @@ macro_rules! __private_json_eof_normalize {
                     $($rest)+
                 ]
                 CONST_ASSOC(JSON_OBJECT_NON_EMPTY)
+                write {
+
+                }
             }
             $($then_macro_rest)*
         }
@@ -946,6 +953,9 @@ macro_rules! __private_json_eof_normalize {
                     $($rest)+
                 ]
                 CONST_ASSOC(JSON_STRING)
+                write {
+
+                }
             }
             $($then_macro_rest)*
         }
@@ -1005,6 +1015,7 @@ macro_rules! __private_json_eof {
             kind $kind:tt
             chunk $only_compile_time:tt
             CONST_ASSOC($CONST_ASSOC:ident)
+            write $write:tt
         }
         outer_const_generics $outer_const_generics:tt
     ) => {
@@ -1413,6 +1424,21 @@ macro_rules! __private_json_concat_compile_time_tokens {
             const __CJSON_PREV_STATE: $crate::r#const::State = __CJSON_NEXT_STATE;
         }
     }};
+}
+
+#[macro_export]
+macro_rules! __private_json_concat_compile_time_tokens_state {
+    (
+        ($prev:expr)
+        [
+            $($name:ident ( $($($args:tt)+)? ))*
+        ]
+    ) => {
+        $prev
+        $(
+            .$name()
+        )*
+    };
 }
 
 #[macro_export]

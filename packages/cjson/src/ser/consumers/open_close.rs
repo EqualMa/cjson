@@ -1,4 +1,7 @@
-use crate::r#const::HasConstCompileTimeChunk;
+use crate::{
+    r#const::{HasConstCompileTimeChunk, HasConstState, IntermediateChunkAsStr, State},
+    ser::traits::ConsumeTextChunk,
+};
 
 pub(crate) enum GroupOrComma {
     Nothing = 0,
@@ -36,6 +39,9 @@ pub(crate) struct OpenClose {
 }
 
 impl OpenClose {
+    pub(crate) const fn into_tuple(self) -> (GroupOrComma, GroupOrComma) {
+        (self.open, self.close)
+    }
     pub const fn try_from_u8(v: u8) -> Option<Self> {
         let open = v >> 4;
         let close = v & 0xf;
@@ -169,7 +175,7 @@ impl<T: ?Sized + HasConstCompileTimeChunk, const OPEN_CLOSE: u8> MakeChunks<OPEN
                 MadeChunks {
                     prepend_comma: false,
                     chunk: T::CHUNK.into_inner(),
-                    append_comma: true,
+                    append_comma: false,
                 }
             }
         }
@@ -180,4 +186,97 @@ pub(crate) struct MadeChunks {
     pub prepend_comma: bool,
     pub chunk: &'static str,
     pub append_comma: bool,
+}
+
+enum MakeChunkOutput {
+    Intact,
+    RemoveGroupOpen,
+    PrependCommaRemoveGroupOpen,
+    RemoveGroupClose,
+    RemoveGroupCloseAppendComma,
+    RemoveSurroundingGroups,
+    RemoveSurroundingGroupsAppendComma,
+    PrependCommaRemoveSurroundingGroups,
+    PrependCommaRemoveSurroundingGroupsAppendComma,
+}
+
+const fn make_chunk(
+    open_close: OpenClose,
+    prev_state: State,
+    next_state: State,
+) -> MakeChunkOutput {
+    let OpenClose { open, close } = open_close;
+    if prev_state.is_init() {
+        if next_state.is_eof() {
+            // This chunk starts from init and ends with eof
+            match (open, close) {
+                (GroupOrComma::Nothing, GroupOrComma::Nothing) => {
+                    MakeChunkOutput::RemoveSurroundingGroups
+                }
+                (GroupOrComma::Nothing, GroupOrComma::Group) => MakeChunkOutput::RemoveGroupOpen,
+
+                (GroupOrComma::Nothing, GroupOrComma::Comma) => {
+                    MakeChunkOutput::RemoveSurroundingGroupsAppendComma
+                }
+                (GroupOrComma::Group, GroupOrComma::Nothing) => MakeChunkOutput::RemoveGroupClose,
+                (GroupOrComma::Group, GroupOrComma::Group) => MakeChunkOutput::Intact,
+                (GroupOrComma::Group, GroupOrComma::Comma) => {
+                    MakeChunkOutput::RemoveGroupCloseAppendComma
+                }
+                (GroupOrComma::Comma, GroupOrComma::Nothing) => {
+                    MakeChunkOutput::PrependCommaRemoveSurroundingGroups
+                }
+                (GroupOrComma::Comma, GroupOrComma::Group) => {
+                    MakeChunkOutput::PrependCommaRemoveGroupOpen
+                }
+                (GroupOrComma::Comma, GroupOrComma::Comma) => {
+                    MakeChunkOutput::PrependCommaRemoveSurroundingGroupsAppendComma
+                }
+            }
+        } else {
+            // init but not eof
+            match open {
+                GroupOrComma::Nothing => MakeChunkOutput::RemoveGroupOpen,
+                GroupOrComma::Group => MakeChunkOutput::Intact,
+                GroupOrComma::Comma => MakeChunkOutput::PrependCommaRemoveGroupOpen,
+            }
+        }
+    } else {
+        if next_state.is_eof() {
+            // eof but not init
+            match close {
+                GroupOrComma::Nothing => MakeChunkOutput::RemoveGroupClose,
+                GroupOrComma::Group => MakeChunkOutput::Intact,
+                GroupOrComma::Comma => MakeChunkOutput::RemoveGroupCloseAppendComma,
+            }
+        } else {
+            // intermediate chunk
+            MakeChunkOutput::Intact
+        }
+    }
+}
+
+#[cfg(remove)]
+impl<Prev: ?Sized + HasConstState, Next: ?Sized + HasConstState>
+    IntermediateChunkAsStr<'_, Prev, Next>
+{
+    pub(super) fn write_into<const OPEN_CLOSE: u8>(self, w: &mut impl ConsumeTextChunk) {
+        match const {
+            make_chunk(
+                OpenClose::try_from_u8(OPEN_CLOSE).unwrap(),
+                Prev::STATE,
+                Next::STATE,
+            )
+        } {
+            MakeChunkOutput::Intact => w.consume_text_chunk(self.as_str()),
+            MakeChunkOutput::RemoveGroupOpen => w.consume_text_chunk(self.remove_group_open()),
+            MakeChunkOutput::PrependCommaRemoveGroupOpen => todo!(),
+            MakeChunkOutput::RemoveGroupClose => todo!(),
+            MakeChunkOutput::RemoveGroupCloseAppendComma => todo!(),
+            MakeChunkOutput::RemoveSurroundingGroups => todo!(),
+            MakeChunkOutput::RemoveSurroundingGroupsAppendComma => todo!(),
+            MakeChunkOutput::PrependCommaRemoveSurroundingGroups => todo!(),
+            MakeChunkOutput::PrependCommaRemoveSurroundingGroupsAppendComma => todo!(),
+        }
+    }
 }

@@ -1,5 +1,5 @@
 pub use self::consumers::{
-    ConsumeChainedArrays, ConsumeJson, ConsumeJsonChunks, Consumed, json_kinds,
+    ConsumeChainedArrays, ConsumeJson, ConsumeJsonChunks, ConsumeJsonText, Consumed, json_kinds,
 };
 
 use json_kinds::JsonKind;

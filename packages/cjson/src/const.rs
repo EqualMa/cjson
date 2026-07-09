@@ -15,11 +15,42 @@ use crate::{
 };
 
 pub use self::{
-    constrained_types::{NonEmptyArrayAsArray, NonEmptyArrayAsArrayVec, NonEmptyArrayAsStr},
+    constrained_types::{
+        //
+        ContentfulFirstChunkOfArrayAsArray,
+        ContentfulFirstChunkOfArrayAsArrayVec,
+        ContentfulFirstChunkOfArrayAsStr,
+        //
+        ContentfulFirstChunkOfObjectAsArray,
+        ContentfulFirstChunkOfObjectAsArrayVec,
+        ContentfulFirstChunkOfObjectAsStr,
+        //
+        ContentfulLastChunkOfArrayAsArray,
+        ContentfulLastChunkOfArrayAsArrayVec,
+        ContentfulLastChunkOfArrayAsStr,
+        //
+        ContentfulLastChunkOfObjectAsArray,
+        ContentfulLastChunkOfObjectAsArrayVec,
+        ContentfulLastChunkOfObjectAsStr,
+        //
+        IntermediateChunkAsArray,
+        IntermediateChunkAsArrayVec,
+        IntermediateChunkAsStr,
+        //
+        NonEmptyArrayAsArray,
+        NonEmptyArrayAsArrayVec,
+        NonEmptyArrayAsStr,
+        //
+        NonEmptyObjectAsArray,
+        NonEmptyObjectAsArrayVec,
+        NonEmptyObjectAsStr,
+    },
     stated_str::StatedChunkStr,
     stated_str_as_array::StatedChunkString,
     stated_str_as_array_vec::StatedChunkBuf,
 };
+
+pub mod states;
 
 pub mod value;
 
@@ -63,6 +94,10 @@ impl<T> AsRefU8Slice<T> {
 
 pub trait HasConstJsonValue {
     const JSON_VALUE: texts::Value<&'static str>;
+}
+
+pub trait HasConstState {
+    const STATE: State;
 }
 
 mod sealed {

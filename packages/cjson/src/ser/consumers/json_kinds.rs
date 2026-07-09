@@ -1,5 +1,11 @@
 use core::convert::Infallible;
 
+use crate::r#const::{
+    ContentfulFirstChunkOfArrayAsStr, ContentfulFirstChunkOfObjectAsStr,
+    ContentfulLastChunkOfArrayAsStr, ContentfulLastChunkOfObjectAsStr, HasConstState,
+    NonEmptyArrayAsStr, NonEmptyObjectAsStr,
+};
+
 pub struct AnyValue;
 pub struct JsonString;
 pub struct Array;
@@ -32,6 +38,8 @@ pub trait JsonKind: Sized {
     type StringContainsSelf: YesOrNo;
     type ArrayContainsSelf: YesOrNo;
     type ObjectContainsSelf: YesOrNo;
+
+    type ArrayOrObjectContainsSelf: YesOrNo;
 }
 
 impl JsonKind for AnyValue {
@@ -64,6 +72,7 @@ impl JsonKind for AnyValue {
     type StringContainsSelf = Infallible;
     type ArrayContainsSelf = Infallible;
     type ObjectContainsSelf = Infallible;
+    type ArrayOrObjectContainsSelf = Infallible;
 }
 
 impl JsonKind for JsonString {
@@ -96,6 +105,7 @@ impl JsonKind for JsonString {
     type StringContainsSelf = ();
     type ArrayContainsSelf = Infallible;
     type ObjectContainsSelf = Infallible;
+    type ArrayOrObjectContainsSelf = Infallible;
 }
 
 impl JsonKind for Array {
@@ -128,6 +138,7 @@ impl JsonKind for Array {
     type StringContainsSelf = Infallible;
     type ArrayContainsSelf = ();
     type ObjectContainsSelf = Infallible;
+    type ArrayOrObjectContainsSelf = ();
 }
 
 impl JsonKind for Object {
@@ -160,4 +171,27 @@ impl JsonKind for Object {
     type StringContainsSelf = Infallible;
     type ArrayContainsSelf = Infallible;
     type ObjectContainsSelf = ();
+    type ArrayOrObjectContainsSelf = ();
+}
+
+pub trait ArrayOrObject: 'static + JsonKind {
+    type ContentfulFirstChunkAsStr<'a, Next: ?Sized + HasConstState>;
+    type ContentfulLastChunkAsStr<'a, Prev: ?Sized + HasConstState>;
+    type ContentfulFullChunkAsAtr<'a>;
+}
+
+impl ArrayOrObject for Array {
+    type ContentfulFirstChunkAsStr<'a, Next: ?Sized + HasConstState> =
+        ContentfulFirstChunkOfArrayAsStr<'a, Next>;
+    type ContentfulLastChunkAsStr<'a, Prev: ?Sized + HasConstState> =
+        ContentfulLastChunkOfArrayAsStr<'a, Prev>;
+    type ContentfulFullChunkAsAtr<'a> = NonEmptyArrayAsStr<'a>;
+}
+
+impl ArrayOrObject for Object {
+    type ContentfulFirstChunkAsStr<'a, Next: ?Sized + HasConstState> =
+        ContentfulFirstChunkOfObjectAsStr<'a, Next>;
+    type ContentfulLastChunkAsStr<'a, Prev: ?Sized + HasConstState> =
+        ContentfulLastChunkOfObjectAsStr<'a, Prev>;
+    type ContentfulFullChunkAsAtr<'a> = NonEmptyObjectAsStr<'a>;
 }

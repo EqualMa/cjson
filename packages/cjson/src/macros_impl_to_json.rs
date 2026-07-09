@@ -971,6 +971,7 @@ macro_rules! __private_impl_to_json_eof {
             kind $kind:tt
             chunk $only_compile_time:tt
             CONST_ASSOC($CONST_ASSOC:ident)
+            write $write:tt
         }
         (
             // used_const_generics
@@ -1015,6 +1016,7 @@ macro_rules! __private_impl_to_json_eof {
             kind $kind:tt
             chunk $only_compile_time:tt
             CONST_ASSOC($CONST_ASSOC:ident)
+            write $write:tt
         }
         (
             // used_const_generics

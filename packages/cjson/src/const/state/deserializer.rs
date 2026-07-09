@@ -1,4 +1,4 @@
-use super::{AfterEndArrayOrObject, Intermediate, IntermediateState, Stack, StateInner};
+use super::{AfterEndArrayOrObject, Intermediate, IntermediateState, Stack, StateInner, ValueKind};
 
 macro_rules! tri {
     ($e:expr $(,)?) => {
@@ -28,7 +28,7 @@ impl<'a> Deserializer<'a> {
             StateInner::Init => match tri!(self.parse_json_value_no_nesting()) {
                 ParseJsonValueNoNestingOutput::JsonValue => {
                     tri!(self.expect_eof_after_value());
-                    Ok(StateInner::Eof)
+                    Ok(StateInner::Eof(ValueKind::Unknown))
                 }
                 ParseJsonValueNoNestingOutput::EofInString => {
                     Ok(StateInner::Intermediate(Intermediate {
@@ -48,9 +48,9 @@ impl<'a> Deserializer<'a> {
                     }),
             },
             StateInner::Intermediate(inter) => self.parse_till_eof_with_intermediate_state(inter),
-            StateInner::Eof => {
+            StateInner::Eof(kind) => {
                 tri!(self.expect_eof_after_value());
-                Ok(StateInner::Eof)
+                Ok(StateInner::Eof(kind))
             }
         }
     }
@@ -111,7 +111,7 @@ impl<'a> Deserializer<'a> {
                         None => {
                             return {
                                 tri!(self.expect_eof_after_value());
-                                Ok(StateInner::Eof)
+                                Ok(StateInner::Eof(ValueKind::String))
                             };
                         }
                     },
@@ -132,7 +132,7 @@ impl<'a> Deserializer<'a> {
                             AfterEndArrayOrObject::Eof => {
                                 return {
                                     tri!(self.expect_eof_after_value());
-                                    Ok(StateInner::Eof)
+                                    Ok(StateInner::Eof(ValueKind::ArrayWithEmptyContent))
                                 };
                             }
                         }
@@ -147,7 +147,7 @@ impl<'a> Deserializer<'a> {
                         AfterEndArrayOrObject::Eof => {
                             return {
                                 tri!(self.expect_eof_after_value());
-                                Ok(StateInner::Eof)
+                                Ok(StateInner::Eof(ValueKind::ArrayWithNonEmptyContent))
                             };
                         }
                     },
@@ -162,7 +162,7 @@ impl<'a> Deserializer<'a> {
                             AfterEndArrayOrObject::Eof => {
                                 return {
                                     tri!(self.expect_eof_after_value());
-                                    Ok(StateInner::Eof)
+                                    Ok(StateInner::Eof(ValueKind::ArrayWithUnknownContent))
                                 };
                             }
                         },
@@ -184,7 +184,7 @@ impl<'a> Deserializer<'a> {
                         AfterEndArrayOrObject::Eof => {
                             return {
                                 tri!(self.expect_eof_after_value());
-                                Ok(StateInner::Eof)
+                                Ok(StateInner::Eof(ValueKind::ObjectWithEmptyContent))
                             };
                         }
                     },
@@ -221,7 +221,7 @@ impl<'a> Deserializer<'a> {
                             AfterEndArrayOrObject::Eof => {
                                 return {
                                     tri!(self.expect_eof_after_value());
-                                    Ok(StateInner::Eof)
+                                    Ok(StateInner::Eof(ValueKind::ObjectWithNonEmptyContent))
                                 };
                             }
                         },
@@ -249,7 +249,7 @@ impl<'a> Deserializer<'a> {
                             AfterEndArrayOrObject::Eof => {
                                 return {
                                     tri!(self.expect_eof_after_value());
-                                    Ok(StateInner::Eof)
+                                    Ok(StateInner::Eof(ValueKind::ObjectWithUnknownContent))
                                 };
                             }
                         },

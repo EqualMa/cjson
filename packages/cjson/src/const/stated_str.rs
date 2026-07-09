@@ -9,15 +9,6 @@ pub struct StatedChunkStr<'a> {
 }
 
 impl<'a> StatedChunkStr<'a> {
-    pub(crate) const fn new_checked(prev_state: State, next_state: State, s: &'a str) -> Self {
-        super::state::check(prev_state.copied(), next_state.copied(), s);
-        Self {
-            prev_state,
-            next_state,
-            chunk: s,
-        }
-    }
-
     pub(crate) const fn copied(&self) -> Self {
         Self {
             prev_state: self.prev_state.copied(),
@@ -69,7 +60,7 @@ impl<'a> StatedChunkStr<'a> {
 
     pub(crate) const fn remove_surrounding_group(self) -> Self {
         self.prev_state().assert_same(&State::INIT);
-        self.next_state().assert_same(&State::EOF);
+        self.next_state().assert_eof();
 
         match self.inner().as_bytes() {
             [b'[', inner @ .., b']'] => Self {
@@ -123,7 +114,7 @@ impl<'a> StatedChunkStr<'a> {
     }
 
     pub(crate) const fn remove_group_close(self) -> Self {
-        self.next_state().assert_same(&State::EOF);
+        self.next_state().assert_eof();
         match self.chunk.as_bytes() {
             [head @ .., b']'] => Self {
                 prev_state: self.prev_state.copied(),

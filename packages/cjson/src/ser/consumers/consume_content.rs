@@ -7,7 +7,7 @@ use crate::ser::{
 
 use super::{
     ConsumeChainedStrings, ConsumeChunksOfNonEmptyArray, ConsumeChunksOfNonEmptyObject,
-    ConsumeJson, Consumed,
+    ConsumeJson, ConsumeJsonText, Consumed,
     consume_chained_content::ConsumeChainedArrayItems,
     json_kinds::{self, JsonKind},
     open_close::OpenClose,
@@ -81,9 +81,17 @@ impl<W: ConsumeTextChunk> ConsumeJson for ConsumeArrayItems<W> {
     ) -> Consumed<json_kinds::Array, Self> {
         Consumed::ASSERT_ARRAY
     }
+    fn consume_non_empty_array_as_str(
+        mut self,
+        v: crate::r#const::NonEmptyArrayAsStr<'_>,
+        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
+    ) -> Consumed<json_kinds::Array, Self> {
+        self.0.consume_text_chunk(v.items());
+        Consumed::ASSERT_ARRAY
+    }
 
     type ConsumeChunksOfNonEmptyArray =
-        ConsumeChunksOfNonEmptyArray<W, states::Init, { OpenClose::BOTH_NOTHING.as_u8() }>;
+        ConsumeChunksOfNonEmptyArray<W, Self, states::Init, { OpenClose::BOTH_NOTHING.as_u8() }>;
     fn start_to_consume_chunks_of_non_empty_array(
         self,
         (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
@@ -97,6 +105,23 @@ impl<W: ConsumeTextChunk> ConsumeJson for ConsumeArrayItems<W> {
         (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
     ) -> Self::ConsumeChainedArrays {
         ConsumeChainedArrayItems::new_owned(self.0)
+    }
+
+    fn consume_array_of_items(
+        mut self,
+        items: impl IntoIterator<Item: IntoJson>,
+        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
+    ) -> Consumed<json_kinds::Array, Self> {
+        let mut items = items.into_iter();
+        let Some(first) = items.next() else {
+            return self.consume_empty_array(());
+        };
+        first.json_provide_into(ConsumeJsonText(self.0.as_mut_consume_text_chunk()));
+        items.for_each(|item| {
+            self.0.consume_text_chunk(",");
+            item.json_provide_into(ConsumeJsonText(self.0.as_mut_consume_text_chunk()));
+        });
+        Consumed::ASSERT_ARRAY
     }
 }
 
@@ -115,7 +140,7 @@ impl<W: ConsumeTextChunk> ConsumeJson for ConsumeObjectKvs<W> {
     }
 
     type ConsumeChunksOfNonEmptyObject =
-        ConsumeChunksOfNonEmptyObject<W, states::Init, { OpenClose::BOTH_NOTHING.as_u8() }>;
+        ConsumeChunksOfNonEmptyObject<W, Self, states::Init, { OpenClose::BOTH_NOTHING.as_u8() }>;
 
     fn start_to_consume_chunks_of_non_empty_object(
         self,

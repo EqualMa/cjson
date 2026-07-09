@@ -101,3 +101,21 @@ pub struct ChainArray<A: ToJsonArray, B: ToJsonArray>(pub A, pub B);
 pub struct ChainObject<A: ToJsonObject, B: ToJsonObject>(pub A, pub B);
 
 mod chain;
+
+#[derive(Debug, Clone, Copy)]
+pub struct ArrayOfIter<I: IntoIterator<Item: IntoJson>>(pub I);
+
+impl<I: IntoIterator<Item: IntoJson>> IntoJson for ArrayOfIter<I> {
+    type JsonKind = json_kinds::Array;
+
+    fn json_provide_into<
+        W: ConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::JsonKind> = ()>>,
+    >(
+        self,
+        w: W,
+    ) -> Consumed<Self::JsonKind, W> {
+        w.consume_array_of_items(self.0, ())
+    }
+
+    const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false;
+}
