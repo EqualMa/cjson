@@ -6,12 +6,12 @@ use crate::{
 };
 
 use super::{
-    ConsumeChainedArrays, ConsumeChainedStrings, ConsumeChunksOfNonEmptyArray,
-    ConsumeChunksOfNonEmptyObject, ConsumeJson, ConsumeJsonText, Consumed,
+    ConsumeChainedStrings, ConsumeChunksOfNonEmptyArray, ConsumeChunksOfNonEmptyObject,
+    ConsumeJson, ConsumeJsonText, Consumed,
     consume_content::ConsumeStringFragment,
     json_kinds::{self, JsonKind},
     open_close::OpenClose,
-    states,
+    states, write_comma_kvs, write_key_frag_quote_colon_value,
 };
 
 /// - If the array contains no item, consumes nothing.
@@ -166,6 +166,17 @@ impl<W: ConsumeTextChunk> ConsumeJson for ConsumeObjectOpenKvsIfNotEmpty<'_, W> 
         self,
         (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
     ) -> Consumed<json_kinds::Object, Self> {
+        debug_assert!(!*self.started);
+        Consumed::ASSERT_OBJECT
+    }
+    fn consume_non_empty_object_as_str(
+        mut self,
+        v: crate::r#const::NonEmptyObjectAsStr<'_>,
+        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+    ) -> Consumed<json_kinds::Object, Self> {
+        debug_assert!(!*self.started);
+        *self.started = true;
+        self.writer.consume_text_chunk(v.open_kvs());
         Consumed::ASSERT_OBJECT
     }
 
@@ -175,29 +186,74 @@ impl<W: ConsumeTextChunk> ConsumeJson for ConsumeObjectOpenKvsIfNotEmpty<'_, W> 
         self,
         (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
     ) -> Self::ConsumeChunksOfNonEmptyObject {
+        debug_assert!(!*self.started);
         *self.started = true;
         ConsumeChunksOfNonEmptyObject(self.writer, PhantomData)
     }
-}
 
-impl<W: ConsumeTextChunk> ConsumeChainedArrays for ConsumeArrayOpenItemsIfNotEmpty<'_, W> {
-    fn extend(&mut self, arr: impl IntoJson<JsonKind = json_kinds::Array>) {
-        ConsumeArrayOpenItemsIfNotEmpty {
-            writer: self.writer.as_mut_consume_text_chunk(),
-            started: self.started,
-        }
-        .impl_extend(arr)
-    }
-
-    type InitialConsumer = Self;
-    fn end_with(
+    type ConsumeChainedObjects = Self;
+    fn start_to_consume_chained_objects(
         self,
-        arr: impl IntoJson<JsonKind = json_kinds::Array>,
-    ) -> Consumed<json_kinds::Array, Self::InitialConsumer> {
-        self.impl_extend(arr);
-        Consumed::ASSERT_ARRAY
+        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+    ) -> Self::ConsumeChainedObjects {
+        debug_assert!(!*self.started);
+        self
+    }
+
+    fn consume_object_of_iter(
+        mut self,
+        kvs: impl IntoIterator<Item: crate::ser::IntoJsonKeyColonValue>,
+        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+    ) -> Consumed<json_kinds::Object, Self> {
+        // ["key_frag_quote_colon_value,"key_frag_quote_colon_value,"key_frag_quote_colon_value
+        let mut kvs = kvs.into_iter();
+        let Some(first) = kvs.next() else {
+            return self.consume_empty_object(());
+        };
+
+        debug_assert!(!*self.started);
+        self.writer.consume_text_chunk("[\""); // TODO: ConsumeStringOpenFragment
+        write_key_frag_quote_colon_value(&mut self.writer, first);
+
+        write_comma_kvs(&mut self.writer, kvs);
+
+        Consumed::ASSERT_OBJECT
     }
 }
+
+impl_many!({
+    {
+        {
+            use super::ConsumeChainedArrays as TraitConsumeChained;
+            use ConsumeArrayOpenItemsIfNotEmpty as ConsumeOpenContentIfNotEmpty;
+            use json_kinds::Array as K;
+        }
+        {
+            use super::ConsumeChainedObjects as TraitConsumeChained;
+            use ConsumeObjectOpenKvsIfNotEmpty as ConsumeOpenContentIfNotEmpty;
+            use json_kinds::Object as K;
+        }
+    }
+
+    impl<W: ConsumeTextChunk> TraitConsumeChained for ConsumeOpenContentIfNotEmpty<'_, W> {
+        fn extend(&mut self, content: impl IntoJson<JsonKind = K>) {
+            ConsumeOpenContentIfNotEmpty {
+                writer: self.writer.as_mut_consume_text_chunk(),
+                started: self.started,
+            }
+            .impl_extend(content)
+        }
+
+        type InitialConsumer = Self;
+        fn end_with(
+            self,
+            content: impl IntoJson<JsonKind = K>,
+        ) -> Consumed<K, Self::InitialConsumer> {
+            self.impl_extend(content);
+            const { Consumed::assert(K) }
+        }
+    }
+});
 
 impl<W: ConsumeTextChunk> ConsumeJson for ConsumeStringOpenFragmentIfNotEmpty<'_, W> {
     type ConsumeJsonKind = json_kinds::JsonString;

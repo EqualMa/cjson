@@ -3,16 +3,16 @@ use core::marker::PhantomData;
 use crate::{
     r#const::{HasConstCompileTimeChunk, HasConstState, State, states},
     ser::{
+        IntoJson,
         consumers::{
             consume_chained_full::ConsumeChainedStringsFull, runtime_chunks::RuntimeChunks,
         },
+        into_json_key_colon_value::Sealed as _,
         texts,
         traits::{self, ConsumeTextChunk, IntoTextChunks as _},
     },
     utils::impl_many,
 };
-
-use super::IntoJson;
 
 use self::{
     consume_chained_full::ConsumeChainedArraysFull,
@@ -77,7 +77,7 @@ macro_rules! not_array {
         }
         fn consume_non_empty_array_as_str(
             self,
-            v: crate::r#const::NonEmptyArrayAsStr<'_>,
+            _: crate::r#const::NonEmptyArrayAsStr<'_>,
             yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKind>::Contains<
                 crate::ser::json_kinds::Array,
             >,
@@ -86,7 +86,7 @@ macro_rules! not_array {
         }
 
         type ConsumeChunksOfNonEmptyArray =
-            crate::ser::consumers::never_consume::NeverConsume<Self>;
+            crate::ser::consumers::never_consume::NeverConsume<Self, crate::r#const::states::Init>;
 
         fn start_to_consume_chunks_of_non_empty_array(
             self,
@@ -124,20 +124,49 @@ macro_rules! not_object {
         fn consume_empty_object(
             self,
             yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKind>::Contains<
-                json_kinds::Object,
+                crate::ser::json_kinds::Object,
+            >,
+        ) -> Consumed<json_kinds::Object, Self> {
+            match yes {}
+        }
+        fn consume_non_empty_object_as_str(
+            self,
+            _: crate::r#const::NonEmptyObjectAsStr<'_>,
+            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKind>::Contains<
+                crate::ser::json_kinds::Object,
             >,
         ) -> Consumed<json_kinds::Object, Self> {
             match yes {}
         }
 
         type ConsumeChunksOfNonEmptyObject =
-            crate::ser::consumers::never_consume::NeverConsume<Self>;
+            crate::ser::consumers::never_consume::NeverConsume<Self, crate::r#const::states::Init>;
         fn start_to_consume_chunks_of_non_empty_object(
             self,
             yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKind>::Contains<
-                json_kinds::Object,
+                crate::ser::json_kinds::Object,
             >,
         ) -> Self::ConsumeChunksOfNonEmptyObject {
+            match yes {}
+        }
+
+        type ConsumeChainedObjects = crate::ser::consumers::never_consume::NeverConsume<Self>;
+        fn start_to_consume_chained_objects(
+            self,
+            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKind>::Contains<
+                crate::ser::json_kinds::Object,
+            >,
+        ) -> Self::ConsumeChainedObjects {
+            match yes {}
+        }
+
+        fn consume_object_of_iter(
+            self,
+            _: impl IntoIterator<Item: crate::ser::IntoJsonKeyColonValue>,
+            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKind>::Contains<
+                json_kinds::Object,
+            >,
+        ) -> Consumed<json_kinds::Object, Self> {
             match yes {}
         }
     };
@@ -146,8 +175,10 @@ macro_rules! not_object {
 pub mod json_kinds;
 pub mod runtime_chunks;
 
+pub(super) mod chunks;
 mod consume_chained_content;
 mod consume_chained_full;
+mod consume_comma_content_close;
 mod consume_content;
 mod consume_content_and_record;
 mod consume_content_close;
@@ -193,7 +224,7 @@ pub trait ConsumeJson {
         yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
     ) -> Consumed<json_kinds::Array, Self>;
 
-    type ConsumeChunksOfNonEmptyArray: ConsumeJsonChunks<json_kinds::Array, InitialConsumer = Self, CurrentState = states::Init>;
+    type ConsumeChunksOfNonEmptyArray: chunks::ReadyToConsumeJsonChunksOfNonEmptyArray<InitialConsumer = Self>;
     fn start_to_consume_chunks_of_non_empty_array(
         self,
         yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
@@ -216,12 +247,29 @@ pub trait ConsumeJson {
         self,
         yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
     ) -> Consumed<json_kinds::Object, Self>;
+    fn consume_non_empty_object_as_str(
+        self,
+        v: crate::r#const::NonEmptyObjectAsStr<'_>,
+        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+    ) -> Consumed<json_kinds::Object, Self>;
 
-    type ConsumeChunksOfNonEmptyObject: ConsumeJsonChunks<json_kinds::Object, InitialConsumer = Self, CurrentState = states::Init>;
+    type ConsumeChunksOfNonEmptyObject: chunks::ReadyToConsumeJsonChunksOfNonEmptyObject;
     fn start_to_consume_chunks_of_non_empty_object(
         self,
         yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
     ) -> Self::ConsumeChunksOfNonEmptyObject;
+
+    type ConsumeChainedObjects: ConsumeChainedObjects<InitialConsumer = Self>;
+    fn start_to_consume_chained_objects(
+        self,
+        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+    ) -> Self::ConsumeChainedObjects;
+
+    fn consume_object_of_iter(
+        self,
+        kvs: impl IntoIterator<Item: crate::ser::IntoJsonKeyColonValue>,
+        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+    ) -> Consumed<json_kinds::Object, Self>;
 }
 
 pub trait ConsumeChainedStrings {
@@ -242,6 +290,16 @@ pub trait ConsumeChainedArrays {
         self,
         arr: impl IntoJson<JsonKind = json_kinds::Array>,
     ) -> Consumed<json_kinds::Array, Self::InitialConsumer>;
+}
+
+pub trait ConsumeChainedObjects {
+    fn extend(&mut self, obj: impl IntoJson<JsonKind = json_kinds::Object>);
+
+    type InitialConsumer: ?Sized;
+    fn end_with(
+        self,
+        obj: impl IntoJson<JsonKind = json_kinds::Object>,
+    ) -> Consumed<json_kinds::Object, Self::InitialConsumer>;
 }
 
 pub trait ConsumeJsonChunks<K: json_kinds::ArrayOrObject> {
@@ -293,6 +351,18 @@ pub trait ConsumeJsonChunks<K: json_kinds::ArrayOrObject> {
         v: impl IntoJson<JsonKind = json_kinds::Array>,
     ) -> Self::ConsumeJsonItemsAfterItem;
 
+    type ConsumeJsonKvsAfterFieldValue: ConsumeJsonChunks<K, InitialConsumer = Self::InitialConsumer>;
+    fn json_kvs_after_field_value(
+        self,
+        v: impl IntoJson<JsonKind = json_kinds::Object>,
+    ) -> Self::ConsumeJsonKvsAfterFieldValue;
+
+    type ConsumeJsonStringFragment: ConsumeJsonChunks<K, InitialConsumer = Self::InitialConsumer>;
+    fn json_string_fragment(
+        self,
+        v: impl IntoJson<JsonKind = json_kinds::JsonString>,
+    ) -> Self::ConsumeJsonStringFragment;
+
     #[cfg(remove)]
     type ConsumeOpenContentBeforeContent: ConsumeOpenContentBeforeContent<K, InitialConsumer = Self::InitialConsumer>;
     #[cfg(remove)]
@@ -302,6 +372,14 @@ pub trait ConsumeJsonChunks<K: json_kinds::ArrayOrObject> {
         yes: K::ArrayOrObjectContainsSelf,
     ) -> Self::ConsumeOpenContentBeforeContent;
 
+    fn end_with_right_bracket(
+        self,
+        yes: K::Contains<json_kinds::Array>,
+    ) -> Consumed<K, Self::InitialConsumer>;
+    fn end_with_right_brace(
+        self,
+        yes: K::Contains<json_kinds::Object>,
+    ) -> Consumed<K, Self::InitialConsumer>;
     fn end(self) -> Consumed<K, Self::InitialConsumer>;
 }
 
@@ -442,6 +520,15 @@ impl<W: ConsumeTextChunk> ConsumeJson for ConsumeJsonText<W> {
         Consumed::ASSERT_OBJECT
     }
 
+    fn consume_non_empty_object_as_str(
+        mut self,
+        v: crate::r#const::NonEmptyObjectAsStr<'_>,
+        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+    ) -> Consumed<json_kinds::Object, Self> {
+        self.0.consume_text_chunk(v.as_str());
+        Consumed::ASSERT_OBJECT
+    }
+
     type ConsumeChunksOfNonEmptyObject =
         ConsumeChunksOfNonEmptyObject<W, Self, states::Init, { OpenClose::BOTH_GROUP.as_u8() }>;
 
@@ -450,6 +537,34 @@ impl<W: ConsumeTextChunk> ConsumeJson for ConsumeJsonText<W> {
         (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
     ) -> Self::ConsumeChunksOfNonEmptyObject {
         ConsumeChunksOfNonEmptyObject(self.0, PhantomData)
+    }
+
+    type ConsumeChainedObjects = consume_chained_full::ConsumeChainedObjectsFull<W>;
+    fn start_to_consume_chained_objects(
+        self,
+        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+    ) -> Self::ConsumeChainedObjects {
+        consume_chained_full::ConsumeChainedObjectsFull::new(self.0)
+    }
+
+    fn consume_object_of_iter(
+        mut self,
+        kvs: impl IntoIterator<Item: crate::ser::IntoJsonKeyColonValue>,
+        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+    ) -> Consumed<json_kinds::Object, Self> {
+        let mut items = kvs.into_iter();
+        let Some(first) = items.next() else {
+            return self.consume_empty_object(());
+        };
+        self.0.consume_text_chunk("{\"");
+        write_key_frag_quote_colon_value(&mut self.0, first);
+
+        items.for_each(|kv| {
+            self.0.consume_text_chunk(",\"");
+            write_key_frag_quote_colon_value(&mut self.0, kv);
+        });
+        self.0.consume_text_chunk("}");
+        Consumed::ASSERT_OBJECT
     }
 }
 
@@ -738,6 +853,32 @@ impl_many!({
             CONSUME(self.0, PhantomData)
         }
 
+        type ConsumeJsonKvsAfterFieldValue =
+            CONSUME<W, InitialConsumer, states::ThenKvsAfterFieldValue<S>, OC>;
+        fn json_kvs_after_field_value(
+            mut self,
+            v: impl IntoJson<JsonKind = json_kinds::Object>,
+        ) -> Self::ConsumeJsonKvsAfterFieldValue {
+            const { _ = states::ThenKvsAfterFieldValue::<S>::STATE }
+            let Consumed { .. } = v.json_provide_into(ConsumeObjectKvsPrependCommaIfNotEmpty(
+                self.0.as_mut_consume_text_chunk(),
+            ));
+            CONSUME(self.0, PhantomData)
+        }
+
+        type ConsumeJsonStringFragment =
+            CONSUME<W, InitialConsumer, states::ThenStringFragment<S>, OC>;
+        fn json_string_fragment(
+            mut self,
+            v: impl IntoJson<JsonKind = json_kinds::JsonString>,
+        ) -> Self::ConsumeJsonStringFragment {
+            const { _ = states::ThenStringFragment::<S>::STATE }
+            let Consumed { .. } = v.json_provide_into(consume_content::ConsumeStringFragment(
+                self.0.as_mut_consume_text_chunk(),
+            ));
+            CONSUME(self.0, PhantomData)
+        }
+
         type ConsumeConstChunk<T: ?Sized + HasConstCompileTimeChunk> =
             CONSUME<W, InitialConsumer, states::NextStateOf<T>, OC>;
         fn consume_const_chunk<T: ?Sized + HasConstCompileTimeChunk>(
@@ -794,6 +935,19 @@ impl_many!({
             let mut w = TConsumeOpenContentBeforeContent::new(self.0);
             w.extend(content);
             w
+        }
+
+        fn end_with_right_bracket(
+            self,
+            yes: <K as JsonKind>::Contains<json_kinds::Array>,
+        ) -> Consumed<K, Self::InitialConsumer> {
+            self.impl_end_with_right_bracket(yes)
+        }
+        fn end_with_right_brace(
+            self,
+            yes: <K as JsonKind>::Contains<json_kinds::Object>,
+        ) -> Consumed<K, Self::InitialConsumer> {
+            self.impl_end_with_right_brace(yes)
         }
 
         fn end(self) -> Consumed<K, Self::InitialConsumer> {
@@ -929,11 +1083,19 @@ impl_many!({
     {
         {
             use ConsumeObjectKvsPrependCommaIfNotEmpty as CONSUME;
+            use write_comma_kvs as write_iter;
             const OC: OpenClose = OpenClose::PREPEND_COMMA;
+            const fn make_non_empty_object(kvs: &str) -> (&'static str, &str) {
+                (",", kvs)
+            }
         }
         {
             use ConsumeObjectKvsAppendCommaIfNotEmpty as CONSUME;
+            use write_kvs_comma as write_iter;
             const OC: OpenClose = OpenClose::APPEND_COMMA;
+            const fn make_non_empty_object(kvs: &str) -> (&str, &'static str) {
+                (kvs, ",")
+            }
         }
     }
 
@@ -951,6 +1113,16 @@ impl_many!({
             Consumed::ASSERT_OBJECT
         }
 
+        fn consume_non_empty_object_as_str(
+            mut self,
+            v: crate::r#const::NonEmptyObjectAsStr<'_>,
+            (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+        ) -> Consumed<json_kinds::Object, Self> {
+            let (chunk1, chunk2) = make_non_empty_object(v.kvs());
+            self.0.consume_2_text_chunks(chunk1, chunk2);
+            Consumed::ASSERT_OBJECT
+        }
+
         type ConsumeChunksOfNonEmptyObject =
             ConsumeChunksOfNonEmptyObject<W, Self, states::Init, { OC.as_u8() }>;
 
@@ -960,84 +1132,95 @@ impl_many!({
         ) -> Self::ConsumeChunksOfNonEmptyObject {
             ConsumeChunksOfNonEmptyObject(self.0, PhantomData)
         }
+
+        type ConsumeChainedObjects = Self;
+        fn start_to_consume_chained_objects(
+            self,
+            (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+        ) -> Self::ConsumeChainedObjects {
+            self
+        }
+
+        fn consume_object_of_iter(
+            mut self,
+            kvs: impl IntoIterator<Item: crate::ser::IntoJsonKeyColonValue>,
+            (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+        ) -> Consumed<json_kinds::Object, Self> {
+            write_iter(&mut self.0, kvs);
+            Consumed::ASSERT_OBJECT
+        }
+    }
+
+    impl<W: ConsumeTextChunk> ConsumeChainedObjects for CONSUME<W> {
+        fn extend(&mut self, arr: impl IntoJson<JsonKind = json_kinds::Object>) {
+            let Consumed { .. } =
+                arr.json_provide_into(CONSUME(self.0.as_mut_consume_text_chunk()));
+        }
+
+        type InitialConsumer = Self;
+        fn end_with(
+            self,
+            arr: impl IntoJson<JsonKind = json_kinds::Object>,
+        ) -> Consumed<json_kinds::Object, Self::InitialConsumer> {
+            arr.json_provide_into(self)
+        }
     }
 });
 
-/// `$(, $item)* ]`
-struct ConsumeArrayCommaItemsClose<W: ConsumeTextChunk>(W);
-
-impl<W: ConsumeTextChunk> ConsumeJson for ConsumeArrayCommaItemsClose<W> {
-    type ConsumeJsonKind = json_kinds::Array;
-
-    not_any_value! {}
-    not_string! {}
-    not_object! {}
-
-    fn consume_empty_array(
-        mut self,
-        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
-    ) -> Consumed<json_kinds::Array, Self> {
-        self.0.consume_text_chunk("]");
-        Consumed::ASSERT_ARRAY
-    }
-    fn consume_non_empty_array_as_str(
-        mut self,
-        v: crate::r#const::NonEmptyArrayAsStr<'_>,
-        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
-    ) -> Consumed<json_kinds::Array, Self> {
-        self.0.consume_2_text_chunks(",", v.items_close());
-        Consumed::ASSERT_ARRAY
-    }
-
-    type ConsumeChunksOfNonEmptyArray = ConsumeChunksOfNonEmptyArray<
-        W,
-        Self,
-        states::Init,
-        { OpenClose::PREPEND_COMMA_CLOSE_GROUP.as_u8() },
-    >;
-    fn start_to_consume_chunks_of_non_empty_array(
-        self,
-        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
-    ) -> Self::ConsumeChunksOfNonEmptyArray {
-        ConsumeChunksOfNonEmptyArray(self.0, PhantomData)
-    }
-
-    type ConsumeChainedArrays = Self;
-    fn start_to_consume_chained_arrays(
-        self,
-        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
-    ) -> Self::ConsumeChainedArrays {
-        self
-    }
-
-    fn consume_array_of_items(
-        mut self,
-        items: impl IntoIterator<Item: IntoJson>,
-        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
-    ) -> Consumed<json_kinds::Array, Self> {
-        let Consumed { .. } =
-            ConsumeArrayItemsPrependCommaIfNotEmpty(self.0.as_mut_consume_text_chunk())
-                .consume_array_of_items(items, ());
-
-        self.0.consume_text_chunk("]");
-
-        Consumed::ASSERT_ARRAY
-    }
+fn write_key_frag_quote_colon_value(
+    w: &mut impl ConsumeTextChunk,
+    kv: impl crate::ser::IntoJsonKeyColonValue,
+) {
+    let (key, value) = kv.into_json_key_value();
+    key.json_provide_into(consume_content::ConsumeStringFragment(
+        w.as_mut_consume_text_chunk(),
+    ));
+    w.consume_text_chunk("\":");
+    value.json_provide_into(ConsumeJsonText(w.as_mut_consume_text_chunk()));
 }
 
-impl<W: ConsumeTextChunk> ConsumeChainedArrays for ConsumeArrayCommaItemsClose<W> {
-    fn extend(&mut self, arr: impl IntoJson<JsonKind = json_kinds::Array>) {
-        let Consumed { .. } = arr.json_provide_into(ConsumeArrayItemsPrependCommaIfNotEmpty(
-            self.0.as_mut_consume_text_chunk(),
-        ));
-    }
+fn write_comma_kvs(
+    w: &mut impl ConsumeTextChunk,
+    kvs: impl IntoIterator<Item: crate::ser::IntoJsonKeyColonValue>,
+) {
+    // ,"key_frag_quote_colon_value,"key_frag_quote_colon_value,"key_frag_quote_colon_value
+    kvs.into_iter().for_each(|kv| {
+        w.consume_text_chunk(",\"");
+        write_key_frag_quote_colon_value(w, kv);
+    });
+}
 
-    type InitialConsumer = Self; // TODO:
-    fn end_with(
-        self,
-        arr: impl IntoJson<JsonKind = json_kinds::Array>,
-    ) -> Consumed<json_kinds::Array, Self::InitialConsumer> {
-        // TODO: infinite recursion?
-        arr.json_provide_into(self)
-    }
+fn write_non_empty_kvs(
+    w: &mut impl ConsumeTextChunk,
+    first: impl crate::ser::IntoJsonKeyColonValue,
+    kvs: impl IntoIterator<Item: crate::ser::IntoJsonKeyColonValue>,
+) {
+    // "key_frag_quote_colon_value,"key_frag_quote_colon_value,"key_frag_quote_colon_value
+    w.consume_text_chunk("\""); // TODO: ConsumeStringOpenFragment
+    write_key_frag_quote_colon_value(w, first);
+
+    write_comma_kvs(w, kvs);
+}
+
+fn write_kvs(
+    w: &mut impl ConsumeTextChunk,
+    kvs: impl IntoIterator<Item: crate::ser::IntoJsonKeyColonValue>,
+) {
+    let mut kvs = kvs.into_iter();
+    let Some(first) = kvs.next() else { return };
+
+    write_non_empty_kvs(w, first, kvs);
+}
+
+fn write_kvs_comma(
+    w: &mut impl ConsumeTextChunk,
+    kvs: impl IntoIterator<Item: crate::ser::IntoJsonKeyColonValue>,
+) {
+    // "key_frag_quote_colon_value,"key_frag_quote_colon_value,"key_frag_quote_colon_value,
+    let mut kvs = kvs.into_iter();
+    let Some(first) = kvs.next() else { return };
+
+    write_non_empty_kvs(w, first, kvs);
+
+    w.consume_text_chunk(",");
 }

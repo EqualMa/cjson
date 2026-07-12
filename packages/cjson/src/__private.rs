@@ -20,7 +20,9 @@ pub mod well_known_macro {
 pub mod state_then_runtime {
     pub use crate::r#const::states::{
         ThenItemsAfterArrayStartBeforeItem as json_items_after_array_start_before_item,
-        ThenItemsAfterItem as json_items_after_item, ThenValue as json_value,
+        ThenItemsAfterItem as json_items_after_item,
+        ThenKvsAfterFieldValue as json_kvs_after_field_value,
+        ThenStringFragment as json_string_fragment, ThenValue as json_value,
     };
 }
 
@@ -57,7 +59,9 @@ pub mod impl_to_json_options {
     };
 }
 
+// TODO: rename to write
 pub mod only_compile_time;
+pub use only_compile_time as write;
 
 #[cfg(feature = "proc-macro")]
 pub mod proc_macro {

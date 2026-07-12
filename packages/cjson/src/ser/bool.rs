@@ -1,14 +1,31 @@
-use super::ToJson;
+use crate::ser::{IntoJson, json_kinds::JsonKind};
+
+use super::{ConsumeJson, Consumed, ToJson, json_kinds, texts};
 
 impl ToJson for bool {
     type ToJson<'a>
-        = super::texts::Boolean
+        = texts::Boolean
     where
         Self: 'a;
 
     fn to_json(&self) -> Self::ToJson<'_> {
-        super::texts::Boolean(*self)
+        texts::Boolean(*self)
     }
+}
+
+impl IntoJson for bool {
+    type JsonKind = json_kinds::AnyValue;
+
+    fn json_provide_into<
+        W: ConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::JsonKind> = ()>>,
+    >(
+        self,
+        w: W,
+    ) -> Consumed<Self::JsonKind, W> {
+        w.consume_any_value(texts::Value::bool(self), ())
+    }
+
+    const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false;
 }
 
 mod r#const {

@@ -1,11 +1,15 @@
 pub use self::consumers::{
-    ConsumeChainedArrays, ConsumeJson, ConsumeJsonChunks, ConsumeJsonText, Consumed, json_kinds,
+    ConsumeChainedArrays, ConsumeChainedObjects, ConsumeJson, ConsumeJsonChunks, ConsumeJsonText,
+    Consumed,
+    chunks::{ReadyToConsumeJsonChunksOfNonEmptyArray, ReadyToConsumeJsonChunksOfNonEmptyObject},
+    json_kinds,
 };
 
 use json_kinds::JsonKind;
 
 mod consumers;
 pub mod iter_text_chunk;
+pub mod open_close;
 pub mod texts;
 pub mod traits;
 pub mod values;
@@ -24,6 +28,33 @@ pub trait IntoJson {
     ///
     /// Wrong implementations will not affect json validity.
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool;
+}
+
+pub trait ToJson2 {
+    type ToJsonKind: JsonKind;
+    fn json_provide_to<W: ConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::ToJsonKind> = ()>>>(
+        &self,
+        w: W,
+    ) -> Consumed<Self::ToJsonKind, W>;
+    const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool;
+}
+
+mod into_json_key_colon_value;
+pub trait IntoJsonKeyColonValue: into_json_key_colon_value::Sealed {}
+
+impl<T: ?Sized + ToJson2> IntoJson for &T {
+    type JsonKind = T::ToJsonKind;
+
+    fn json_provide_into<
+        W: ConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::JsonKind> = ()>>,
+    >(
+        self,
+        w: W,
+    ) -> Consumed<Self::JsonKind, W> {
+        T::json_provide_to(self, w)
+    }
+
+    const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = T::IS_CHAINABLE_AND_ALWAYS_EMPTY;
 }
 
 pub trait ToJson {

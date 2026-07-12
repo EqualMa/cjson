@@ -11,6 +11,10 @@ impl<'s> Value<&'s str> {
 
     pub(crate) const EMPTY_ARRAY: Self = Self("[]");
     pub(crate) const EMPTY_OBJECT: Self = Self("{}");
+
+    pub(crate) const fn bool(v: bool) -> Self {
+        Self(if v { "true" } else { "false" })
+    }
 }
 
 impl<'s> ConstAsJsonValueStr<Value<&'s str>> {

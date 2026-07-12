@@ -1,4 +1,21 @@
-use crate::ser::{ToJson, ToJsonString, texts};
+use crate::ser::{ToJson, ToJson2, ToJsonString, texts};
+
+use super::{ConsumeJson, json_kinds};
+
+impl ToJson2 for str {
+    type ToJsonKind = json_kinds::JsonString;
+
+    fn json_provide_to<
+        W: ConsumeJson<ConsumeJsonKind: json_kinds::JsonKind<Contains<Self::ToJsonKind> = ()>>,
+    >(
+        &self,
+        w: W,
+    ) -> super::Consumed<Self::ToJsonKind, W> {
+        w.consume_str(self, ())
+    }
+
+    const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false;
+}
 
 impl ToJson for str {
     type ToJson<'a>

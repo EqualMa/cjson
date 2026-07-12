@@ -8,7 +8,7 @@ use crate::ser::{
 use super::{
     ConsumeChainedStrings, ConsumeChunksOfNonEmptyArray, ConsumeChunksOfNonEmptyObject,
     ConsumeJson, ConsumeJsonText, Consumed,
-    consume_chained_content::ConsumeChainedArrayItems,
+    consume_chained_content::{ConsumeChainedArrayItems, ConsumeChainedObjectKvs},
     json_kinds::{self, JsonKind},
     open_close::OpenClose,
     states,
@@ -138,6 +138,14 @@ impl<W: ConsumeTextChunk> ConsumeJson for ConsumeObjectKvs<W> {
     ) -> Consumed<json_kinds::Object, Self> {
         Consumed::ASSERT_OBJECT
     }
+    fn consume_non_empty_object_as_str(
+        mut self,
+        v: crate::r#const::NonEmptyObjectAsStr<'_>,
+        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+    ) -> Consumed<json_kinds::Object, Self> {
+        self.0.consume_text_chunk(v.kvs());
+        Consumed::ASSERT_OBJECT
+    }
 
     type ConsumeChunksOfNonEmptyObject =
         ConsumeChunksOfNonEmptyObject<W, Self, states::Init, { OpenClose::BOTH_NOTHING.as_u8() }>;
@@ -147,5 +155,22 @@ impl<W: ConsumeTextChunk> ConsumeJson for ConsumeObjectKvs<W> {
         (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
     ) -> Self::ConsumeChunksOfNonEmptyObject {
         ConsumeChunksOfNonEmptyObject(self.0, PhantomData)
+    }
+
+    type ConsumeChainedObjects = ConsumeChainedObjectKvs<W, bool, Self>;
+    fn start_to_consume_chained_objects(
+        self,
+        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+    ) -> Self::ConsumeChainedObjects {
+        ConsumeChainedObjectKvs::new_owned(self.0)
+    }
+
+    fn consume_object_of_iter(
+        mut self,
+        kvs: impl IntoIterator<Item: crate::ser::IntoJsonKeyColonValue>,
+        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+    ) -> Consumed<json_kinds::Object, Self> {
+        super::write_kvs(&mut self.0, kvs);
+        Consumed::ASSERT_OBJECT
     }
 }

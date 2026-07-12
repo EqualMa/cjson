@@ -1,13 +1,33 @@
 use crate::{
     ToJson,
     ser::{
-        ToJsonArray, ToJsonString, texts,
+        ConsumeChainedArrays, ConsumeJson, Consumed, IntoJson, ToJsonArray, ToJsonString,
+        json_kinds, texts,
         traits::{self, Array, EmptyOrCommaSeparatedElements, JsonString},
     },
 };
 
 use super::{ChainArray, ChainString};
 
+impl<A: IntoJson<JsonKind = json_kinds::Array>, B: IntoJson<JsonKind = json_kinds::Array>> IntoJson
+    for ChainArray<A, B>
+{
+    type JsonKind = json_kinds::Array;
+
+    fn json_provide_into<
+        W: ConsumeJson<ConsumeJsonKind: json_kinds::JsonKind<Contains<Self::JsonKind> = ()>>,
+    >(
+        self,
+        w: W,
+    ) -> Consumed<Self::JsonKind, W> {
+        let mut w = w.start_to_consume_chained_arrays(());
+        w.extend(self.0);
+        w.end_with(self.1)
+    }
+
+    const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool =
+        A::IS_CHAINABLE_AND_ALWAYS_EMPTY && B::IS_CHAINABLE_AND_ALWAYS_EMPTY;
+}
 impl<A: ToJsonArray, B: ToJsonArray> ToJson for ChainArray<A, B> {
     type ToJson<'a>
         = <Self as ToJsonArray>::ToJsonArray<'a>

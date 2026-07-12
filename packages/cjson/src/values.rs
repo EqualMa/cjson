@@ -1,7 +1,8 @@
 use ref_cast::{RefCastCustom, ref_cast_custom};
 
 use crate::ser::{
-    ConsumeJson, Consumed, IntoJson, ToJson, ToJsonArray, ToJsonObject, ToJsonString,
+    ConsumeJson, Consumed, IntoJson, IntoJsonKeyColonValue, ToJson, ToJsonArray, ToJsonObject,
+    ToJsonString,
     json_kinds::{self, JsonKind},
 };
 
@@ -96,7 +97,7 @@ mod float;
 #[derive(Debug, Clone, Copy)]
 pub struct ChainString<A: ToJsonString, B: ToJsonString>(pub A, pub B);
 #[derive(Debug, Clone, Copy)]
-pub struct ChainArray<A: ToJsonArray, B: ToJsonArray>(pub A, pub B);
+pub struct ChainArray<A, B>(pub A, pub B);
 #[derive(Debug, Clone, Copy)]
 pub struct ChainObject<A: ToJsonObject, B: ToJsonObject>(pub A, pub B);
 
@@ -104,6 +105,8 @@ mod chain;
 
 #[derive(Debug, Clone, Copy)]
 pub struct ArrayOfIter<I: IntoIterator<Item: IntoJson>>(pub I);
+#[derive(Debug, Clone, Copy)]
+pub struct ObjectOfIter<I: IntoIterator<Item: IntoJsonKeyColonValue>>(pub I);
 
 impl<I: IntoIterator<Item: IntoJson>> IntoJson for ArrayOfIter<I> {
     type JsonKind = json_kinds::Array;
@@ -115,6 +118,21 @@ impl<I: IntoIterator<Item: IntoJson>> IntoJson for ArrayOfIter<I> {
         w: W,
     ) -> Consumed<Self::JsonKind, W> {
         w.consume_array_of_items(self.0, ())
+    }
+
+    const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false;
+}
+
+impl<I: IntoIterator<Item: IntoJsonKeyColonValue>> IntoJson for ObjectOfIter<I> {
+    type JsonKind = json_kinds::Object;
+
+    fn json_provide_into<
+        W: ConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::JsonKind> = ()>>,
+    >(
+        self,
+        w: W,
+    ) -> Consumed<Self::JsonKind, W> {
+        w.consume_object_of_iter(self.0, ())
     }
 
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false;

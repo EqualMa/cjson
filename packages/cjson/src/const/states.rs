@@ -15,18 +15,36 @@ impl<T: ?Sized + HasConstCompileTimeChunk> HasConstState for NextStateOf<T> {
     const STATE: State = T::CHUNK.into_next_state();
 }
 
-pub struct ThenValue<T: ?Sized + HasConstState>(Never, PhantomData<T>);
+macro_rules! define_then {
+    (
+        $($Then:ident :: $then:ident ),+ $(,)?
+    ) => {
+        $(
+            pub struct $Then<T: ?Sized + HasConstState>(Never, PhantomData<T>);
 
-impl<T: ?Sized + HasConstState> HasConstState for ThenValue<T> {
-    const STATE: State = T::STATE.json_value();
+            impl<T: ?Sized + HasConstState> HasConstState for $Then<T> {
+                const STATE: State = T::STATE.$then();
+            }
+        )+
+    };
 }
 
-pub struct ThenItemsAfterItem<T: ?Sized + HasConstState>(Never, PhantomData<T>);
-impl<T: ?Sized + HasConstState> HasConstState for ThenItemsAfterItem<T> {
-    const STATE: State = T::STATE.json_items_after_item();
-}
+define_then!(
+    ThenValue::json_value,
+    ThenItemsAfterItem::json_items_after_item,
+    ThenItemsAfterArrayStartBeforeItem::json_items_after_array_start_before_item,
+    ThenKvsAfterFieldValue::json_kvs_after_field_value,
+    ThenKvsAfterObjectStartBeforeKv::json_kvs_after_object_start_before_kv,
+    ThenLeftBracket::left_bracket,
+    ThenLeftBrace::left_brace,
+    ThenStringFragment::json_string_fragment,
+);
 
-pub struct ThenItemsAfterArrayStartBeforeItem<T: ?Sized + HasConstState>(Never, PhantomData<T>);
-impl<T: ?Sized + HasConstState> HasConstState for ThenItemsAfterArrayStartBeforeItem<T> {
-    const STATE: State = T::STATE.json_items_after_array_start_before_item();
-}
+type LeftBracket = ThenLeftBracket<Init>;
+
+pub type LeftBracketValue = ThenValue<LeftBracket>;
+pub type LeftBracketItemsBeforeItem = ThenItemsAfterArrayStartBeforeItem<LeftBracket>;
+
+type LeftBrace = ThenLeftBrace<Init>;
+
+pub type LeftBraceKvsBeforeKv = ThenKvsAfterObjectStartBeforeKv<LeftBrace>;

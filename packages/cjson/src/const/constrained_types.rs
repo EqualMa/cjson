@@ -130,12 +130,54 @@ define!(
         chunk
             .prev_state()
             .copied()
-            .assert_is_top_level_after_array_start();
+            .assert_is_top_level_after_object_start();
         chunk
             .next_state()
-            .assert_same(&State::INIT_AFTER_ARRAY_ITEM);
+            .assert_same(&State::INIT_AFTER_OBJECT_FIELD_VALUE);
     },
 );
+
+impl<'a> NonEmptyObjectAsStr<'a> {
+    const fn debug_assert(&self) {
+        debug_assert!(matches!(
+            self.0.as_bytes(),
+            [b'{', items @ .., b'}'] if items.len() > 0
+        ));
+    }
+
+    pub const fn kvs(&self) -> &'a str {
+        self.debug_assert();
+        let [b'{', items @ .., b'}'] = self.0.as_bytes() else {
+            // SAFETY: self.0 is json object
+            unsafe { unreachable_unchecked() }
+        };
+
+        // SAFETY: self.0 is json object
+        unsafe { str::from_utf8_unchecked(items) }
+    }
+
+    pub const fn kvs_close(&self) -> &'a str {
+        self.debug_assert();
+        let [b'{', items_close @ ..] = self.0.as_bytes() else {
+            // SAFETY: self.0 is json object
+            unsafe { unreachable_unchecked() }
+        };
+
+        // SAFETY: self.0 is json object
+        unsafe { str::from_utf8_unchecked(items_close) }
+    }
+
+    pub const fn open_kvs(&self) -> &'a str {
+        self.debug_assert();
+        let [open_items @ .., b'}'] = self.0.as_bytes() else {
+            // SAFETY: self.0 is json array
+            unsafe { unreachable_unchecked() }
+        };
+
+        // SAFETY: self.0 is json array
+        unsafe { str::from_utf8_unchecked(open_items) }
+    }
+}
 
 define!(
     ContentfulFirstChunkOfArrayAsArray,
@@ -258,6 +300,9 @@ impl_many!({
             const fn assert_is_contentful_first_chunk(next: State) {
                 next.assert_is_contentful_first_chunk_of_array()
             }
+            const fn assert_is_contentful_last_chunk(prev: State) {
+                prev.assert_is_contentful_last_chunk_of_array()
+            }
         }
         {
             use ContentfulFirstChunkOfObjectAsStr as ContentfulFirstChunkAsStr;
@@ -268,6 +313,9 @@ impl_many!({
             const CLOSE: u8 = b'}';
             const fn assert_is_contentful_first_chunk(next: State) {
                 next.assert_is_contentful_first_chunk_of_object()
+            }
+            const fn assert_is_contentful_last_chunk(prev: State) {
+                prev.assert_is_contentful_last_chunk_of_object()
             }
         }
     }
@@ -295,7 +343,7 @@ impl_many!({
 
     impl<'a, Prev: ?Sized + HasConstState> ContentfulLastChunkAsStr<'a, Prev> {
         pub(crate) const fn remove_group_close(self) -> &'a str {
-            const { assert_is_contentful_first_chunk(Prev::STATE) }
+            const { assert_is_contentful_last_chunk(Prev::STATE) }
             match self.0.as_bytes() {
                 [content @ .., CLOSE] => {
                     debug_assert!(!content.is_empty());

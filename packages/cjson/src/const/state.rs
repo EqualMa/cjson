@@ -56,6 +56,26 @@ impl State {
         }
     }
 
+    pub(crate) const fn assert_eof_of_non_empty_array(self) {
+        match self.0 {
+            StateInner::Eof(kind) => match kind {
+                ValueKind::ArrayWithNonEmptyContent => {}
+                _ => panic!("expect state to be Eof of non empty array"),
+            },
+            _ => panic!("expect state to be Eof"),
+        }
+    }
+
+    pub(crate) const fn assert_eof_of_non_empty_object(self) {
+        match self.0 {
+            StateInner::Eof(kind) => match kind {
+                ValueKind::ObjectWithNonEmptyContent => {}
+                _ => panic!("expect state to be Eof of non empty object"),
+            },
+            _ => panic!("expect state to be Eof"),
+        }
+    }
+
     pub(crate) const fn is_init(&self) -> bool {
         matches!(self, Self(StateInner::Init))
     }
@@ -329,14 +349,15 @@ impl State {
         match self.0 {
             StateInner::Init => panic!(),
             StateInner::Intermediate(Intermediate { stack, state }) => match state {
-                AfterArrayStart => Self(StateInner::Intermediate(Intermediate {
-                    stack,
-                    state: AfterArrayStartOrComma,
-                })),
+                AfterArrayStart | AfterArrayStartOrComma => {
+                    Self(StateInner::Intermediate(Intermediate {
+                        stack,
+                        state: AfterArrayStartOrComma,
+                    }))
+                }
                 InString => panic!(),
                 AfterArrayItem => panic!(),
                 AfterArrayComma => panic!(),
-                AfterArrayStartOrComma => panic!(),
                 AfterArrayStartOrItem => panic!(),
                 AfterObjectStart => panic!(),
                 InObjectFieldName => panic!(),
@@ -373,6 +394,29 @@ impl State {
                 | AfterObjectStartOrComma
                 | AfterObjectStartOrFieldValue => panic!(),
             },
+        }
+    }
+
+    pub const fn json_kvs_after_field_value(self) -> State {
+        match &self.0 {
+            StateInner::Init => panic!(),
+            StateInner::Intermediate(Intermediate { stack: _, state }) => match state {
+                AfterObjectFieldValue => self,
+                InString
+                | AfterArrayStart
+                | AfterArrayStartOrComma
+                | AfterArrayStartOrItem
+                | AfterArrayItem
+                | AfterArrayComma
+                | AfterObjectStart
+                | AfterObjectStartOrComma
+                | AfterObjectStartOrFieldValue
+                | InObjectFieldName
+                | AfterObjectFieldName
+                | AfterObjectFieldColon
+                | AfterObjectComma => panic!(),
+            },
+            StateInner::Eof(..) => panic!(),
         }
     }
 
@@ -570,6 +614,54 @@ impl State {
                     | ValueKind::String
                     | ValueKind::Unknown => {
                         panic!("expect first chunk to be what an object would start with")
+                    }
+                }
+            }
+        }
+    }
+
+    pub(crate) const fn assert_is_contentful_last_chunk_of_array(self) {
+        let prev = self;
+        match prev.0 {
+            StateInner::Init | StateInner::Eof(..) => panic!("expect last chunk"),
+            StateInner::Intermediate(intermediate) => {
+                match intermediate.estimated_top_level_value_kind() {
+                    ValueKind::ArrayWithNonEmptyContent | ValueKind::ArrayWithUnknownContent => {
+                        // ok
+                    }
+                    ValueKind::ArrayWithEmptyContent => {
+                        panic!("expect last chunk to be what a non-empty array would end with")
+                    }
+                    ValueKind::ObjectWithUnknownContent
+                    | ValueKind::ObjectWithEmptyContent
+                    | ValueKind::ObjectWithNonEmptyContent
+                    | ValueKind::String
+                    | ValueKind::Unknown => {
+                        panic!("expect last chunk to be what a non-empty array would end with")
+                    }
+                }
+            }
+        }
+    }
+
+    pub(crate) const fn assert_is_contentful_last_chunk_of_object(self) {
+        let prev = self;
+        match prev.0 {
+            StateInner::Init | StateInner::Eof(..) => panic!("expect last chunk"),
+            StateInner::Intermediate(intermediate) => {
+                match intermediate.estimated_top_level_value_kind() {
+                    ValueKind::ObjectWithNonEmptyContent | ValueKind::ObjectWithUnknownContent => {
+                        // ok
+                    }
+                    ValueKind::ObjectWithEmptyContent => {
+                        panic!("expect last chunk to be what a non-empty object would end with")
+                    }
+                    ValueKind::ArrayWithUnknownContent
+                    | ValueKind::ArrayWithEmptyContent
+                    | ValueKind::ArrayWithNonEmptyContent
+                    | ValueKind::String
+                    | ValueKind::Unknown => {
+                        panic!("expect last chunk to be what a non-empty object would end with")
                     }
                 }
             }

@@ -883,7 +883,8 @@ macro_rules! __private_json_eof_normalize {
                 ]
                 CONST_ASSOC(JSON_OBJECT_NON_EMPTY)
                 write {
-
+                    consume_non_empty_object_as_str
+                    try_consume_non_empty_object_as_str
                 }
             }
             $($then_macro_rest)*
@@ -2095,7 +2096,7 @@ macro_rules! __private_json_after_object_field_value {
         $(as $runtime_type:ty)?
         $(; $($rest:tt)*)?
     ) => {
-        $crate::__private_json_after_runtime_items! {
+        $crate::__private_json_after_runtime_kvs! {
             $state
             [after_object_field_value ($runtime) $($runtime_type)?]
             $($($rest)*)?
