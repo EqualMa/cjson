@@ -424,3 +424,174 @@ impl_many!({
         }
     }
 });
+
+define!(
+    JsonStringAsArray,
+    JsonStringAsArrayVec,
+    JsonStringAsStr,
+    |v| {
+        let chunk = v.remove_surrounding_group();
+        chunk.prev_state().assert_is_top_level_in_string();
+        chunk.next_state().assert_is_top_level_in_string();
+    },
+);
+
+impl<'a> JsonStringAsStr<'a> {
+    const fn debug_assert(&self) {
+        debug_assert!(matches!(
+            //
+            self.0.as_bytes(),
+            [b'"', .., b'"']
+        ));
+    }
+
+    pub(crate) const fn fragment(&self) -> &'a str {
+        self.debug_assert();
+        let [b'"', fragment @ .., b'"'] = self.0.as_bytes() else {
+            // SAFETY: self.0 is json string
+            unsafe { unreachable_unchecked() }
+        };
+
+        // SAFETY: self.0 is json string
+        unsafe { str::from_utf8_unchecked(fragment) }
+    }
+
+    pub(crate) const fn fragment_close(&self) -> &'a str {
+        self.debug_assert();
+        let [b'"', fragment_close @ ..] = self.0.as_bytes() else {
+            // SAFETY: self.0 is json string
+            unsafe { unreachable_unchecked() }
+        };
+
+        // SAFETY: self.0 is json string
+        unsafe { str::from_utf8_unchecked(fragment_close) }
+    }
+
+    pub(crate) const fn open_non_empty_fragment(&self) -> Option<&'a str> {
+        self.debug_assert();
+        let [open_fragment @ .., b']'] = self.0.as_bytes() else {
+            // SAFETY: self.0 is json string
+            unsafe { unreachable_unchecked() }
+        };
+
+        let [b'"', fragment @ ..] = open_fragment else {
+            // SAFETY: self.0 is json string
+            unsafe { unreachable_unchecked() }
+        };
+
+        if fragment.is_empty() {
+            None
+        } else {
+            // SAFETY: self.0 is json string
+            let open_fragment = unsafe { str::from_utf8_unchecked(open_fragment) };
+            Some(open_fragment)
+        }
+    }
+}
+
+define!(
+    FirstChunkOfJsonStringAsArray,
+    FirstChunkOfJsonStringAsArrayVec,
+    FirstChunkOfJsonStringAsStr,
+    |v| {
+        v.prev_state().assert_init();
+        v.next_state().assert_is_top_level_in_string();
+        match v.inner().as_bytes() {
+            [b'"', ..] => {}
+            _ => panic!("expect first chunk of json string"),
+        }
+    },
+);
+
+define!(
+    LastChunkOfJsonStringAsArray,
+    LastChunkOfJsonStringAsArrayVec,
+    LastChunkOfJsonStringAsStr,
+    |v| {
+        v.prev_state().assert_is_top_level_in_string();
+        v.next_state().assert_eof_of_string();
+        match v.inner().as_bytes() {
+            [.., b'"'] => {}
+            _ => panic!("expect last chunk of json string"),
+        }
+    },
+);
+
+define!(
+    JsonStringFragmentAsArray,
+    JsonStringFragmentAsArrayVec,
+    JsonStringFragmentAsStr,
+    |v| {
+        v.prev_state().assert_is_top_level_in_string();
+        v.next_state().assert_is_top_level_in_string();
+    },
+);
+
+impl<'a> JsonStringFragmentAsStr<'a> {
+    pub(crate) const fn non_empty_fragment(self) -> Option<&'a str> {
+        non_empty(self.as_str())
+    }
+}
+
+impl<'a> FirstChunkOfJsonStringAsStr<'a> {
+    const fn debug_assert(&self) {
+        debug_assert!(matches!(
+            //
+            self.0.as_bytes(),
+            [b'"', ..]
+        ));
+    }
+
+    pub(crate) const fn fragment(self) -> &'a str {
+        self.debug_assert();
+        let [b'"', fragment @ ..] = self.0.as_bytes() else {
+            // SAFETY: self.0 is first chunk of json string
+            unsafe { unreachable_unchecked() }
+        };
+
+        // SAFETY: self.0 is first chunk of json string, which is utf8 with first quote trimmed
+        unsafe { str::from_utf8_unchecked(fragment) }
+    }
+
+    pub(crate) const fn open_non_empty_fragment(self) -> Option<&'a str> {
+        self.debug_assert();
+
+        let [b'"', fragment @ ..] = self.0.as_bytes() else {
+            // SAFETY: self.0 is first chunk of json string
+            unsafe { unreachable_unchecked() }
+        };
+
+        if fragment.is_empty() {
+            None
+        } else {
+            Some(self.0)
+        }
+    }
+}
+
+impl<'a> LastChunkOfJsonStringAsStr<'a> {
+    const fn debug_assert(&self) {
+        debug_assert!(matches!(
+            //
+            self.0.as_bytes(),
+            [.., b'"']
+        ));
+    }
+    pub(crate) const fn fragment(self) -> &'a str {
+        self.debug_assert();
+        let [fragment @ .., b'"'] = self.0.as_bytes() else {
+            // SAFETY: self.0 is last chunk of json string
+            unsafe { unreachable_unchecked() }
+        };
+
+        // SAFETY: self.0 is last chunk of json string, which is utf8 with last quote trimmed
+        unsafe { str::from_utf8_unchecked(fragment) }
+    }
+    pub(crate) const fn non_empty_fragment(self) -> Option<&'a str> {
+        non_empty(self.fragment())
+    }
+}
+
+const fn non_empty(s: &str) -> Option<&str> {
+    if s.is_empty() { None } else { Some(s) }
+}

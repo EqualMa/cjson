@@ -56,6 +56,16 @@ impl State {
         }
     }
 
+    pub(crate) const fn assert_eof_of_string(&self) {
+        match self.0 {
+            StateInner::Eof(kind) => match kind {
+                ValueKind::String => {}
+                _ => panic!("expect state to be Eof of json string"),
+            },
+            _ => panic!("expect state to be Eof"),
+        }
+    }
+
     pub(crate) const fn assert_eof_of_non_empty_array(self) {
         match self.0 {
             StateInner::Eof(kind) => match kind {
@@ -107,6 +117,10 @@ impl State {
     }
     pub(crate) const fn assert_is_before_top_level_right_brace(self) {
         self.right_brace().assert_eof();
+    }
+
+    pub(crate) const fn assert_is_top_level_in_string(&self) {
+        self.assert_same(&Self::INIT_IN_STRING);
     }
 
     pub const fn json_value(self) -> Self {

@@ -955,7 +955,8 @@ macro_rules! __private_json_eof_normalize {
                 ]
                 CONST_ASSOC(JSON_STRING)
                 write {
-
+                    consume_json_string_as_str
+                    try_consume_json_string_as_str
                 }
             }
             $($then_macro_rest)*

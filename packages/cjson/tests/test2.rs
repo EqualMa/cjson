@@ -211,8 +211,51 @@ fn test3<const V: u8>() {
         r#"{"one":1,"two":2}"#
     );
 
-    #[cfg(todo)]
-    {
-        json_write!(w, json_string!("a", ":", "b"));
-    }
+    assert_eq!(json_to_string!(""), "\"\"");
+    assert_eq!(json_to_string!(json_string!()), "\"\"");
+    assert_eq!(json_to_string!(json_string!("a", ":", "b")), "\"a:b\"");
+    assert_eq!(json_to_string!(json_string!("a", "b", "", "c")), "\"abc\"");
+
+    assert_eq!(json_to_string!(json_string!("a", ("b"), "c")), "\"abc\"");
+    assert_eq!(json_to_string!(json_string!("a", (""), "b")), "\"ab\"");
+    assert_eq!(
+        json_to_string!(json_string!("a", ("b"), ("_"), "c")),
+        "\"ab_c\""
+    );
+    assert_eq!(
+        json_to_string!(json_string!("a", (""), ("bc"), "d")),
+        "\"abcd\""
+    );
+
+    assert_eq!(json_to_string!(json_string!(("a"), "b")), "\"ab\"");
+    assert_eq!(json_to_string!(json_string!((""), "b")), "\"b\"");
+    assert_eq!(json_to_string!(json_string!(("a"), ("b"), "c")), "\"abc\"");
+    assert_eq!(json_to_string!(json_string!((""), ("b"), "c")), "\"bc\"");
+    assert_eq!(json_to_string!(json_string!(("a"), (""), "c")), "\"ac\"");
+    assert_eq!(json_to_string!(json_string!((""), (""), "c")), "\"c\"");
+
+    assert_eq!(json_to_string!(json_string!("01", ("2"),)), "\"012\"");
+    assert_eq!(json_to_string!(json_string!("01", (""),)), "\"01\"");
+    assert_eq!(
+        json_to_string!(json_string!("012", ("3"), ("45"))),
+        "\"012345\""
+    );
+    assert_eq!(
+        json_to_string!(json_string!("012", ("3"), (""))),
+        "\"0123\""
+    );
+    assert_eq!(
+        json_to_string!(json_string!("012", (""), ("34"))),
+        "\"01234\""
+    );
+    assert_eq!(json_to_string!(json_string!("012", (""), (""))), "\"012\"");
+
+    assert_eq!(json_to_string!(json_string!(("0"), "1", ("2"),)), "\"012\"");
+    assert_eq!(json_to_string!(json_string!((""), "1", ("2"),)), "\"12\"");
+    assert_eq!(json_to_string!(json_string!(("0"), "1", (""),)), "\"01\"");
+    assert_eq!(json_to_string!(json_string!((""), "1", (""),)), "\"1\"");
+    assert_eq!(
+        json_to_string!(json_string!(("0"), ("1"), "23", ("45"), ("67"))),
+        "\"01234567\""
+    );
 }

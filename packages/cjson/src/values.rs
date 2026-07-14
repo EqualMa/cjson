@@ -95,7 +95,7 @@ impl Finite<f32> {
 mod float;
 
 #[derive(Debug, Clone, Copy)]
-pub struct ChainString<A: ToJsonString, B: ToJsonString>(pub A, pub B);
+pub struct ChainString<A, B>(pub A, pub B);
 #[derive(Debug, Clone, Copy)]
 pub struct ChainArray<A, B>(pub A, pub B);
 #[derive(Debug, Clone, Copy)]

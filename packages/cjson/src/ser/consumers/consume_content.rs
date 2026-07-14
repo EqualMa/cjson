@@ -10,6 +10,7 @@ use super::{
     ConsumeJson, ConsumeJsonText, Consumed,
     consume_chained_content::{ConsumeChainedArrayItems, ConsumeChainedObjectKvs},
     json_kinds::{self, JsonKind},
+    json_string_chunks,
     open_close::OpenClose,
     states,
 };
@@ -22,6 +23,7 @@ pub struct ConsumeObjectKvs<W: ConsumeTextChunk>(pub W);
 
 impl<W: ConsumeTextChunk> ConsumeJson for ConsumeStringFragment<W> {
     type ConsumeJsonKind = json_kinds::JsonString;
+    type Writer = W;
 
     not_any_value! {}
     not_array! {}
@@ -33,6 +35,14 @@ impl<W: ConsumeTextChunk> ConsumeJson for ConsumeStringFragment<W> {
     ) -> Consumed<json_kinds::JsonString, Self> {
         Consumed::ASSERT_STRING
     }
+    fn consume_json_string_as_str(
+        mut self,
+        v: crate::r#const::JsonStringAsStr<'_>,
+        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+    ) -> Consumed<json_kinds::JsonString, Self> {
+        self.0.consume_text_chunk(v.fragment());
+        Consumed::ASSERT_STRING
+    }
 
     fn consume_str(
         mut self,
@@ -41,6 +51,25 @@ impl<W: ConsumeTextChunk> ConsumeJson for ConsumeStringFragment<W> {
     ) -> Consumed<json_kinds::JsonString, Self> {
         crate::ser::texts::StrToJsonStringFragment(s).write_into(&mut self.0);
         Consumed::ASSERT_STRING
+    }
+
+    type EndJsonString = json_string_chunks::EndJsonStringWithNothing;
+    fn start_to_consume_chunks_of_json_string_with_first_chunk(
+        mut self,
+        v: crate::r#const::FirstChunkOfJsonStringAsStr<'_>,
+        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+    ) -> json_string_chunks::ConsumeInJsonString<Self::EndJsonString, Self> {
+        self.0.consume_text_chunk(v.fragment());
+        json_string_chunks::ConsumeInJsonString::new(self.0)
+    }
+    fn start_to_consume_chunks_of_json_string(
+        mut self,
+        v: impl IntoJson<JsonKind = json_kinds::JsonString>,
+        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+    ) -> json_string_chunks::ConsumeInJsonString<Self::EndJsonString, Self> {
+        let Consumed { .. } =
+            v.json_provide_into(ConsumeStringFragment(self.0.as_mut_consume_text_chunk()));
+        json_string_chunks::ConsumeInJsonString::new(self.0)
     }
 
     type ConsumeChainedStrings = Self;
@@ -70,6 +99,7 @@ impl<W: ConsumeTextChunk> ConsumeChainedStrings for ConsumeStringFragment<W> {
 
 impl<W: ConsumeTextChunk> ConsumeJson for ConsumeArrayItems<W> {
     type ConsumeJsonKind = json_kinds::Array;
+    type Writer = W;
 
     not_any_value! {}
     not_string! {}
@@ -127,6 +157,7 @@ impl<W: ConsumeTextChunk> ConsumeJson for ConsumeArrayItems<W> {
 
 impl<W: ConsumeTextChunk> ConsumeJson for ConsumeObjectKvs<W> {
     type ConsumeJsonKind = json_kinds::Object;
+    type Writer = W;
 
     not_any_value! {}
     not_string! {}

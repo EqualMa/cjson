@@ -18,6 +18,7 @@ pub(super) struct ConsumeObjectCommaKvsClose<W: ConsumeTextChunk>(pub W);
 
 impl<W: ConsumeTextChunk> ConsumeJson for ConsumeArrayCommaItemsClose<W> {
     type ConsumeJsonKind = json_kinds::Array;
+    type Writer = W;
 
     not_any_value! {}
     not_string! {}
@@ -77,6 +78,7 @@ impl<W: ConsumeTextChunk> ConsumeJson for ConsumeArrayCommaItemsClose<W> {
 
 impl<W: ConsumeTextChunk> ConsumeJson for ConsumeObjectCommaKvsClose<W> {
     type ConsumeJsonKind = json_kinds::Object;
+    type Writer = W;
 
     not_any_value! {}
     not_string! {}

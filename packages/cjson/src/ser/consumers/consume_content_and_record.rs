@@ -47,6 +47,7 @@ impl_many!({
 
 impl<'a, W: ConsumeTextChunk> ConsumeJson for ConsumeArrayItemsAndRecord<'a, W> {
     type ConsumeJsonKind = json_kinds::Array;
+    type Writer = W;
 
     not_any_value! {}
     not_string! {}
@@ -107,6 +108,7 @@ impl<'a, W: ConsumeTextChunk> ConsumeJson for ConsumeArrayItemsAndRecord<'a, W> 
 
 impl<'a, W: ConsumeTextChunk> ConsumeJson for ConsumeObjectKvsAndRecord<'a, W> {
     type ConsumeJsonKind = json_kinds::Object;
+    type Writer = W;
 
     not_any_value! {}
     not_string! {}

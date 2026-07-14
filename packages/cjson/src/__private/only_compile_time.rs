@@ -23,3 +23,7 @@ pub mod non_empty_object {
         NonEmptyObjectAsArray as AsArray, NonEmptyObjectAsArrayVec as AsArrayVec,
     };
 }
+
+pub mod json_string {
+    pub use crate::r#const::{JsonStringAsArray as AsArray, JsonStringAsArrayVec as AsArrayVec};
+}

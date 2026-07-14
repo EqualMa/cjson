@@ -37,6 +37,7 @@ define_then!(
     ThenKvsAfterObjectStartBeforeKv::json_kvs_after_object_start_before_kv,
     ThenLeftBracket::left_bracket,
     ThenLeftBrace::left_brace,
+    ThenDoubleQuote::double_quote,
     ThenStringFragment::json_string_fragment,
 );
 
@@ -48,3 +49,6 @@ pub type LeftBracketItemsBeforeItem = ThenItemsAfterArrayStartBeforeItem<LeftBra
 type LeftBrace = ThenLeftBrace<Init>;
 
 pub type LeftBraceKvsBeforeKv = ThenKvsAfterObjectStartBeforeKv<LeftBrace>;
+
+type TopLevelInString = ThenDoubleQuote<Init>;
+pub const TOP_LEVEL_IN_STRING: State = TopLevelInString::STATE;

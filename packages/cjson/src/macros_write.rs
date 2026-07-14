@@ -393,6 +393,14 @@ macro_rules! __private_json_write_chained_content {
 #[macro_export]
 macro_rules! __private_json_write_chunks {
     (
+        kind json_string
+        $($rest:tt)+
+    ) => {
+        $crate::__private_json_write_json_string_chunks! {
+            $($rest)+
+        }
+    };
+    (
         kind $kind:tt
         prev_compile_runtime $prev_compile_runtime:tt
         last_compile_time $last_compile_time:tt
@@ -420,6 +428,239 @@ macro_rules! __private_json_write_chunks {
                 )
             }
         }
+    }};
+}
+
+#[macro_export]
+macro_rules! __private_json_write_json_string_chunks {
+    (
+        prev_compile_runtime[
+            prev $prev_compile_runtime:tt
+            current {
+                compile_time $compile_time:tt
+                runtime[ json_string_fragment($v:expr) ]
+            }
+        ]
+        last_compile_time[ double_quote() ]
+        maybe_try { $maybe_try:ident $($question:tt)? }
+        consumer $consumer:tt
+    ) => {
+        $crate::ser::ConsumeInJsonString::end_with(
+            $crate::__private_json_write_json_string_prev_of_last_runtime! {
+                $prev_compile_runtime
+                $compile_time
+                maybe_try { $maybe_try $($question)? }
+                consumer $consumer
+            },
+            $v
+        ) $($question)?
+    };
+    (
+        prev_compile_runtime $prev_compile_runtime:tt
+        last_compile_time $last_compile_time:tt
+        maybe_try { $maybe_try:ident $($question:tt)? }
+        consumer $consumer:tt
+    ) => {
+        $crate::ser::ConsumeInJsonString::end_with_last_chunk(
+            {
+                $crate::__private_json_write_json_string_prev! {
+                    $prev_compile_runtime
+                    mut()
+                    w
+                    maybe_try { $maybe_try $($question)? }
+                    consumer $consumer
+                }
+
+                w
+            },
+            $crate::__private_json_chunk_as_str! {
+                $last_compile_time
+                [$crate::r#const::LastChunkOfJsonStringAsArray]
+                []
+                ($crate::r#const::states::TOP_LEVEL_IN_STRING)
+            }
+        ) $($question)?
+    };
+}
+
+#[macro_export]
+macro_rules! __private_json_write_json_string_prev {
+    (
+        [
+            prev[]
+            current {
+                compile_time[ double_quote() ]
+                runtime [
+                    json_string_fragment($v:expr)
+                ]
+            }
+        ]
+        mut($($mut_:tt)?)
+        $w:ident
+        maybe_try { $maybe_try:ident $($question:tt)? }
+        consumer($consumer:expr)
+    ) => {
+        let $($mut_)? $w = <_ as $crate::ser::ConsumeJson>::start_to_consume_chunks_of_json_string(
+            $consumer,
+            $v,
+            ()
+        ) $($question)?;
+    };
+    (
+        [
+            prev[]
+            current {
+                compile_time $compile_time:tt
+                runtime $runtime:tt
+            }
+        ]
+        mut $mut_:tt
+        $w:ident
+        maybe_try { $maybe_try:ident $($question:tt)? }
+        consumer $consumer:tt
+    ) => {
+        let mut $w = $crate::__private_json_write_json_string_prev_of_last_runtime! {
+            []
+            $compile_time
+            maybe_try { $maybe_try $($question)? }
+            consumer $consumer
+        };
+
+        $crate::__private_json_write_json_string_runtime_fragment! {
+            $runtime
+            (&mut $w)
+            { $maybe_try $($question)? }
+        }
+    };
+    (
+        [
+            prev $prev:tt
+            current {
+                compile_time $compile_time:tt
+                runtime $runtime:tt
+            }
+        ]
+        mut $mut_:tt
+        $w:ident
+        maybe_try $maybe_try:tt
+        consumer $consumer:tt
+    ) => {{
+        $crate::__private_json_write_json_string_prev! {
+            $prev
+            mut(mut)
+            $w
+            maybe_try $maybe_try
+            consumer $consumer
+        }
+
+        $crate::__private_json_write_json_string_compile_time_fragment! {
+            $compile_time
+            (&mut $w)
+            $maybe_try
+        }
+
+        $crate::__private_json_write_json_string_runtime_fragment! {
+            $runtime
+            (&mut $w)
+            $maybe_try
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! __private_json_write_json_string_compile_time_fragment {
+    (
+        []
+        $w:tt
+        $maybe_try:tt
+    ) => {};
+    (
+        $compile_time:tt
+        ($w:expr)
+        { $maybe_try:ident $($question:tt)? }
+    ) => {
+        $crate::ser::ConsumeInJsonString::consume_fragment_as_str(
+            $w,
+            $crate::__private_json_chunk_as_str! {
+                $compile_time
+                [$crate::r#const::JsonStringFragmentAsArray]
+                []
+                ($crate::r#const::states::TOP_LEVEL_IN_STRING)
+            },
+        ) $($question)?;
+    };
+}
+
+#[macro_export]
+macro_rules! __private_json_write_json_string_runtime_fragment {
+    (
+        [ json_string_fragment($v:expr) ]
+        ($w:expr)
+        { $maybe_try:ident $($question:tt)? }
+    ) => {
+        $crate::ser::ConsumeInJsonString::consume_fragment(
+            $w,
+            $v,
+        ) $($question)?;
+    };
+}
+
+#[macro_export]
+macro_rules! __private_json_write_json_string_prev_of_last_runtime {
+    (
+        [] // prev_compile_runtime
+        $compile_time:tt
+        maybe_try { $maybe_try:ident $($question:tt)? }
+        consumer($consumer:expr)
+    ) => {
+        <_ as $crate::ser::ConsumeJson>::start_to_consume_chunks_of_json_string_with_first_chunk(
+            $consumer,
+            $crate::__private_json_chunk_as_str! {
+                $compile_time
+                [$crate::r#const::FirstChunkOfJsonStringAsArray]
+                []
+                ($crate::r#const::State::INIT)
+            },
+            ()
+        ) $($question)?
+    };
+    (
+        $prev_compile_runtime:tt
+        []
+        maybe_try $maybe_try:tt
+        consumer $consumer:tt
+    ) => {{
+        $crate::__private_json_write_json_string_prev! {
+            $prev_compile_runtime
+            mut()
+            w
+            maybe_try $maybe_try
+            consumer $consumer
+        }
+
+        w
+    }};
+    (
+        $prev_compile_runtime:tt
+        $compile_time:tt
+        maybe_try $maybe_try:tt
+        consumer $consumer:tt
+    ) => {{
+        $crate::__private_json_write_json_string_prev! {
+            $prev_compile_runtime
+            mut(mut)
+            w
+            maybe_try $maybe_try
+            consumer $consumer
+        }
+
+        $crate::__private_json_write_json_string_compile_time_fragment! {
+            $compile_time
+            (&mut w)
+            $maybe_try
+        }
+
+        w
     }};
 }
 
@@ -920,6 +1161,39 @@ macro_rules! __private_json_write_chunks_group_open_runtime {
         $crate::__private_json_write_chunks_then! {
             __CJsonPrevState w
             $then
+        }
+    };
+}
+
+// TODO: refactor other code with this macro
+#[macro_export]
+macro_rules! __private_json_chunk_as_str {
+    (
+        $chunk:tt
+        [$($Type:tt)*]
+        [$($TypeParams:tt)*]
+        ($initial_state:expr)
+    ) => {
+        const {
+            const {
+                $($Type)*::<
+                    {
+                        $crate::__private_json_concat_compile_time_tokens_len! {
+                            $chunk
+                        }
+                    },
+                    $($TypeParams)*
+                >::from_array_vec({
+                    let mut buf = $crate::r#const::StatedChunkBuf::new(
+                        $initial_state
+                    );
+                    $crate::__private_json_concat_compile_time_tokens_buf! {
+                        buf $chunk
+                    }
+                    buf
+                })
+            }
+            .as_str()
         }
     };
 }

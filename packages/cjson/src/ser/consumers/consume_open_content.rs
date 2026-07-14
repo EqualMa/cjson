@@ -10,6 +10,7 @@ use super::{
     ConsumeJson, ConsumeJsonText, Consumed,
     consume_content::ConsumeStringFragment,
     json_kinds::{self, JsonKind},
+    json_string_chunks,
     open_close::OpenClose,
     states, write_comma_kvs, write_key_frag_quote_colon_value,
 };
@@ -90,6 +91,7 @@ impl_many!({
 
 impl<W: ConsumeTextChunk> ConsumeJson for ConsumeArrayOpenItemsIfNotEmpty<'_, W> {
     type ConsumeJsonKind = json_kinds::Array;
+    type Writer = W;
 
     not_any_value! {}
     not_string! {}
@@ -157,6 +159,7 @@ impl<W: ConsumeTextChunk> ConsumeJson for ConsumeArrayOpenItemsIfNotEmpty<'_, W>
 
 impl<W: ConsumeTextChunk> ConsumeJson for ConsumeObjectOpenKvsIfNotEmpty<'_, W> {
     type ConsumeJsonKind = json_kinds::Object;
+    type Writer = W;
 
     not_any_value! {}
     not_string! {}
@@ -255,8 +258,9 @@ impl_many!({
     }
 });
 
-impl<W: ConsumeTextChunk> ConsumeJson for ConsumeStringOpenFragmentIfNotEmpty<'_, W> {
+impl<'a, W: ConsumeTextChunk> ConsumeJson for ConsumeStringOpenFragmentIfNotEmpty<'a, W> {
     type ConsumeJsonKind = json_kinds::JsonString;
+    type Writer = W;
 
     not_any_value! {}
     not_object! {}
@@ -266,6 +270,24 @@ impl<W: ConsumeTextChunk> ConsumeJson for ConsumeStringOpenFragmentIfNotEmpty<'_
         self,
         (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
     ) -> Consumed<json_kinds::JsonString, Self> {
+        debug_assert!(!*self.started);
+        Consumed::ASSERT_STRING
+    }
+
+    fn consume_json_string_as_str(
+        mut self,
+        v: crate::r#const::JsonStringAsStr<'_>,
+        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+    ) -> Consumed<json_kinds::JsonString, Self> {
+        let Some(open_non_empty_fragment) = v.open_non_empty_fragment() else {
+            return self.consume_empty_string(());
+        };
+
+        debug_assert!(!*self.started);
+        *self.started = true;
+
+        self.writer.consume_text_chunk(open_non_empty_fragment);
+
         Consumed::ASSERT_STRING
     }
 
@@ -274,18 +296,66 @@ impl<W: ConsumeTextChunk> ConsumeJson for ConsumeStringOpenFragmentIfNotEmpty<'_
         s: &str,
         (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
     ) -> Consumed<json_kinds::JsonString, Self> {
+        debug_assert!(!*self.started);
+
         if !s.is_empty() {
-            if !*self.started {
-                *self.started = true;
-                self.writer.consume_text_chunk("\"");
-            }
+            *self.started = true;
+
+            // TODO: optimize with ConsumeStringOpenFragment
+            self.writer.consume_text_chunk("\"");
             let Consumed { .. } = ConsumeStringFragment(self.writer).consume_str(s, ());
         }
 
         Consumed::ASSERT_STRING
     }
 
+    type EndJsonString = json_string_chunks::EndJsonStringOpenFragmentIfNotEmpty<'a>;
+    fn start_to_consume_chunks_of_json_string_with_first_chunk(
+        mut self,
+        v: crate::r#const::FirstChunkOfJsonStringAsStr<'_>,
+        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+    ) -> json_string_chunks::ConsumeInJsonString<Self::EndJsonString, Self> {
+        debug_assert!(!*self.started);
+
+        'open: {
+            let Some(open_non_empty_fragment) = v.open_non_empty_fragment() else {
+                break 'open;
+            };
+
+            *self.started = true;
+            self.writer.consume_text_chunk(open_non_empty_fragment);
+        }
+
+        json_string_chunks::ConsumeInJsonString::new_full(
+            json_string_chunks::EndJsonStringOpenFragmentIfNotEmpty {
+                started: self.started,
+            },
+            self.writer,
+        )
+    }
+    fn start_to_consume_chunks_of_json_string(
+        mut self,
+        v: impl IntoJson<JsonKind = json_kinds::JsonString>,
+        (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+    ) -> json_string_chunks::ConsumeInJsonString<Self::EndJsonString, Self> {
+        debug_assert!(!*self.started);
+
+        // TODO: Will this cause infinite recursion?
+        let Consumed { .. } = v.json_provide_into(ConsumeStringOpenFragmentIfNotEmpty {
+            writer: self.writer.as_mut_consume_text_chunk(),
+            started: self.started,
+        });
+
+        json_string_chunks::ConsumeInJsonString::new_full(
+            json_string_chunks::EndJsonStringOpenFragmentIfNotEmpty {
+                started: self.started,
+            },
+            self.writer,
+        )
+    }
+
     type ConsumeChainedStrings = Self;
+    // TODO: Self should wrap ConsumeChainedStrings. ConsumeChainedStrings allows started to be true
 
     fn start_to_consume_chained_strings(
         self,

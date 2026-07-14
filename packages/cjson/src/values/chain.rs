@@ -1,8 +1,9 @@
+// TODO: optimize IntoJson with IS_CHAINABLE_AND_ALWAYS_EMPTY
 use crate::{
     ToJson,
     ser::{
-        ConsumeChainedArrays, ConsumeJson, Consumed, IntoJson, ToJsonArray, ToJsonString,
-        json_kinds, texts,
+        ConsumeChainedArrays, ConsumeChainedStrings as _, ConsumeJson, Consumed, IntoJson,
+        ToJsonArray, ToJsonString, json_kinds, texts,
         traits::{self, Array, EmptyOrCommaSeparatedElements, JsonString},
     },
 };
@@ -60,6 +61,26 @@ impl<A: ToJsonArray, B: ToJsonArray> ToJsonArray for ChainArray<A, B> {
                 .chain_with_comma(self.1.to_json_array().into_comma_separated_elements()),
         )
     }
+}
+
+impl<A: IntoJson<JsonKind = json_kinds::JsonString>, B: IntoJson<JsonKind = json_kinds::JsonString>>
+    IntoJson for ChainString<A, B>
+{
+    type JsonKind = json_kinds::JsonString;
+
+    fn json_provide_into<
+        W: ConsumeJson<ConsumeJsonKind: json_kinds::JsonKind<Contains<Self::JsonKind> = ()>>,
+    >(
+        self,
+        w: W,
+    ) -> Consumed<Self::JsonKind, W> {
+        let mut w = w.start_to_consume_chained_strings(());
+        w.extend(self.0);
+        w.end_with(self.1)
+    }
+
+    const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool =
+        A::IS_CHAINABLE_AND_ALWAYS_EMPTY && B::IS_CHAINABLE_AND_ALWAYS_EMPTY;
 }
 
 impl<A: ToJsonString, B: ToJsonString> ToJson for ChainString<A, B> {

@@ -33,9 +33,25 @@ pub use self::{
         ContentfulLastChunkOfObjectAsArrayVec,
         ContentfulLastChunkOfObjectAsStr,
         //
+        FirstChunkOfJsonStringAsArray,
+        FirstChunkOfJsonStringAsArrayVec,
+        FirstChunkOfJsonStringAsStr,
+        //
         IntermediateChunkAsArray,
         IntermediateChunkAsArrayVec,
         IntermediateChunkAsStr,
+        //
+        JsonStringAsArray,
+        JsonStringAsArrayVec,
+        JsonStringAsStr,
+        //
+        JsonStringFragmentAsArray,
+        JsonStringFragmentAsArrayVec,
+        JsonStringFragmentAsStr,
+        //
+        LastChunkOfJsonStringAsArray,
+        LastChunkOfJsonStringAsArrayVec,
+        LastChunkOfJsonStringAsStr,
         //
         NonEmptyArrayAsArray,
         NonEmptyArrayAsArrayVec,
