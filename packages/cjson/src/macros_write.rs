@@ -544,7 +544,7 @@ macro_rules! __private_json_write_json_string_prev {
         $w:ident
         maybe_try $maybe_try:tt
         consumer $consumer:tt
-    ) => {{
+    ) => {
         $crate::__private_json_write_json_string_prev! {
             $prev
             mut(mut)
@@ -564,7 +564,7 @@ macro_rules! __private_json_write_json_string_prev {
             (&mut $w)
             $maybe_try
         }
-    }};
+    };
 }
 
 #[macro_export]
@@ -594,7 +594,7 @@ macro_rules! __private_json_write_json_string_compile_time_fragment {
 #[macro_export]
 macro_rules! __private_json_write_json_string_runtime_fragment {
     (
-        [ json_string_fragment($v:expr) ]
+        [ json_string_fragment($v:expr) $(as $RuntimeType:ty)? ] // TODO: remove $RuntimeType
         ($w:expr)
         { $maybe_try:ident $($question:tt)? }
     ) => {
@@ -916,7 +916,7 @@ macro_rules! __private_json_write_chunks_first {
                 };
         }
 
-        let $new_w = <_ as $crate::ser::ConsumeJsonChunks<_>>::consume_contentful_first_chunk(
+        let $new_w = <_ as $crate::ser::ConsumeJsonChunksFromInit<_>>::consume_contentful_first_chunk(
             $crate::__private_json_write_chunks_start_to_consume_non_empty!(
                 $kind
                 $consume
@@ -1052,7 +1052,8 @@ macro_rules! __private_json_write_chunks_runtime {
 #[macro_export]
 macro_rules! __private_json_state_then_runtime {
     (
-        [$runtime_kind:ident $runtime_args:tt]
+        // TODO: remove $RuntimeType
+        [$runtime_kind:ident $runtime_args:tt $(as $RuntimeType:ty)?]
         [$PrevState:ty]
     ) => {
         $crate::__private::state_then_runtime::$runtime_kind::<$PrevState>
@@ -1063,7 +1064,8 @@ macro_rules! __private_json_state_then_runtime {
 macro_rules! __private_json_write_runtime {
     (
         { $maybe_try:ident $($question:tt)? }
-        [$runtime_kind:ident ($($runtime_args:tt)*)]
+        // TODO: remove $RuntimeType
+        [$runtime_kind:ident ($($runtime_args:tt)*) $(as $RuntimeType:ty)?]
         ($w:expr)
     ) => {
         <_ as $crate::ser::ConsumeJsonChunks<_>>::$runtime_kind(

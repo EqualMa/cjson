@@ -1,6 +1,6 @@
 pub use self::consumers::{
     ConsumeChainedArrays, ConsumeChainedObjects, ConsumeChainedStrings, ConsumeJson,
-    ConsumeJsonChunks, ConsumeJsonText, Consumed,
+    ConsumeJsonChunks, ConsumeJsonChunksFromInit, ConsumeJsonText, Consumed,
     chunks::{ReadyToConsumeJsonChunksOfNonEmptyArray, ReadyToConsumeJsonChunksOfNonEmptyObject},
     json_kinds,
     json_string_chunks::ConsumeInJsonString,
@@ -40,6 +40,8 @@ pub trait ToJson2 {
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool;
 }
 
+pub trait ToJsonByCopyIntoJson: Copy + IntoJson {}
+
 mod into_json_key_colon_value;
 pub trait IntoJsonKeyColonValue: into_json_key_colon_value::Sealed {}
 
@@ -57,6 +59,51 @@ impl<T: ?Sized + ToJson2> IntoJson for &T {
 
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = T::IS_CHAINABLE_AND_ALWAYS_EMPTY;
 }
+
+impl<T: ToJsonByCopyIntoJson> ToJson2 for T {
+    type ToJsonKind = T::JsonKind;
+
+    fn json_provide_to<
+        W: ConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::ToJsonKind> = ()>>,
+    >(
+        &self,
+        w: W,
+    ) -> Consumed<Self::ToJsonKind, W> {
+        T::json_provide_into(*self, w)
+    }
+
+    const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = <T as IntoJson>::IS_CHAINABLE_AND_ALWAYS_EMPTY;
+}
+
+impl<T: ?Sized + ToJson2> ToJsonByCopyIntoJson for &T {}
+
+pub trait IntoJsonExt: IntoJson + Sized {
+    fn into_json_as<W: Default + traits::ConsumeTextChunk>(self) -> W {
+        let mut w = W::default();
+        let Consumed { .. } =
+            self.json_provide_into(ConsumeJsonText(w.as_mut_consume_text_chunk()));
+        w
+    }
+
+    #[cfg(feature = "alloc")]
+    fn into_json_as_string(self) -> ::alloc::string::String {
+        self.into_json_as()
+    }
+}
+
+pub trait ToJsonExt: ToJson2 {
+    fn to_json_as<W: Default + traits::ConsumeTextChunk>(&self) -> W {
+        <&Self as IntoJsonExt>::into_json_as(self)
+    }
+
+    #[cfg(feature = "alloc")]
+    fn to_json_as_string(&self) -> ::alloc::string::String {
+        <&Self as IntoJsonExt>::into_json_as_string(self)
+    }
+}
+
+impl<T: IntoJson> IntoJsonExt for T {}
+impl<T: ToJson2 + ?Sized> ToJsonExt for T {}
 
 pub trait ToJson {
     type ToJson<'a>: traits::Text

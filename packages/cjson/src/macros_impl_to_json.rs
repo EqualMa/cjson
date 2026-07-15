@@ -166,12 +166,17 @@ macro_rules! __private_impl_to_json_options_resolved {
             ($matched)
             $match_body
             {$($($used_const_generics)*)?}
-            {
+            ({
+                trait ToJson2
+                provide json_provide_to
+                try_provide json_try_provide_to
+                ref(&)
+            }{
                 impl_generics($($impl_generics)*)
                 where_clause($($where_clause)*)
                 self($_self)
                 type($Type)
-            }
+            })
         }
     };
     (
@@ -207,86 +212,84 @@ macro_rules! __private_impl_to_json_parse {
     ) => {
         $crate::__private_impl_to_json_parse_with! {
             $json
-            $used_const_generics
             {
-                vis(pub) // TODO: parameterize
-                branch_name_or_empty()
-                expand_macro_bang($crate::__private_impl_to_json_expand!)
-                expand_macro_rest($data)
+                expand_macro_bang($crate::__private_impl_to_json_parsed!)
+                expand_macro_rest(
+                    ({
+                        trait ToJson2
+                        provide json_provide_to
+                        try_provide json_try_provide_to
+                        ref(&)
+                    } $data)
+                )
             }
+
         }
     };
 }
 
 #[macro_export]
+macro_rules! __private_impl_to_json_parsed {
+    (
+        kind($Kind:ty)
+        write_macro_bang($($write_macro_bang:tt)+)
+        $(write_prev($($write_prev:tt)*))?
+        $(write_rest($($write_rest:tt)*))?
+        IS_CHAINABLE_AND_ALWAYS_EMPTY($IS_CHAINABLE_AND_ALWAYS_EMPTY:expr)
+        ({
+            trait $Trait:ident
+            provide $provide:ident
+            try_provide $try_provide:ident
+            ref($($ref:tt)?)
+        }{
+            impl_generics($($impl_generics:tt)*)
+            where_clause($($where_clause:tt)*)
+            self($_self:ident)
+            type($Type:ty)
+        })
+    ) => { const _: () = {
+        impl< $($impl_generics)* > $crate::ser::$Trait
+            for $Type
+            $($where_clause)*
+        {
+            type ToJsonKind = $Kind;
+            fn $provide<W: $crate::ser::ConsumeJson<ConsumeJsonKind: $crate::ser::json_kinds::JsonKind<Contains<Self::ToJsonKind> = ()>>>(
+                $($ref)? $_self,
+                w: W,
+            ) -> $crate::ser::Consumed<Self::ToJsonKind, W> {
+                $($write_macro_bang)+ {
+                    $($($write_prev)*)?
+                    { no_try }
+                    (w)
+                    $($($write_rest)*)?
+                }
+            }
+
+            const IS_CHAINABLE_AND_ALWAYS_EMPTY: $crate::__private::bool = $IS_CHAINABLE_AND_ALWAYS_EMPTY;
+        }
+    }; };
+}
+
+#[macro_export]
 macro_rules! __private_impl_to_json_parse_with {
     (
-        ( $lit:literal $(,)? )
-        {} // used_const_generics
-        $expand:tt
-    ) => {
-        $crate::__private_impl_to_json_parse_with! {
-            ( const { $lit } )
-            {}
-            $expand
-        }
-    };
-    (
-        ( const $const_block:block )
-        $used_const_generics:tt
-        {
-            vis $vis:tt
-            branch_name_or_empty $branch_name_or_empty:tt
-            expand_macro_bang $expand_macro_bang:tt
-            expand_macro_rest $expand_macro_rest:tt
-        }
-    ) => {
-        $crate::__private_impl_to_json_const! {
-            vis $vis
-            branch_name_or_empty $branch_name_or_empty
-            then_bang $expand_macro_bang
-            then_rest $expand_macro_rest
-            $used_const_generics
-            const $const_block
-        }
-    };
-    (
-        ( $well_known_ident:ident $(,)? )
-        {}
-        {
-            vis $vis:tt
-            branch_name_or_empty $branch_name_or_empty:tt
-            expand_macro_bang($($expand_macro_bang:tt)+)
-            expand_macro_rest($($expand_macro_rest:tt)*)
-        }
-    ) => {
-        $($expand_macro_bang)+ {
-            mod()
-            type($crate::__private::well_known_ident::$well_known_ident)
-            value($crate::__private::well_known_ident::$well_known_ident)
-            $($expand_macro_rest)*
-        }
-    };
-    (
         ( ($runtime_expr:expr) as $RuntimeType:ty $(,)? )
-        {}
         {
-            vis $vis:tt
-            branch_name_or_empty $branch_name_or_empty:tt
             expand_macro_bang($($expand_macro_bang:tt)+)
             expand_macro_rest($($expand_macro_rest:tt)*)
         }
     ) => {
         $($expand_macro_bang)+ {
-            mod()
-            type($RuntimeType)
-            value($runtime_expr)
+            // TODO: what if $RuntimeType is a ref with elided lifetime
+            kind(<$RuntimeType as $crate::ser::IntoJson>::JsonKind)
+            write_macro_bang($crate::__private_json_write!)
+            write_rest( ($runtime_expr) )
+            IS_CHAINABLE_AND_ALWAYS_EMPTY( <$RuntimeType as $crate::ser::IntoJson>::IS_CHAINABLE_AND_ALWAYS_EMPTY )
             $($expand_macro_rest)*
         }
     };
     (
         ( [$($array_content:tt)*] $(,)? )
-        $used_const_generics:tt
         $expand:tt
     ) => {
         $crate::__private_json_after_array_start! {
@@ -296,10 +299,9 @@ macro_rules! __private_impl_to_json_parse_with {
                     left_bracket()
                 ]
                 after_value {
-                    EOF_impl_to_json {
-                        kind(json_array)
-                    } (
-                        $used_const_generics
+                    EOF_of_kind(json_array)
+                    then_macro_bang($crate::__private_impl_to_json_eof!)
+                    then_macro_rest(
                         $expand
                     )
                 }
@@ -309,7 +311,6 @@ macro_rules! __private_impl_to_json_parse_with {
     };
     (
         ( {$($object_content:tt)*} $(,)? )
-        $used_const_generics:tt
         $expand:tt
     ) => {
         $crate::__private_json_after_object_start! {
@@ -319,10 +320,9 @@ macro_rules! __private_impl_to_json_parse_with {
                     left_brace()
                 ]
                 after_value {
-                    EOF_impl_to_json {
-                        kind(json_object)
-                    } (
-                        $used_const_generics
+                    EOF_of_kind(json_object)
+                    then_macro_bang($crate::__private_impl_to_json_eof!)
+                    then_macro_rest(
                         $expand
                     )
                 }
@@ -332,7 +332,6 @@ macro_rules! __private_impl_to_json_parse_with {
     };
     (
         ( $well_known_macro:ident $bang:tt $well_known_macro_body:tt $(,)? )
-        $used_const_generics:tt
         $expand:tt
     ) => {
         $crate::__private_json_macro! {
@@ -341,14 +340,28 @@ macro_rules! __private_impl_to_json_parse_with {
                 prev[]
                 current_compile_time[]
                 after_value {
-                    EOF_impl_to_json {
-                        kind($well_known_macro)
-                    } (
-                        $used_const_generics
+                    EOF_of_kind($well_known_macro)
+                    then_macro_bang($crate::__private_impl_to_json_eof!)
+                    then_macro_rest(
                         $expand
                     )
                 }
             ]
+        }
+    };
+    (
+        ($($json:tt)+)
+        {
+            expand_macro_bang($($expand_macro_bang:tt)+)
+            expand_macro_rest($($expand_macro_rest:tt)*)
+        }
+    ) => {
+        $($expand_macro_bang)+ {
+            kind($crate::ser::json_kinds::AnyValue)
+            write_macro_bang($crate::__private_json_write!)
+            write_rest( $($json)+ )
+            IS_CHAINABLE_AND_ALWAYS_EMPTY( false )
+            $($expand_macro_rest)*
         }
     };
 }
@@ -865,223 +878,61 @@ macro_rules! __private_impl_to_json_const {
 
 #[macro_export]
 macro_rules! __private_impl_to_json_eof {
-    // EmptyArray
     (
-        EmptyArray {}
-        (
-            $used_const_generics:tt
-            {
-                vis $vis:tt
-                branch_name_or_empty $branch_name_or_empty:tt
-                expand_macro_bang($($expand_macro_bang:tt)+)
-                expand_macro_rest($($expand_macro_rest:tt)*)
-            }
-        )
+        $parsed1:tt $parsed2:tt
+        {
+            expand_macro_bang($($expand_macro_bang:tt)+)
+            expand_macro_rest($($expand_macro_rest:tt)*)
+        }
     ) => {
         $($expand_macro_bang)+ {
-            mod()
-            type(
-                $crate::r#const::array::EmptyArray
-            )
-            value(
-                $crate::r#const::array::EmptyArray
-            )
+            kind( $crate::__private_impl_to_json_kind![$parsed1 $parsed2] )
+            write_macro_bang($crate::__private_json_write_eof!)
+            write_prev( $parsed1 $parsed2 )
+            IS_CHAINABLE_AND_ALWAYS_EMPTY( $crate::__private_impl_to_json_const_impl!($parsed1 $parsed2) )
             $($expand_macro_rest)*
         }
     };
-    (
-        ArrayOfItems {
-            ($runtime_expr:expr)
-            $(as $RuntimeType:ty)?
-        }
-        (
-            $used_const_generics:tt
-            {
-                vis $vis:tt
-                branch_name_or_empty $branch_name_or_empty:tt
-                expand_macro_bang($($expand_macro_bang:tt)+)
-                expand_macro_rest($($expand_macro_rest:tt)*)
-            }
-        )
-    ) => {
-        $($expand_macro_bang)+ {
-            mod()
-            type(
-                $crate::r#const::array::ArrayOfItems::<$crate::__expand_or![[$($RuntimeType)?][_]]>
-            )
-            value(
-                $crate::r#const::array::ArrayOfItems($runtime_expr)
-            )
-            $($expand_macro_rest)*
-        }
-    };
-    // EmptyObject
-    (
-        EmptyObject {}
-        (
-            $used_const_generics:tt
-            {
-                vis $vis:tt
-                branch_name_or_empty $branch_name_or_empty:tt
-                expand_macro_bang($($expand_macro_bang:tt)+)
-                expand_macro_rest($($expand_macro_rest:tt)*)
-            }
-        )
-    ) => {
-        $($expand_macro_bang)+ {
-            mod()
-            type(
-                $crate::r#const::object::EmptyObject
-            )
-            value(
-                $crate::r#const::object::EmptyObject
-            )
-            $($expand_macro_rest)*
-        }
-    };
-    (
-        ObjectOfKvs {
-            ($runtime_expr:expr)
-            $(as $RuntimeType:ty)?
-        }
-        (
-            $used_const_generics:tt
-            {
-                vis $vis:tt
-                branch_name_or_empty $branch_name_or_empty:tt
-                expand_macro_bang($($expand_macro_bang:tt)+)
-                expand_macro_rest($($expand_macro_rest:tt)*)
-            }
-        )
-    ) => {
-        $($expand_macro_bang)+ {
-            mod()
-            type(
-                $crate::r#const::object::ObjectOfKvs::<$crate::__expand_or![[$($RuntimeType)?][_]]>
-            )
-            value(
-                $crate::r#const::object::ObjectOfKvs($runtime_expr)
-            )
-            $($expand_macro_rest)*
-        }
-    };
-    // only_compile_time (no branch name)
-    (
-        only_compile_time {
-            kind $kind:tt
-            chunk $only_compile_time:tt
-            CONST_ASSOC($CONST_ASSOC:ident)
-            write $write:tt
-        }
-        (
-            // used_const_generics
-            {$( const $CONST:ident: $ConstTy:ty $(= $const_value:expr)? ;)*}
-            {
-                vis($($vis:tt)*)
-                branch_name_or_empty()
-                expand_macro_bang($($expand_macro_bang:tt)+)
-                expand_macro_rest($($expand_macro_rest:tt)*)
-            }
-        )
-    ) => {
-        $($expand_macro_bang)+ {
-            mod(
-                $($vis)* enum HasConstCompileTimeChunk<$( const $CONST: $ConstTy ),*> {}
+}
 
-                $crate::__private_impl_for_only_compile_time_tokens! {
-                    prev_state($crate::r#const::State::INIT)
-                    tokens $only_compile_time
-                    impl_generics($( const $CONST: $ConstTy, )*)
-                    for(HasConstCompileTimeChunk<$( $CONST ),*>)
-                }
-            )
-            type(
-                $crate::__private::only_compile_time_kinds::$CONST_ASSOC::<
-                    $crate::r#const::CompileTimeChunk::<
-                        HasConstCompileTimeChunk<$( $CONST ),*>
-                    >
-                >
-            )
-            value(
-                $crate::r#const::CompileTimeChunk::<
-                    HasConstCompileTimeChunk<$( $CONST ),*>
-                >::$CONST_ASSOC
-            )
-            $($expand_macro_rest)*
-        }
-    };
-    // only_compile_time (with branch name)
+#[macro_export]
+macro_rules! __private_impl_to_json_kind {
     (
-        only_compile_time {
-            kind $kind:tt
-            chunk $only_compile_time:tt
-            CONST_ASSOC($CONST_ASSOC:ident)
-            write $write:tt
+        $_kind:ident {
+            kind $kind:ident
+            $($_rest:tt)*
         }
-        (
-            // used_const_generics
-            {$( const $CONST:ident: $ConstTy:ty $(= $const_value:expr)? ;)*}
-            {
-                vis $vis:tt
-                branch_name_or_empty($($branch_name:ident)+)
-                expand_macro_bang($($expand_macro_bang:tt)+)
-                expand_macro_rest($($expand_macro_rest:tt)*)
-            }
-        )
     ) => {
-        $($expand_macro_bang)+ {
-            mod(
-                pub enum HasConstCompileTimeChunk {}
+        $crate::__private::impl_to_json_kinds::chunks::$kind
+    };
+    (
+        $kind:ident $parsed2:tt
+    ) => {
+        $crate::__private::impl_to_json_kinds::full::$kind
+    };
+}
 
-                $crate::__private_impl_for_only_compile_time_tokens! {
-                    prev_state($crate::r#const::State::INIT)
-                    tokens $only_compile_time
-                    impl_generics($( const $CONST: $ConstTy, )*)
-                    for(
-                        CjsonMacroGeneratedChunk::<
-                            cjson_macro_generated_types:: $($branch_name::)+ HasConstCompileTimeChunk,
-                            $( $CONST ),*
-                        >
-                    )
-                }
-            )
-            type(
-                $crate::__private::only_compile_time_kinds::$CONST_ASSOC::<
-                    $crate::r#const::CompileTimeChunk<
-                        CjsonMacroGeneratedChunk::<
-                            cjson_macro_generated_types:: $($branch_name::)+ HasConstCompileTimeChunk,
-                            $( $CONST ),*
-                        >
-                    >
-                >
-            )
-            value(
-                $crate::r#const::CompileTimeChunk::<
-                    CjsonMacroGeneratedChunk::<
-                        cjson_macro_generated_types:: $($branch_name::)+ HasConstCompileTimeChunk,
-                        $( $CONST ),*
-                    >
-                >::$CONST_ASSOC
-            )
-            $($expand_macro_rest)*
-        }
+#[macro_export]
+macro_rules! __private_impl_to_json_const_impl {
+    (EmptyArray {}) => { true };
+    (EmptyObject {}) => { true };
+    (ArrayOfItems { ($runtime_expr:expr) $(as $RuntimeType:ty)? }) => {
+        $crate::__expand_or![[$(<$RuntimeType as $crate::ser::IntoJson>::IS_CHAINABLE_AND_ALWAYS_EMPTY)?][false]]
+    };
+    (ObjectOfKvs { ($runtime_expr:expr) $(as $RuntimeType:ty)? }) => {
+        $crate::__expand_or![[$(<$RuntimeType as $crate::ser::IntoJson>::IS_CHAINABLE_AND_ALWAYS_EMPTY)?][false]]
     };
     (
-        runtime_chunks {
-            kind $kind:tt
-            chunks[
-                prev_compile_runtime $prev_compile_runtime:tt
-                last_compile_time $last_compile_time:tt
-            ]
-            path $path:tt
-        }
-        $args:tt
+        only_compile_time $body:tt
     ) => {
-        $crate::__private_impl_to_json_after_value_mixed! {
-            $prev_compile_runtime
-            []
-            ($last_compile_time $path $args)
-        }
+        // TODO: compile-time empty string might return `true` here
+        false
+    };
+    (
+        runtime_chunks $body:tt
+    ) => {
+        // TODO: runtime string might return all_compile_chunks_are_empty && $RuntimeType::IS_CHAINABLE_AND_ALWAYS_EMPTY here
+        false
     };
 }
 
@@ -1273,12 +1124,11 @@ macro_rules! __private_impl_to_json_match {
         $used_const_generics:tt
         $data:tt
     ) => {
-        $crate::__private_impl_to_json_expand_verbatim! {
-            mod(
-                $crate::__private_impl_to_json_expect_empty! $used_const_generics
-            )
-            type($crate::values::Never)
-            value(match $crate::__private_impl_to_json_expand_matched!($matched) {})
+        $crate::__private_impl_to_json_parsed! {
+            kind($crate::ser::json_kinds::AnyValue) // TODO: kind of Never
+            write_macro_bang($crate::__private_impl_to_json_write_matched!)
+            write_rest( $matched {} )
+            IS_CHAINABLE_AND_ALWAYS_EMPTY( false ) // TODO: ?
             $data
         }
     };
@@ -1314,10 +1164,7 @@ macro_rules! __private_impl_to_json_match_variants {
     ) => {
         $crate::__private_impl_to_json_parse_with! {
             $json
-            $used_const_generics
             {
-                vis(pub)
-                branch_name_or_empty($match_branch_name)
                 expand_macro_bang($crate::__private_impl_to_json_variant_expand!)
                 expand_macro_rest(
                     expanded $expanded
@@ -1335,19 +1182,9 @@ macro_rules! __private_impl_to_json_match_variants {
     };
     (
         {
-            mod $expanded_mod:tt
-            impl { $($expanded_impl:tt)* }
-            type {
-                [$($expanded_type_prefix:tt)*]
-                [$($expanded_type_postfix:tt)*]
-            }
-            match { $($expanded_match:tt)* }
-            prev_branch {
-                name($prev_branch_name:ident)
-                type($prev_branch_type:ty)
-                value($prev_branch_value:expr)
-                either_paths $prev_either_paths:tt
-            }
+            match $match:tt
+            kind $kind:tt
+            IS_CHAINABLE_AND_ALWAYS_EMPTY $IS_CHAINABLE_AND_ALWAYS_EMPTY:tt
         }
         // branches
         []
@@ -1358,48 +1195,52 @@ macro_rules! __private_impl_to_json_match_variants {
             data $data:tt
         }
     ) => {
-        $crate::__private_impl_to_json_expand_verbatim! {
-            mod(
-                #[allow(non_snake_case)]
-                mod cjson_macro_generated_types $expanded_mod
-
-                $($vis)* struct CjsonMacroGeneratedChunk<T>(T);
-
-                $($expanded_impl)*
+        $crate::__private_impl_to_json_parsed! {
+            kind $kind
+            write_macro_bang($crate::__private_impl_to_json_write_matched!)
+            write_rest(
+                $matched
+                $match
             )
-            type(
-                $($expanded_type_prefix)*
-                <$prev_branch_type as $crate::ser::ToJson>::ToJson<'cjson_lt_to_json>
-                $($expanded_type_postfix)*
-            )
-            value(
-                match $crate::__private_impl_to_json_expand_matched!($matched) {
-                    $($expanded_match)*
-                    $crate::__private_impl_to_json_match_either_expr! {
-                        $prev_either_paths
-                        <
-                            <Self as cjson_macro_generated_types::$prev_branch_name::ImplToJsonHelper>::ImplToJsonHelper<'_>
-                            as $crate::ser::ToJson
-                        >::to_json(
-                            &$prev_branch_value
-                        )
-                    }
-                }
-            )
+            IS_CHAINABLE_AND_ALWAYS_EMPTY $IS_CHAINABLE_AND_ALWAYS_EMPTY
             $data
         }
     };
 }
 
 #[macro_export]
+macro_rules! __private_impl_to_json_write_matched {
+    (
+        $maybe_try:tt
+        $consumer:tt
+        $matched:tt
+        {$(
+            [$($pat:tt)+] {
+                write_macro_bang($($write_macro_bang:tt)+)
+                write_prev($($write_prev:tt)*)
+                write_rest($($write_rest:tt)*)
+            }
+        )*}
+    ) => {
+        match $crate::__private_impl_to_json_expand_matched!($matched) {$(
+            $($pat)+ => $($write_macro_bang)+ {
+                $($write_prev)*
+                $maybe_try
+                $consumer
+                $($write_rest)*
+            },
+        )*}
+    };
+}
+
+#[macro_export]
 macro_rules! __private_impl_to_json_variant_expand {
     (
-        mod($(
-            $define_item:item
-            $impl_item:item
-        )?)
-        type $type:tt
-        value $value:tt
+        kind($Kind:ty)
+        write_macro_bang($($write_macro_bang:tt)+)
+        $(write_prev($($write_prev:tt)*))?
+        $(write_rest($($write_rest:tt)*))?
+        IS_CHAINABLE_AND_ALWAYS_EMPTY($IS_CHAINABLE_AND_ALWAYS_EMPTY:expr)
         expanded {}
         cur_variant {
             match_branch_name { $match_branch_name:ident }
@@ -1413,38 +1254,15 @@ macro_rules! __private_impl_to_json_variant_expand {
         $crate::__private_impl_to_json_match_variants! {
             // expanded
             {
-                mod {
-                    pub mod $match_branch_name {
-                        pub trait ImplToJsonHelper {
-                            type ImplToJsonHelper<'a>: $crate::ser::ToJson
-                            where
-                            Self: 'a;
-                        }
-                        $($define_item)?
-                    }
-                }
-                impl {
-                    $($impl_item)?
-
-                    $crate::__private_impl_to_json_match_impl_helper! {
-                        ($match_branch_name)
-                        $type
-                        $then
-                    }
-                }
-                type {
-                    []
-                    []
-                }
                 match {
-                    $pat $($pat_if)* =>
+                    [$pat $($pat_if)*] {
+                        write_macro_bang($($write_macro_bang)+)
+                        write_prev($($($write_prev)*)?)
+                        write_rest($($($write_rest)*)?)
+                    }
                 }
-                prev_branch {
-                    name ($match_branch_name)
-                    type $type
-                    value $value
-                    either_paths()
-                }
+                kind($Kind)
+                IS_CHAINABLE_AND_ALWAYS_EMPTY($IS_CHAINABLE_AND_ALWAYS_EMPTY)
             }
             $rest_variants
             $used_const_generics
@@ -1452,26 +1270,15 @@ macro_rules! __private_impl_to_json_variant_expand {
         }
     };
     (
-        mod($(
-            $define_item:item
-            $impl_item:item
-        )?)
-        type $type:tt
-        value $value:tt
+        kind($Kind:ty)
+        write_macro_bang($($write_macro_bang:tt)+)
+        $(write_prev($($write_prev:tt)*))?
+        $(write_rest($($write_rest:tt)*))?
+        IS_CHAINABLE_AND_ALWAYS_EMPTY($IS_CHAINABLE_AND_ALWAYS_EMPTY:expr)
         expanded {
-            mod { $($expanded_mod:tt)* }
-            impl { $($expanded_impl:tt)* }
-            type {
-                [$($expanded_type_prefix:tt)*]
-                [$($expanded_type_postfix:tt)*]
-            }
             match { $($expanded_match:tt)* }
-            prev_branch {
-                name($prev_branch_name:ident)
-                type($prev_branch_type:ty)
-                value($prev_branch_value:expr)
-                either_paths $prev_either_paths:tt
-            }
+            kind($expanded_Kind:ty)
+            IS_CHAINABLE_AND_ALWAYS_EMPTY($expanded_IS_CHAINABLE_AND_ALWAYS_EMPTY:expr)
         }
         cur_variant {
             match_branch_name { $match_branch_name:ident }
@@ -1485,59 +1292,16 @@ macro_rules! __private_impl_to_json_variant_expand {
         $crate::__private_impl_to_json_match_variants! {
             // expanded
             {
-                mod {
-                    $($expanded_mod)*
-                    pub mod $match_branch_name {
-                        pub trait ImplToJsonHelper {
-                            type ImplToJsonHelper<'a>: $crate::ser::ToJson
-                            where
-                            Self: 'a;
-                        }
-                        $($define_item)?
-                    }
-                }
-                impl {
-                    $($expanded_impl)*
-                    $($impl_item)?
-
-                    $crate::__private_impl_to_json_match_impl_helper! {
-                        ($match_branch_name)
-                        $type
-                        $then
-                    }
-                }
-                type {
-                    [
-                        $($expanded_type_prefix)*
-                        $crate::values::Either<
-                            <$prev_branch_type as $crate::ser::ToJson>::ToJson<'cjson_lt_to_json>,
-                    ]
-                    [
-                        >
-                        $($expanded_type_postfix)*
-                    ]
-                }
                 match {
                     $($expanded_match)*
-                        $crate::__private_impl_to_json_match_either_expr! {
-                            $prev_either_paths
-                            $crate::values::Either::A(
-                                <
-                                    <Self as cjson_macro_generated_types::$prev_branch_name::ImplToJsonHelper>::ImplToJsonHelper<'_>
-                                    as $crate::ser::ToJson
-                                >::to_json(
-                                    &$prev_branch_value
-                                )
-                            )
-                        },
-                    $pat $($pat_if)* =>
+                    [$pat $($pat_if)*] {
+                        write_macro_bang($($write_macro_bang)+)
+                        write_prev($($($write_prev)*)?)
+                        write_rest($($($write_rest)*)?)
+                    }
                 }
-                prev_branch {
-                    name ($match_branch_name)
-                    type $type
-                    value $value
-                    either_paths($prev_either_paths B)
-                }
+                kind(<$expanded_Kind as $crate::ser::json_kinds::JsonKind>::Union<$Kind>)
+                IS_CHAINABLE_AND_ALWAYS_EMPTY($expanded_IS_CHAINABLE_AND_ALWAYS_EMPTY && $IS_CHAINABLE_AND_ALWAYS_EMPTY)
             }
             $rest_variants
             $used_const_generics

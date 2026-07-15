@@ -1,7 +1,7 @@
 use crate::{
     r#const::array_string::ArrayString,
     ser::{
-        ToJson,
+        IntoJson, ToJson, json_kinds, texts,
         traits::{self, IntoTextChunks},
     },
     utils::impl_many,
@@ -20,6 +20,22 @@ impl_many!({
             use f32 as Float;
         }
     }
+
+    impl IntoJson for Finite<Float> {
+        type JsonKind = json_kinds::AnyValue;
+        fn json_provide_into<
+            W: crate::ser::ConsumeJson<
+                    ConsumeJsonKind: json_kinds::JsonKind<Contains<Self::JsonKind> = ()>,
+                >,
+        >(
+            self,
+            w: W,
+        ) -> crate::ser::Consumed<Self::JsonKind, W> {
+            w.consume_any_value(texts::Value::new_without_validation(self), ())
+        }
+        const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false;
+    }
+
     impl ToJson for Finite<Float> {
         type ToJson<'a>
             = Self

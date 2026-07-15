@@ -378,13 +378,7 @@ pub trait ConsumeJsonChunks<K: json_kinds::ArrayOrObject> {
     type ConsumeRuntimeChunk<C: RuntimeChunks>: ConsumeJsonChunks<K>;
     fn consume_runtime_chunk<C: RuntimeChunks>(self, chunk: C) -> Self::ConsumeRuntimeChunk<C>;
 
-    type ConsumeContentfulFirstChunk<Next: ?Sized + HasConstState>: ConsumeJsonChunks<K, InitialConsumer = Self::InitialConsumer>;
-    fn consume_contentful_first_chunk<Next: ?Sized + HasConstState>(
-        self,
-        v: K::ContentfulFirstChunkAsStr<'_, Next>,
-    ) -> Self::ConsumeContentfulFirstChunk<Next>;
-
-    type ConsumeIntermediateChunk<Next: ?Sized + HasConstState>: ConsumeJsonChunks<K, InitialConsumer = Self::InitialConsumer>;
+    type ConsumeIntermediateChunk<Next: ?Sized + HasConstState>: ConsumeJsonChunks<K, InitialConsumer = Self::InitialConsumer, CurrentState = Next>;
     fn consume_intermediate_chunk<Next: ?Sized + HasConstState>(
         self,
         v: crate::r#const::IntermediateChunkAsStr<'_, Self::CurrentState, Next>,
@@ -395,33 +389,48 @@ pub trait ConsumeJsonChunks<K: json_kinds::ArrayOrObject> {
         v: K::ContentfulLastChunkAsStr<'_, Self::CurrentState>,
     ) -> Consumed<K, Self::InitialConsumer>;
 
-    fn consume_contentful_full_chunk(
-        self,
-        v: K::ContentfulFullChunkAsAtr<'_>,
-    ) -> Consumed<K, Self::InitialConsumer>;
-
-    type ConsumeJsonValue: ConsumeJsonChunks<K, InitialConsumer = Self::InitialConsumer>;
+    type ConsumeJsonValue: ConsumeJsonChunks<
+            K,
+            InitialConsumer = Self::InitialConsumer,
+            CurrentState = states::ThenValue<Self::CurrentState>,
+        >;
     fn json_value(self, v: impl IntoJson) -> Self::ConsumeJsonValue;
 
-    type ConsumeJsonItemsAfterArrayStartBeforeItem: ConsumeJsonChunks<K, InitialConsumer = Self::InitialConsumer>;
+    type ConsumeJsonItemsAfterArrayStartBeforeItem: ConsumeJsonChunks<
+            K,
+            InitialConsumer = Self::InitialConsumer,
+            CurrentState = states::ThenItemsAfterArrayStartBeforeItem<Self::CurrentState>,
+        >;
     fn json_items_after_array_start_before_item(
         self,
         v: impl IntoJson<JsonKind = json_kinds::Array>,
     ) -> Self::ConsumeJsonItemsAfterArrayStartBeforeItem;
 
-    type ConsumeJsonItemsAfterItem: ConsumeJsonChunks<K, InitialConsumer = Self::InitialConsumer>;
+    type ConsumeJsonItemsAfterItem: ConsumeJsonChunks<
+            K,
+            InitialConsumer = Self::InitialConsumer,
+            CurrentState = states::ThenItemsAfterItem<Self::CurrentState>,
+        >;
     fn json_items_after_item(
         self,
         v: impl IntoJson<JsonKind = json_kinds::Array>,
     ) -> Self::ConsumeJsonItemsAfterItem;
 
-    type ConsumeJsonKvsAfterFieldValue: ConsumeJsonChunks<K, InitialConsumer = Self::InitialConsumer>;
+    type ConsumeJsonKvsAfterFieldValue: ConsumeJsonChunks<
+            K,
+            InitialConsumer = Self::InitialConsumer,
+            CurrentState = states::ThenKvsAfterFieldValue<Self::CurrentState>,
+        >;
     fn json_kvs_after_field_value(
         self,
         v: impl IntoJson<JsonKind = json_kinds::Object>,
     ) -> Self::ConsumeJsonKvsAfterFieldValue;
 
-    type ConsumeJsonStringFragment: ConsumeJsonChunks<K, InitialConsumer = Self::InitialConsumer>;
+    type ConsumeJsonStringFragment: ConsumeJsonChunks<
+            K,
+            InitialConsumer = Self::InitialConsumer,
+            CurrentState = states::ThenStringFragment<Self::CurrentState>,
+        >;
     fn json_string_fragment(
         self,
         v: impl IntoJson<JsonKind = json_kinds::JsonString>,
@@ -445,6 +454,21 @@ pub trait ConsumeJsonChunks<K: json_kinds::ArrayOrObject> {
         yes: K::Contains<json_kinds::Object>,
     ) -> Consumed<K, Self::InitialConsumer>;
     fn end(self) -> Consumed<K, Self::InitialConsumer>;
+}
+
+pub trait ConsumeJsonChunksFromInit<K: json_kinds::ArrayOrObject>:
+    ConsumeJsonChunks<K, CurrentState = states::Init>
+{
+    type ConsumeContentfulFirstChunk<Next: ?Sized + HasConstState>: ConsumeJsonChunks<K, InitialConsumer = Self::InitialConsumer, CurrentState = Next>;
+    fn consume_contentful_first_chunk<Next: ?Sized + HasConstState>(
+        self,
+        v: K::ContentfulFirstChunkAsStr<'_, Next>,
+    ) -> Self::ConsumeContentfulFirstChunk<Next>;
+
+    fn consume_contentful_full_chunk(
+        self,
+        v: K::ContentfulFullChunkAsAtr<'_>,
+    ) -> Consumed<K, Self::InitialConsumer>;
 }
 
 pub trait ConsumeArrayOfItems {
@@ -814,31 +838,6 @@ impl_many!({
         type InitialConsumer = InitialConsumer;
         type CurrentState = S;
 
-        type ConsumeContentfulFirstChunk<Next: ?Sized + HasConstState> =
-            CONSUME<W, InitialConsumer, Next, OC>;
-        fn consume_contentful_first_chunk<Next: ?Sized + HasConstState>(
-            mut self,
-            v: <K as json_kinds::ArrayOrObject>::ContentfulFirstChunkAsStr<'_, Next>,
-        ) -> Self::ConsumeContentfulFirstChunk<Next> {
-            const {
-                // make sure current state is Init
-                S::STATE.assert_init();
-                assert!(!Next::STATE.is_eof());
-            }
-
-            match const { OpenClose::try_from_u8(OC).unwrap().open } {
-                open_close::GroupOrComma::Nothing => {
-                    self.0.consume_text_chunk(v.remove_group_open())
-                }
-                open_close::GroupOrComma::Group => self.0.consume_text_chunk(v.as_str()),
-                open_close::GroupOrComma::Comma => {
-                    self.0.consume_2_text_chunks(",", v.remove_group_open())
-                }
-            }
-
-            CONSUME(self.0, PhantomData)
-        }
-
         type ConsumeIntermediateChunk<Next: ?Sized + HasConstState> =
             CONSUME<W, InitialConsumer, Next, OC>;
         fn consume_intermediate_chunk<Next: ?Sized + HasConstState>(
@@ -873,44 +872,6 @@ impl_many!({
                 }
             }
 
-            const { assert_consumed() }
-        }
-
-        fn consume_contentful_full_chunk(
-            mut self,
-            v: <K as json_kinds::ArrayOrObject>::ContentfulFullChunkAsAtr<'_>,
-        ) -> Consumed<K, Self::InitialConsumer> {
-            match const { OpenClose::try_from_u8(OC).unwrap().into_tuple() } {
-                (GroupOrComma::Nothing, GroupOrComma::Nothing) => {
-                    self.0.consume_text_chunk(v.remove_surrounding_group())
-                }
-                (GroupOrComma::Nothing, GroupOrComma::Group) => {
-                    self.0.consume_text_chunk(v.remove_group_open())
-                }
-                (GroupOrComma::Nothing, GroupOrComma::Comma) => {
-                    self.0.consume_2_text_chunks(v.remove_group_open(), ",")
-                }
-                (GroupOrComma::Group, GroupOrComma::Nothing) => {
-                    self.0.consume_text_chunk(v.remove_group_close())
-                }
-                (GroupOrComma::Group, GroupOrComma::Group) => self.0.consume_text_chunk(v.as_str()),
-                (GroupOrComma::Group, GroupOrComma::Comma) => {
-                    self.0.consume_2_text_chunks(v.remove_group_close(), ",")
-                }
-                (GroupOrComma::Comma, GroupOrComma::Nothing) => {
-                    self.0.consume_2_text_chunks(",", v.remove_group_close())
-                }
-                (GroupOrComma::Comma, GroupOrComma::Group) => {
-                    self.0.consume_2_text_chunks(",", v.remove_group_open())
-                }
-                (GroupOrComma::Comma, GroupOrComma::Comma) => {
-                    // TODO: consume_3_text_chunks
-                    // actually this branch should not be used
-                    self.0.consume_text_chunk(",");
-                    self.0.consume_text_chunk(v.remove_surrounding_group());
-                    self.0.consume_text_chunk(",");
-                }
-            }
             const { assert_consumed() }
         }
 
@@ -1050,6 +1011,73 @@ impl_many!({
                 S::STATE.assert_eof();
             }
             assert_consumed()
+        }
+    }
+
+    impl<W: ConsumeTextChunk, InitialConsumer, const OC: u8> ConsumeJsonChunksFromInit<K>
+        for CONSUME<W, InitialConsumer, states::Init, OC>
+    {
+        type ConsumeContentfulFirstChunk<Next: ?Sized + HasConstState> =
+            CONSUME<W, InitialConsumer, Next, OC>;
+        fn consume_contentful_first_chunk<Next: ?Sized + HasConstState>(
+            mut self,
+            v: <K as json_kinds::ArrayOrObject>::ContentfulFirstChunkAsStr<'_, Next>,
+        ) -> Self::ConsumeContentfulFirstChunk<Next> {
+            const {
+                // make sure current state is Init
+                Self::CurrentState::STATE.assert_init();
+                assert!(!Next::STATE.is_eof());
+            }
+
+            match const { OpenClose::try_from_u8(OC).unwrap().open } {
+                open_close::GroupOrComma::Nothing => {
+                    self.0.consume_text_chunk(v.remove_group_open())
+                }
+                open_close::GroupOrComma::Group => self.0.consume_text_chunk(v.as_str()),
+                open_close::GroupOrComma::Comma => {
+                    self.0.consume_2_text_chunks(",", v.remove_group_open())
+                }
+            }
+
+            CONSUME(self.0, PhantomData)
+        }
+
+        fn consume_contentful_full_chunk(
+            mut self,
+            v: <K as json_kinds::ArrayOrObject>::ContentfulFullChunkAsAtr<'_>,
+        ) -> Consumed<K, Self::InitialConsumer> {
+            match const { OpenClose::try_from_u8(OC).unwrap().into_tuple() } {
+                (GroupOrComma::Nothing, GroupOrComma::Nothing) => {
+                    self.0.consume_text_chunk(v.remove_surrounding_group())
+                }
+                (GroupOrComma::Nothing, GroupOrComma::Group) => {
+                    self.0.consume_text_chunk(v.remove_group_open())
+                }
+                (GroupOrComma::Nothing, GroupOrComma::Comma) => {
+                    self.0.consume_2_text_chunks(v.remove_group_open(), ",")
+                }
+                (GroupOrComma::Group, GroupOrComma::Nothing) => {
+                    self.0.consume_text_chunk(v.remove_group_close())
+                }
+                (GroupOrComma::Group, GroupOrComma::Group) => self.0.consume_text_chunk(v.as_str()),
+                (GroupOrComma::Group, GroupOrComma::Comma) => {
+                    self.0.consume_2_text_chunks(v.remove_group_close(), ",")
+                }
+                (GroupOrComma::Comma, GroupOrComma::Nothing) => {
+                    self.0.consume_2_text_chunks(",", v.remove_group_close())
+                }
+                (GroupOrComma::Comma, GroupOrComma::Group) => {
+                    self.0.consume_2_text_chunks(",", v.remove_group_open())
+                }
+                (GroupOrComma::Comma, GroupOrComma::Comma) => {
+                    // TODO: consume_3_text_chunks
+                    // actually this branch should not be used
+                    self.0.consume_text_chunk(",");
+                    self.0.consume_text_chunk(v.remove_surrounding_group());
+                    self.0.consume_text_chunk(",");
+                }
+            }
+            const { assert_consumed() }
         }
     }
 });

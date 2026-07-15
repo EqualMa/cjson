@@ -7,12 +7,12 @@ use crate::{
 
 use super::{
     ConsumeArrayItemsAppendCommaIfNotEmpty, ConsumeChunksOfNonEmptyArray,
-    ConsumeChunksOfNonEmptyObject, ConsumeJsonChunks, ConsumeJsonText, Consumed, OpenClose,
-    json_kinds, open_close::GroupOrComma,
+    ConsumeChunksOfNonEmptyObject, ConsumeJsonChunks, ConsumeJsonChunksFromInit, ConsumeJsonText,
+    Consumed, OpenClose, json_kinds, open_close::GroupOrComma,
 };
 
 pub trait ReadyToConsumeJsonChunksOfNonEmptyArray:
-    ConsumeJsonChunks<json_kinds::Array, CurrentState = states::Init>
+    ConsumeJsonChunksFromInit<json_kinds::Array>
 {
     type LeftBracketValue: ConsumeJsonChunks<
             json_kinds::Array,
@@ -33,7 +33,7 @@ pub trait ReadyToConsumeJsonChunksOfNonEmptyArray:
 }
 
 pub trait ReadyToConsumeJsonChunksOfNonEmptyObject:
-    ConsumeJsonChunks<json_kinds::Object, CurrentState = states::Init>
+    ConsumeJsonChunksFromInit<json_kinds::Object>
 {
     type LeftBraceKvsBeforeKv: ConsumeJsonChunks<
             json_kinds::Object,

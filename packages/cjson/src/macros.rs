@@ -1163,6 +1163,21 @@ macro_rules! __private_json_after_value {
             )
         }
     };
+    (
+        chunks $chunks:tt
+        after_value {
+            EOF_of_kind $paren_json_value_kind:tt
+            then_macro_bang $then_macro_bang:tt
+            then_macro_rest $then_macro_rest:tt
+        }
+    ) => {
+        $crate::__private_json_eof_normalize! {
+            kind $paren_json_value_kind
+            chunks $chunks
+            then_macro_bang $then_macro_bang
+            then_macro_rest $then_macro_rest
+        }
+    };
 }
 
 #[macro_export]

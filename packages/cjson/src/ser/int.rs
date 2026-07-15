@@ -3,7 +3,7 @@ use core::mem::MaybeUninit;
 use crate::{
     r#const::array_string::ArrayString,
     ser::{
-        ConsumeJson, Consumed, IntoJson, ToJson,
+        ConsumeJson, Consumed, IntoJson, ToJson, ToJsonByCopyIntoJson,
         json_kinds::{self, JsonKind},
         texts,
         traits::{ConsumeTextChunk, IntoTextChunks, TryConsumeTextChunk},
@@ -36,6 +36,16 @@ impl_many!(
         fn to_json(&self) -> Self::ToJson<'_> {
             texts::Number::new_without_validation(*self)
         }
+    }
+);
+
+impl_many!(
+    impl<__> ToJsonByCopyIntoJson
+        for each_of![
+            i8, i16, i32, i64, isize, i128, //
+            u8, u16, u32, u64, usize, u128,
+        ]
+    {
     }
 );
 

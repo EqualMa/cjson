@@ -7,7 +7,7 @@ use crate::{
 
 use super::{
     ConsumeChainedArrays, ConsumeChainedObjects, ConsumeChainedStrings, ConsumeJson,
-    ConsumeJsonChunks, Consumed,
+    ConsumeJsonChunks, ConsumeJsonChunksFromInit, Consumed,
     json_kinds::{self, JsonKind},
     runtime_chunks::RuntimeChunks,
 };
@@ -21,15 +21,7 @@ impl<INITIAL: ConsumeJson, S: ?Sized + HasConstState, K: json_kinds::ArrayOrObje
     type InitialConsumer = INITIAL;
     type CurrentState = S;
 
-    type ConsumeContentfulFirstChunk<Next: ?Sized + HasConstState> = Self;
-    fn consume_contentful_first_chunk<Next: ?Sized + HasConstState>(
-        self,
-        _: <K as json_kinds::ArrayOrObject>::ContentfulFirstChunkAsStr<'_, Next>,
-    ) -> Self::ConsumeContentfulFirstChunk<Next> {
-        match self.0 {}
-    }
-
-    type ConsumeIntermediateChunk<Next: ?Sized + HasConstState> = Self;
+    type ConsumeIntermediateChunk<Next: ?Sized + HasConstState> = NeverConsume<INITIAL, Next>;
     fn consume_intermediate_chunk<Next: ?Sized + HasConstState>(
         self,
         _: IntermediateChunkAsStr<'_, Self::CurrentState, Next>,
@@ -44,19 +36,13 @@ impl<INITIAL: ConsumeJson, S: ?Sized + HasConstState, K: json_kinds::ArrayOrObje
         match self.0 {}
     }
 
-    fn consume_contentful_full_chunk(
-        self,
-        _: <K as json_kinds::ArrayOrObject>::ContentfulFullChunkAsAtr<'_>,
-    ) -> Consumed<K, Self::InitialConsumer> {
-        match self.0 {}
-    }
-
-    type ConsumeJsonValue = Self;
+    type ConsumeJsonValue = NeverConsume<INITIAL, states::ThenValue<S>>;
     fn json_value(self, _: impl IntoJson) -> Self::ConsumeJsonValue {
         match self.0 {}
     }
 
-    type ConsumeJsonItemsAfterArrayStartBeforeItem = Self;
+    type ConsumeJsonItemsAfterArrayStartBeforeItem =
+        NeverConsume<INITIAL, states::ThenItemsAfterArrayStartBeforeItem<S>>;
     fn json_items_after_array_start_before_item(
         self,
         _: impl IntoJson<JsonKind = json_kinds::Array>,
@@ -64,7 +50,7 @@ impl<INITIAL: ConsumeJson, S: ?Sized + HasConstState, K: json_kinds::ArrayOrObje
         match self.0 {}
     }
 
-    type ConsumeJsonItemsAfterItem = Self;
+    type ConsumeJsonItemsAfterItem = NeverConsume<INITIAL, states::ThenItemsAfterItem<S>>;
     fn json_items_after_item(
         self,
         _: impl IntoJson<JsonKind = json_kinds::Array>,
@@ -72,7 +58,7 @@ impl<INITIAL: ConsumeJson, S: ?Sized + HasConstState, K: json_kinds::ArrayOrObje
         match self.0 {}
     }
 
-    type ConsumeJsonKvsAfterFieldValue = Self;
+    type ConsumeJsonKvsAfterFieldValue = NeverConsume<INITIAL, states::ThenKvsAfterFieldValue<S>>;
     fn json_kvs_after_field_value(
         self,
         _: impl IntoJson<JsonKind = json_kinds::Object>,
@@ -80,7 +66,7 @@ impl<INITIAL: ConsumeJson, S: ?Sized + HasConstState, K: json_kinds::ArrayOrObje
         match self.0 {}
     }
 
-    type ConsumeJsonStringFragment = Self;
+    type ConsumeJsonStringFragment = NeverConsume<INITIAL, states::ThenStringFragment<S>>;
     fn json_string_fragment(
         self,
         _: impl IntoJson<JsonKind = json_kinds::JsonString>,
@@ -130,6 +116,25 @@ impl<INITIAL: ConsumeJson, S: ?Sized + HasConstState, K: json_kinds::ArrayOrObje
         _: <K as JsonKind>::ArrayOrObjectContainsSelf,
     ) -> Self::ConsumeOpenContentBeforeContent {
         match self {}
+    }
+}
+
+impl<INITIAL: ConsumeJson, K: json_kinds::ArrayOrObject> ConsumeJsonChunksFromInit<K>
+    for NeverConsume<INITIAL, states::Init>
+{
+    type ConsumeContentfulFirstChunk<Next: ?Sized + HasConstState> = NeverConsume<INITIAL, Next>;
+    fn consume_contentful_first_chunk<Next: ?Sized + HasConstState>(
+        self,
+        _: <K as json_kinds::ArrayOrObject>::ContentfulFirstChunkAsStr<'_, Next>,
+    ) -> Self::ConsumeContentfulFirstChunk<Next> {
+        match self.0 {}
+    }
+
+    fn consume_contentful_full_chunk(
+        self,
+        _: <K as json_kinds::ArrayOrObject>::ContentfulFullChunkAsAtr<'_>,
+    ) -> Consumed<K, Self::InitialConsumer> {
+        match self.0 {}
     }
 }
 

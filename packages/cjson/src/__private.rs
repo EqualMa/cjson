@@ -1,5 +1,8 @@
 pub use str;
 
+/// used by [`crate::impl_to_json!`]
+pub use bool;
+
 /// used by [`crate::json_to!`]
 pub use Default;
 
@@ -57,6 +60,26 @@ pub mod impl_to_json_options {
         __private_impl_to_json_option_vis as vis,
         __private_impl_to_json_option_where_clause as where_clause,
     };
+}
+
+pub mod impl_to_json_kinds {
+    pub mod full {
+        pub use crate::ser::json_kinds::{
+            //
+            Array as EmptyArray,
+            Array as ArrayOfItems,
+            Object as EmptyObject,
+            Object as ObjectOfKvs,
+        };
+    }
+    pub mod chunks {
+        pub use crate::ser::json_kinds::{
+            //
+            Array as NonEmptyArray,
+            JsonString as json_string,
+            Object as NonEmptyObject,
+        };
+    }
 }
 
 // TODO: rename to write
