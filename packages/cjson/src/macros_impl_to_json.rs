@@ -273,18 +273,19 @@ macro_rules! __private_impl_to_json_parsed {
 #[macro_export]
 macro_rules! __private_impl_to_json_parse_with {
     (
-        ( ($runtime_expr:expr) as $RuntimeType:ty $(,)? )
+        ( ($runtime_expr:expr) $($as_type:tt)* )
         {
             expand_macro_bang($($expand_macro_bang:tt)+)
             expand_macro_rest($($expand_macro_rest:tt)*)
         }
     ) => {
         $($expand_macro_bang)+ {
-            // TODO: what if $RuntimeType is a ref with elided lifetime
-            kind(<$RuntimeType as $crate::ser::IntoJson>::JsonKind)
+            kind($crate::__private_impl_to_json_runtime_kind![$($as_type)*])
             write_macro_bang($crate::__private_json_write!)
-            write_rest( ($runtime_expr) )
-            IS_CHAINABLE_AND_ALWAYS_EMPTY( <$RuntimeType as $crate::ser::IntoJson>::IS_CHAINABLE_AND_ALWAYS_EMPTY )
+            write_rest( ($runtime_expr) ) // TODO: write as Type
+            IS_CHAINABLE_AND_ALWAYS_EMPTY(
+                $crate::__private_impl_to_json_runtime_const_val!($($as_type)*)
+            )
             $($expand_macro_rest)*
         }
     };
@@ -363,6 +364,32 @@ macro_rules! __private_impl_to_json_parse_with {
             IS_CHAINABLE_AND_ALWAYS_EMPTY( false )
             $($expand_macro_rest)*
         }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_impl_to_json_runtime_kind {
+    (                         $(,)?) => {
+        $crate::ser::json_kinds::AnyValue
+    };
+    (as & $lt:lifetime $Ty:ty $(,)?) => {
+        <$Ty as $crate::ser::ToJson2>::ToJsonKind
+    };
+    (as &              $Ty:ty $(,)?) => {
+        <$Ty as $crate::ser::ToJson2>::ToJsonKind
+    };
+    (as                $Ty:ty $(,)?) => {
+        <$Ty as $crate::ser::IntoJson>::JsonKind
+    };
+}
+
+#[macro_export]
+macro_rules! __private_impl_to_json_runtime_const_val {
+    ($(,)?) => {
+        false
+    };
+    (as $Ty:ty $(,)?) => {
+        <$Ty as $crate::ser::IntoJson>::IS_CHAINABLE_AND_ALWAYS_EMPTY
     };
 }
 

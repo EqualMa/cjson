@@ -86,6 +86,8 @@ pub mod impl_to_json_kinds {
 pub mod only_compile_time;
 pub use only_compile_time as write;
 
+pub mod refed;
+
 #[cfg(feature = "proc-macro")]
 pub mod proc_macro {
     pub use ::core::{compile_error, primitive::str, stringify};

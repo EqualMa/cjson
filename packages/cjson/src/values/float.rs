@@ -1,7 +1,7 @@
 use crate::{
     r#const::array_string::ArrayString,
     ser::{
-        IntoJson, ToJson, json_kinds, texts,
+        IntoJson, ToJson, ToJsonByCopyIntoJson, json_kinds, texts,
         traits::{self, IntoTextChunks},
     },
     utils::impl_many,
@@ -35,6 +35,8 @@ impl_many!({
         }
         const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false;
     }
+
+    impl ToJsonByCopyIntoJson for Finite<Float> {}
 
     impl ToJson for Finite<Float> {
         type ToJson<'a>
