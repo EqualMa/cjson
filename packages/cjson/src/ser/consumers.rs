@@ -317,7 +317,7 @@ pub trait ConsumeJson {
         yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
     ) -> Consumed<json_kinds::Object, Self>;
 
-    type ConsumeChunksOfNonEmptyObject: chunks::ReadyToConsumeJsonChunksOfNonEmptyObject;
+    type ConsumeChunksOfNonEmptyObject: chunks::ReadyToConsumeJsonChunksOfNonEmptyObject<InitialConsumer = Self>;
     fn start_to_consume_chunks_of_non_empty_object(
         self,
         yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
