@@ -282,7 +282,7 @@ macro_rules! __private_impl_to_json_parse_with {
         $($expand_macro_bang)+ {
             kind($crate::__private_impl_to_json_runtime_kind![$($as_type)*])
             write_macro_bang($crate::__private_json_write!)
-            write_rest( ($runtime_expr) ) // TODO: write as Type
+            write_rest( ($runtime_expr) $($as_type)* )
             IS_CHAINABLE_AND_ALWAYS_EMPTY(
                 $crate::__private_impl_to_json_runtime_const_val!($($as_type)*)
             )

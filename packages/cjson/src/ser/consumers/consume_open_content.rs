@@ -239,7 +239,7 @@ impl_many!({
     }
 
     impl<W: ConsumeTextChunk> TraitConsumeChained for ConsumeOpenContentIfNotEmpty<'_, W> {
-        fn extend(&mut self, content: impl IntoJson<JsonKind = K>) {
+        fn extend<V: IntoJson<JsonKind = K>>(&mut self, content: V) {
             ConsumeOpenContentIfNotEmpty {
                 writer: self.writer.as_mut_consume_text_chunk(),
                 started: self.started,
@@ -248,9 +248,9 @@ impl_many!({
         }
 
         type InitialConsumer = Self;
-        fn end_with(
+        fn end_with<V: IntoJson<JsonKind = K>>(
             self,
-            content: impl IntoJson<JsonKind = K>,
+            content: V,
         ) -> Consumed<K, Self::InitialConsumer> {
             self.impl_extend(content);
             const { Consumed::assert(K) }
@@ -376,7 +376,7 @@ impl<W: ConsumeTextChunk> ConsumeStringOpenFragmentIfNotEmpty<'_, W> {
 }
 
 impl<W: ConsumeTextChunk> ConsumeChainedStrings for ConsumeStringOpenFragmentIfNotEmpty<'_, W> {
-    fn extend(&mut self, s: impl IntoJson<JsonKind = json_kinds::JsonString>) {
+    fn extend<V: IntoJson<JsonKind = json_kinds::JsonString>>(&mut self, s: V) {
         ConsumeStringOpenFragmentIfNotEmpty {
             writer: self.writer.as_mut_consume_text_chunk(),
             started: self.started,
@@ -385,9 +385,9 @@ impl<W: ConsumeTextChunk> ConsumeChainedStrings for ConsumeStringOpenFragmentIfN
     }
 
     type InitialConsumer = Self;
-    fn end_with(
+    fn end_with<V: IntoJson<JsonKind = json_kinds::JsonString>>(
         self,
-        s: impl IntoJson<JsonKind = json_kinds::JsonString>,
+        s: V,
     ) -> Consumed<json_kinds::JsonString, Self::InitialConsumer> {
         self.impl_extend(s);
         Consumed::ASSERT_STRING

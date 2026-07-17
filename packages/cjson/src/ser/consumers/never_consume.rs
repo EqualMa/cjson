@@ -37,39 +37,39 @@ impl<INITIAL: ConsumeJson, S: ?Sized + HasConstState, K: json_kinds::ArrayOrObje
     }
 
     type ConsumeJsonValue = NeverConsume<INITIAL, states::ThenValue<S>>;
-    fn json_value(self, _: impl IntoJson) -> Self::ConsumeJsonValue {
+    fn json_value<V: IntoJson>(self, _: V) -> Self::ConsumeJsonValue {
         match self.0 {}
     }
 
     type ConsumeJsonItemsAfterArrayStartBeforeItem =
         NeverConsume<INITIAL, states::ThenItemsAfterArrayStartBeforeItem<S>>;
-    fn json_items_after_array_start_before_item(
+    fn json_items_after_array_start_before_item<V: IntoJson<JsonKind = json_kinds::Array>>(
         self,
-        _: impl IntoJson<JsonKind = json_kinds::Array>,
+        _: V,
     ) -> Self::ConsumeJsonItemsAfterArrayStartBeforeItem {
         match self.0 {}
     }
 
     type ConsumeJsonItemsAfterItem = NeverConsume<INITIAL, states::ThenItemsAfterItem<S>>;
-    fn json_items_after_item(
+    fn json_items_after_item<V: IntoJson<JsonKind = json_kinds::Array>>(
         self,
-        _: impl IntoJson<JsonKind = json_kinds::Array>,
+        _: V,
     ) -> Self::ConsumeJsonItemsAfterItem {
         match self.0 {}
     }
 
     type ConsumeJsonKvsAfterFieldValue = NeverConsume<INITIAL, states::ThenKvsAfterFieldValue<S>>;
-    fn json_kvs_after_field_value(
+    fn json_kvs_after_field_value<V: IntoJson<JsonKind = json_kinds::Object>>(
         self,
-        _: impl IntoJson<JsonKind = json_kinds::Object>,
+        _: V,
     ) -> Self::ConsumeJsonKvsAfterFieldValue {
         match self.0 {}
     }
 
     type ConsumeJsonStringFragment = NeverConsume<INITIAL, states::ThenStringFragment<S>>;
-    fn json_string_fragment(
+    fn json_string_fragment<V: IntoJson<JsonKind = json_kinds::JsonString>>(
         self,
-        _: impl IntoJson<JsonKind = json_kinds::JsonString>,
+        _: V,
     ) -> Self::ConsumeJsonStringFragment {
         match self.0 {}
     }
@@ -191,43 +191,43 @@ impl<INITIAL: ConsumeJson, K: JsonKind> ConsumeOpenContentBeforeContent<K>
 }
 
 impl<INITIAL: ConsumeJson> ConsumeChainedArrays for NeverConsume<INITIAL> {
-    fn extend(&mut self, _: impl super::IntoJson<JsonKind = json_kinds::Array>) {
+    fn extend<V: IntoJson<JsonKind = json_kinds::Array>>(&mut self, _: V) {
         match self.0 {}
     }
 
     type InitialConsumer = INITIAL;
-    fn end_with(
+    fn end_with<V: IntoJson<JsonKind = json_kinds::Array>>(
         self,
-        _: impl super::IntoJson<JsonKind = json_kinds::Array>,
+        _: V,
     ) -> Consumed<json_kinds::Array, Self::InitialConsumer> {
         match self.0 {}
     }
 }
 
 impl<INITIAL: ConsumeJson> ConsumeChainedObjects for NeverConsume<INITIAL> {
-    fn extend(&mut self, _: impl super::IntoJson<JsonKind = json_kinds::Object>) {
+    fn extend<V: IntoJson<JsonKind = json_kinds::Object>>(&mut self, _: V) {
         match self.0 {}
     }
 
     type InitialConsumer = INITIAL;
-    fn end_with(
+    fn end_with<V: IntoJson<JsonKind = json_kinds::Object>>(
         self,
-        _: impl super::IntoJson<JsonKind = json_kinds::Object>,
+        _: V,
     ) -> Consumed<json_kinds::Object, Self::InitialConsumer> {
         match self.0 {}
     }
 }
 
 impl<INITIAL: ConsumeJson> ConsumeChainedStrings for NeverConsume<INITIAL> {
-    fn extend(&mut self, _: impl IntoJson<JsonKind = json_kinds::JsonString>) {
+    fn extend<V: IntoJson<JsonKind = json_kinds::JsonString>>(&mut self, _: V) {
         match self.0 {}
     }
 
     type InitialConsumer = INITIAL;
 
-    fn end_with(
+    fn end_with<V: IntoJson<JsonKind = json_kinds::JsonString>>(
         self,
-        _: impl IntoJson<JsonKind = json_kinds::JsonString>,
+        _: V,
     ) -> Consumed<json_kinds::JsonString, Self::InitialConsumer> {
         match self.0 {}
     }

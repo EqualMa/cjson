@@ -337,32 +337,32 @@ pub trait ConsumeJson {
 }
 
 pub trait ConsumeChainedStrings {
-    fn extend(&mut self, s: impl IntoJson<JsonKind = json_kinds::JsonString>);
+    fn extend<V: IntoJson<JsonKind = json_kinds::JsonString>>(&mut self, s: V);
 
     type InitialConsumer: ?Sized;
-    fn end_with(
+    fn end_with<V: IntoJson<JsonKind = json_kinds::JsonString>>(
         self,
-        s: impl IntoJson<JsonKind = json_kinds::JsonString>,
+        s: V,
     ) -> Consumed<json_kinds::JsonString, Self::InitialConsumer>;
 }
 
 pub trait ConsumeChainedArrays {
-    fn extend(&mut self, arr: impl IntoJson<JsonKind = json_kinds::Array>);
+    fn extend<V: IntoJson<JsonKind = json_kinds::Array>>(&mut self, arr: V);
 
     type InitialConsumer: ?Sized;
-    fn end_with(
+    fn end_with<V: IntoJson<JsonKind = json_kinds::Array>>(
         self,
-        arr: impl IntoJson<JsonKind = json_kinds::Array>,
+        arr: V,
     ) -> Consumed<json_kinds::Array, Self::InitialConsumer>;
 }
 
 pub trait ConsumeChainedObjects {
-    fn extend(&mut self, obj: impl IntoJson<JsonKind = json_kinds::Object>);
+    fn extend<V: IntoJson<JsonKind = json_kinds::Object>>(&mut self, obj: V);
 
     type InitialConsumer: ?Sized;
-    fn end_with(
+    fn end_with<V: IntoJson<JsonKind = json_kinds::Object>>(
         self,
-        obj: impl IntoJson<JsonKind = json_kinds::Object>,
+        obj: V,
     ) -> Consumed<json_kinds::Object, Self::InitialConsumer>;
 }
 
@@ -394,16 +394,16 @@ pub trait ConsumeJsonChunks<K: json_kinds::ArrayOrObject> {
             InitialConsumer = Self::InitialConsumer,
             CurrentState = states::ThenValue<Self::CurrentState>,
         >;
-    fn json_value(self, v: impl IntoJson) -> Self::ConsumeJsonValue;
+    fn json_value<V: IntoJson>(self, v: V) -> Self::ConsumeJsonValue;
 
     type ConsumeJsonItemsAfterArrayStartBeforeItem: ConsumeJsonChunks<
             K,
             InitialConsumer = Self::InitialConsumer,
             CurrentState = states::ThenItemsAfterArrayStartBeforeItem<Self::CurrentState>,
         >;
-    fn json_items_after_array_start_before_item(
+    fn json_items_after_array_start_before_item<V: IntoJson<JsonKind = json_kinds::Array>>(
         self,
-        v: impl IntoJson<JsonKind = json_kinds::Array>,
+        v: V,
     ) -> Self::ConsumeJsonItemsAfterArrayStartBeforeItem;
 
     type ConsumeJsonItemsAfterItem: ConsumeJsonChunks<
@@ -411,9 +411,9 @@ pub trait ConsumeJsonChunks<K: json_kinds::ArrayOrObject> {
             InitialConsumer = Self::InitialConsumer,
             CurrentState = states::ThenItemsAfterItem<Self::CurrentState>,
         >;
-    fn json_items_after_item(
+    fn json_items_after_item<V: IntoJson<JsonKind = json_kinds::Array>>(
         self,
-        v: impl IntoJson<JsonKind = json_kinds::Array>,
+        v: V,
     ) -> Self::ConsumeJsonItemsAfterItem;
 
     type ConsumeJsonKvsAfterFieldValue: ConsumeJsonChunks<
@@ -421,9 +421,9 @@ pub trait ConsumeJsonChunks<K: json_kinds::ArrayOrObject> {
             InitialConsumer = Self::InitialConsumer,
             CurrentState = states::ThenKvsAfterFieldValue<Self::CurrentState>,
         >;
-    fn json_kvs_after_field_value(
+    fn json_kvs_after_field_value<V: IntoJson<JsonKind = json_kinds::Object>>(
         self,
-        v: impl IntoJson<JsonKind = json_kinds::Object>,
+        v: V,
     ) -> Self::ConsumeJsonKvsAfterFieldValue;
 
     type ConsumeJsonStringFragment: ConsumeJsonChunks<
@@ -431,9 +431,9 @@ pub trait ConsumeJsonChunks<K: json_kinds::ArrayOrObject> {
             InitialConsumer = Self::InitialConsumer,
             CurrentState = states::ThenStringFragment<Self::CurrentState>,
         >;
-    fn json_string_fragment(
+    fn json_string_fragment<V: IntoJson<JsonKind = json_kinds::JsonString>>(
         self,
-        v: impl IntoJson<JsonKind = json_kinds::JsonString>,
+        v: V,
     ) -> Self::ConsumeJsonStringFragment;
 
     #[cfg(remove)]
@@ -876,7 +876,7 @@ impl_many!({
         }
 
         type ConsumeJsonValue = CONSUME<W, InitialConsumer, states::ThenValue<S>, OC>;
-        fn json_value(mut self, v: impl IntoJson) -> Self::ConsumeJsonValue {
+        fn json_value<V: IntoJson>(mut self, v: V) -> Self::ConsumeJsonValue {
             const { _ = states::ThenValue::<S>::STATE }
             let Consumed { .. } =
                 v.json_provide_into(ConsumeJsonText(self.0.as_mut_consume_text_chunk()));
@@ -885,9 +885,9 @@ impl_many!({
 
         type ConsumeJsonItemsAfterArrayStartBeforeItem =
             CONSUME<W, InitialConsumer, states::ThenItemsAfterArrayStartBeforeItem<S>, OC>;
-        fn json_items_after_array_start_before_item(
+        fn json_items_after_array_start_before_item<V: IntoJson<JsonKind = json_kinds::Array>>(
             mut self,
-            v: impl IntoJson<JsonKind = json_kinds::Array>,
+            v: V,
         ) -> Self::ConsumeJsonItemsAfterArrayStartBeforeItem {
             const { _ = states::ThenItemsAfterArrayStartBeforeItem::<S>::STATE }
             let Consumed { .. } = v.json_provide_into(ConsumeArrayItemsAppendCommaIfNotEmpty(
@@ -898,9 +898,9 @@ impl_many!({
 
         type ConsumeJsonItemsAfterItem =
             CONSUME<W, InitialConsumer, states::ThenItemsAfterItem<S>, OC>;
-        fn json_items_after_item(
+        fn json_items_after_item<V: IntoJson<JsonKind = json_kinds::Array>>(
             mut self,
-            v: impl IntoJson<JsonKind = json_kinds::Array>,
+            v: V,
         ) -> Self::ConsumeJsonItemsAfterItem {
             const { _ = states::ThenItemsAfterItem::<S>::STATE }
             let Consumed { .. } = v.json_provide_into(ConsumeArrayItemsPrependCommaIfNotEmpty(
@@ -911,9 +911,9 @@ impl_many!({
 
         type ConsumeJsonKvsAfterFieldValue =
             CONSUME<W, InitialConsumer, states::ThenKvsAfterFieldValue<S>, OC>;
-        fn json_kvs_after_field_value(
+        fn json_kvs_after_field_value<V: IntoJson<JsonKind = json_kinds::Object>>(
             mut self,
-            v: impl IntoJson<JsonKind = json_kinds::Object>,
+            v: V,
         ) -> Self::ConsumeJsonKvsAfterFieldValue {
             const { _ = states::ThenKvsAfterFieldValue::<S>::STATE }
             let Consumed { .. } = v.json_provide_into(ConsumeObjectKvsPrependCommaIfNotEmpty(
@@ -924,9 +924,9 @@ impl_many!({
 
         type ConsumeJsonStringFragment =
             CONSUME<W, InitialConsumer, states::ThenStringFragment<S>, OC>;
-        fn json_string_fragment(
+        fn json_string_fragment<V: IntoJson<JsonKind = json_kinds::JsonString>>(
             mut self,
-            v: impl IntoJson<JsonKind = json_kinds::JsonString>,
+            v: V,
         ) -> Self::ConsumeJsonStringFragment {
             const { _ = states::ThenStringFragment::<S>::STATE }
             let Consumed { .. } = v.json_provide_into(consume_content::ConsumeStringFragment(
@@ -1185,15 +1185,15 @@ impl_many!({
     }
 
     impl<W: ConsumeTextChunk> ConsumeChainedArrays for CONSUME<W> {
-        fn extend(&mut self, arr: impl IntoJson<JsonKind = json_kinds::Array>) {
+        fn extend<V: IntoJson<JsonKind = json_kinds::Array>>(&mut self, arr: V) {
             let Consumed { .. } =
                 arr.json_provide_into(CONSUME(self.0.as_mut_consume_text_chunk()));
         }
 
         type InitialConsumer = Self;
-        fn end_with(
+        fn end_with<V: IntoJson<JsonKind = json_kinds::Array>>(
             self,
-            arr: impl IntoJson<JsonKind = json_kinds::Array>,
+            arr: V,
         ) -> Consumed<json_kinds::Array, Self::InitialConsumer> {
             arr.json_provide_into(self)
         }
@@ -1277,15 +1277,15 @@ impl_many!({
     }
 
     impl<W: ConsumeTextChunk> ConsumeChainedObjects for CONSUME<W> {
-        fn extend(&mut self, arr: impl IntoJson<JsonKind = json_kinds::Object>) {
+        fn extend<V: IntoJson<JsonKind = json_kinds::Object>>(&mut self, arr: V) {
             let Consumed { .. } =
                 arr.json_provide_into(CONSUME(self.0.as_mut_consume_text_chunk()));
         }
 
         type InitialConsumer = Self;
-        fn end_with(
+        fn end_with<V: IntoJson<JsonKind = json_kinds::Object>>(
             self,
-            arr: impl IntoJson<JsonKind = json_kinds::Object>,
+            arr: V,
         ) -> Consumed<json_kinds::Object, Self::InitialConsumer> {
             arr.json_provide_into(self)
         }

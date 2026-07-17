@@ -157,15 +157,15 @@ impl_many!({
     }
 
     impl<W: ConsumeTextChunk> TraitConsumeChainedContent for ConsumeCommaContentClose<W> {
-        fn extend(&mut self, arr: impl IntoJson<JsonKind = K>) {
+        fn extend<V: IntoJson<JsonKind = K>>(&mut self, arr: V) {
             let Consumed { .. } =
                 arr.json_provide_into(ConsumeCommaContent(self.0.as_mut_consume_text_chunk()));
         }
 
         type InitialConsumer = Self; // TODO:
-        fn end_with(
+        fn end_with<V: IntoJson<JsonKind = K>>(
             self,
-            content: impl IntoJson<JsonKind = K>,
+            content: V,
         ) -> Consumed<K, Self::InitialConsumer> {
             // TODO: infinite recursion?
             content.json_provide_into(self)

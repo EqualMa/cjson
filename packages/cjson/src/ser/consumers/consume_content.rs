@@ -83,15 +83,15 @@ impl<W: ConsumeTextChunk> ConsumeJson for ConsumeStringFragment<W> {
 }
 
 impl<W: ConsumeTextChunk> ConsumeChainedStrings for ConsumeStringFragment<W> {
-    fn extend(&mut self, s: impl IntoJson<JsonKind = json_kinds::JsonString>) {
+    fn extend<V: IntoJson<JsonKind = json_kinds::JsonString>>(&mut self, s: V) {
         let Consumed { .. } =
             s.json_provide_into(ConsumeStringFragment(self.0.as_mut_consume_text_chunk()));
     }
 
     type InitialConsumer = Self;
-    fn end_with(
+    fn end_with<V: IntoJson<JsonKind = json_kinds::JsonString>>(
         self,
-        s: impl IntoJson<JsonKind = json_kinds::JsonString>,
+        s: V,
     ) -> Consumed<json_kinds::JsonString, Self::InitialConsumer> {
         s.json_provide_into(self)
     }

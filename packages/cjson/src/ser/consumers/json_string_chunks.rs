@@ -82,7 +82,7 @@ impl<E: EndJsonString, InitialConsumer: ?Sized + ConsumeJson>
     pub fn consume_fragment_as_str(&mut self, v: JsonStringFragmentAsStr<'_>) {
         self.end.consume_fragment_as_str(&mut self.writer, v)
     }
-    pub fn consume_fragment(&mut self, v: impl IntoJson<JsonKind = json_kinds::JsonString>) {
+    pub fn consume_fragment<V: IntoJson<JsonKind = json_kinds::JsonString>>(&mut self, v: V) {
         self.end.consume_fragment(&mut self.writer, v)
     }
 
@@ -93,9 +93,9 @@ impl<E: EndJsonString, InitialConsumer: ?Sized + ConsumeJson>
         self.end.end_with_last_chunk(self.writer, v);
         Consumed::ASSERT_STRING
     }
-    pub fn end_with(
+    pub fn end_with<V: IntoJson<JsonKind = json_kinds::JsonString>>(
         self,
-        v: impl IntoJson<JsonKind = json_kinds::JsonString>,
+        v: V,
     ) -> Consumed<json_kinds::JsonString, InitialConsumer> {
         self.end.end_with(self.writer, v);
         Consumed::ASSERT_STRING

@@ -34,6 +34,7 @@ macro_rules! __private_json_write {
         $lit:literal
         // literal should precede ident,
         // so that false and true work.
+        $(,)?
     ) => {
         $crate::__private_json_write_const! {
             $maybe_try
@@ -45,6 +46,7 @@ macro_rules! __private_json_write {
         $maybe_try:tt
         $consumer:tt
         const $const_block:block
+        $(,)?
     ) => {
         $crate::__private_json_write_const! {
             $maybe_try
@@ -56,6 +58,7 @@ macro_rules! __private_json_write {
         $maybe_try:tt
         ($consumer:expr)
         $well_known_ident:ident
+        $(,)?
     ) => {
         $crate::__private_json_maybe_try! {
             $maybe_try
@@ -71,11 +74,12 @@ macro_rules! __private_json_write {
     (
         $maybe_try:tt
         $consumer:tt
-        ($runtime_expr:expr)
+        ($runtime_expr:expr) $(as $RuntimeType:ty)?
+        $(,)?
     ) => {
         $crate::__private_json_maybe_try! {
             $maybe_try
-            ( <_ as $crate::ser::IntoJson>:: )
+            ( <$crate::__expand_or![[$($RuntimeType)?][_]] as $crate::ser::IntoJson>:: )
             [json_provide_into]
             [json_try_provide_into]
             (
@@ -88,6 +92,7 @@ macro_rules! __private_json_write {
         $maybe_try:tt
         $consumer:tt
         [$($array_content:tt)*]
+        $(,)?
     ) => {
         $crate::__private_json_after_array_start! {
             [
@@ -110,6 +115,7 @@ macro_rules! __private_json_write {
         $maybe_try:tt
         $consumer:tt
         {$($object_content:tt)*}
+        $(,)?
     ) => {
         $crate::__private_json_after_object_start! {
             [
@@ -132,6 +138,7 @@ macro_rules! __private_json_write {
         $maybe_try:tt
         $consumer:tt
         $well_known_macro:ident $bang:tt $well_known_macro_body:tt
+        $(,)?
     ) => {
         $crate::__private_json_macro!(
             $well_known_macro $bang $well_known_macro_body
@@ -241,16 +248,14 @@ macro_rules! __private_json_write_eof {
         }
     };
     (
-        ArrayOfItems {
-            $items:tt
-            $(as $RuntimeType:ty)? // TODO: remove
-        }
+        ArrayOfItems
+        $v:tt // TODO: refactor
         $maybe_try:tt
         ($consumer:expr)
     ) => {
         $crate::__private_json_write_chained_content! {
             ConsumeChainedArrays
-            $items
+            [$v]
             $maybe_try
             <_ as $crate::ser::ConsumeJson>::start_to_consume_chained_arrays(
                 $consumer, ()
@@ -270,16 +275,14 @@ macro_rules! __private_json_write_eof {
         }
     };
     (
-        ObjectOfKvs {
-            $kvs:tt
-            $(as $RuntimeType:ty)? // TODO: remove
-        }
+        ObjectOfKvs
+        $v:tt // TODO: refactor
         $maybe_try:tt
         ($consumer:expr)
     ) => {
         $crate::__private_json_write_chained_content! {
             ConsumeChainedObjects
-            $kvs
+            [$v]
             $maybe_try
             <_ as $crate::ser::ConsumeJson>::start_to_consume_chained_objects(
                 $consumer, ()
@@ -354,22 +357,30 @@ macro_rules! __private_json_write_chained_content {
     (
         $(@)?
         $TraitConsumeChainedContent:ident
-        ($last_items:expr)
+        [{($last_items:expr) $(as $LastItemsType:ty)?}]
         { $maybe_try:ident $($question:tt)? }
         $w:expr
     ) => {
-        <_ as $crate::ser::$TraitConsumeChainedContent>::end_with($w, $last_items) $($question)?
+        <_ as $crate::ser::$TraitConsumeChainedContent>::end_with::<
+            $crate::__expand_or![[$($LastItemsType)?][_]]
+        >($w, $last_items) $($question)?
     };
     (
         $TraitConsumeChainedContent:ident
-        ($items:expr $(, $rest_items:expr)+)
+        [
+            {($items:expr) $(as $ItemsType:ty)?}
+            $($rest:tt)+
+        ]
         { $maybe_try:ident $($question:tt)? }
         $w:expr
     ) => {{
         let mut w = $w;
-        <_ as $crate::ser::$TraitConsumeChainedContent>::extend(&mut w, $items) $($question)? ;
+        <_ as $crate::ser::$TraitConsumeChainedContent>::extend::<
+            $crate::__expand_or![[$($ItemsType)?][_]]
+        >(&mut w, $items) $($question)? ;
         $crate::__private_json_write_chained_content! {
-            @($($rest_items),+)
+            @$TraitConsumeChainedContent
+            [$($rest)+]
             { $maybe_try $($question)? }
             w
         }
@@ -377,13 +388,19 @@ macro_rules! __private_json_write_chained_content {
     (
         @
         $TraitConsumeChainedContent:ident
-        ($items:expr $(, $rest_items:expr)+)
+        [
+            {($items:expr) $(as $ItemsType:ty)?}
+            $($rest:tt)+
+        ]
         { $maybe_try:ident $($question:tt)? }
         $w:ident
     ) => {
-        <_ as $crate::ser::$TraitConsumeChainedContent>::extend(&mut $w, $items) $($question)? ;
+        <_ as $crate::ser::$TraitConsumeChainedContent>::extend::<
+            $crate::__expand_or![[$($ItemsType)?][_]]
+        >(&mut $w, $items) $($question)? ;
         $crate::__private_json_write_chained_content! {
-            @($($rest_items),+)
+            @$TraitConsumeChainedContent
+            [$($rest)+]
             { $maybe_try $($question)? }
             $w
         }
@@ -438,14 +455,16 @@ macro_rules! __private_json_write_json_string_chunks {
             prev $prev_compile_runtime:tt
             current {
                 compile_time $compile_time:tt
-                runtime[ json_string_fragment($v:expr) ]
+                runtime[ json_string_fragment($v:expr) $(as $RuntimeType:ty)? ]
             }
         ]
         last_compile_time[ double_quote() ]
         maybe_try { $maybe_try:ident $($question:tt)? }
         consumer $consumer:tt
     ) => {
-        $crate::ser::ConsumeInJsonString::end_with(
+        $crate::ser::ConsumeInJsonString::end_with::<
+            $crate::__expand_or![[$($RuntimeType)?][_]]
+        >(
             $crate::__private_json_write_json_string_prev_of_last_runtime! {
                 $prev_compile_runtime
                 $compile_time
@@ -594,11 +613,13 @@ macro_rules! __private_json_write_json_string_compile_time_fragment {
 #[macro_export]
 macro_rules! __private_json_write_json_string_runtime_fragment {
     (
-        [ json_string_fragment($v:expr) $(as $RuntimeType:ty)? ] // TODO: remove $RuntimeType
+        [ json_string_fragment($v:expr) $(as $RuntimeType:ty)? ]
         ($w:expr)
         { $maybe_try:ident $($question:tt)? }
     ) => {
-        $crate::ser::ConsumeInJsonString::consume_fragment(
+        $crate::ser::ConsumeInJsonString::consume_fragment::<
+            $crate::__expand_or![[$($RuntimeType)?][_]]
+        >(
             $w,
             $v,
         ) $($question)?;
@@ -1052,7 +1073,6 @@ macro_rules! __private_json_write_chunks_runtime {
 #[macro_export]
 macro_rules! __private_json_state_then_runtime {
     (
-        // TODO: remove $RuntimeType
         [$runtime_kind:ident $runtime_args:tt $(as $RuntimeType:ty)?]
         [$PrevState:ty]
     ) => {
@@ -1064,11 +1084,12 @@ macro_rules! __private_json_state_then_runtime {
 macro_rules! __private_json_write_runtime {
     (
         { $maybe_try:ident $($question:tt)? }
-        // TODO: remove $RuntimeType
         [$runtime_kind:ident ($($runtime_args:tt)*) $(as $RuntimeType:ty)?]
         ($w:expr)
     ) => {
-        <_ as $crate::ser::ConsumeJsonChunks<_>>::$runtime_kind(
+        <_ as $crate::ser::ConsumeJsonChunks<_>>::$runtime_kind::<
+            $crate::__expand_or![[$($RuntimeType)?][_]]
+        >(
             $w,
             $($runtime_args)*
         ) $($question)?

@@ -101,7 +101,7 @@ impl_many!({
     impl<W: ConsumeTextChunk, S: BorrowMut<bool>, I: TraitInitialConsumer> TraitConsumeChained
         for ConsumeChainedContent<W, S, I>
     {
-        fn extend(&mut self, arr: impl IntoJson<JsonKind = K>) {
+        fn extend<V: IntoJson<JsonKind = K>>(&mut self, arr: V) {
             ConsumeChainedContent {
                 writer: self.writer.as_mut_consume_text_chunk(),
                 started: self.started.borrow_mut(),
@@ -111,7 +111,7 @@ impl_many!({
         }
 
         type InitialConsumer = I;
-        fn end_with(self, arr: impl IntoJson<JsonKind = K>) -> Consumed<K, Self::InitialConsumer> {
+        fn end_with<V: IntoJson<JsonKind = K>>(self, arr: V) -> Consumed<K, Self::InitialConsumer> {
             self.impl_extend(arr);
             Consumed::assert(K)
         }

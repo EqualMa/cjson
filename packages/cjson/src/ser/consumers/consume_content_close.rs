@@ -1,5 +1,3 @@
-use core::marker::PhantomData;
-
 use crate::ser::traits::{ConsumeTextChunk, IntoTextChunks};
 
 use super::{
@@ -74,15 +72,15 @@ impl<W: ConsumeTextChunk> ConsumeJson for ConsumeStringFragmentClose<W> {
 }
 
 impl<W: ConsumeTextChunk> ConsumeChainedStrings for ConsumeStringFragmentClose<W> {
-    fn extend(&mut self, s: impl crate::ser::IntoJson<JsonKind = json_kinds::JsonString>) {
+    fn extend<V: crate::ser::IntoJson<JsonKind = json_kinds::JsonString>>(&mut self, s: V) {
         let Consumed { .. } =
             s.json_provide_into(ConsumeStringFragment(self.0.as_mut_consume_text_chunk()));
     }
 
     type InitialConsumer = Self;
-    fn end_with(
+    fn end_with<V: crate::ser::IntoJson<JsonKind = json_kinds::JsonString>>(
         self,
-        s: impl crate::ser::IntoJson<JsonKind = json_kinds::JsonString>,
+        s: V,
     ) -> Consumed<json_kinds::JsonString, Self::InitialConsumer> {
         s.json_provide_into(self)
     }
