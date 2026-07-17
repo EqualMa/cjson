@@ -416,6 +416,16 @@ pub trait ConsumeJsonChunks<K: json_kinds::ArrayOrObject> {
         v: V,
     ) -> Self::ConsumeJsonItemsAfterItem;
 
+    type ConsumeJsonKvsAfterObjectStartBeforeKv: ConsumeJsonChunks<
+            K,
+            InitialConsumer = Self::InitialConsumer,
+            CurrentState = states::ThenKvsAfterObjectStartBeforeKv<Self::CurrentState>,
+        >;
+    fn json_kvs_after_object_start_before_kv<V: IntoJson<JsonKind = json_kinds::Object>>(
+        self,
+        v: V,
+    ) -> Self::ConsumeJsonKvsAfterObjectStartBeforeKv;
+
     type ConsumeJsonKvsAfterFieldValue: ConsumeJsonChunks<
             K,
             InitialConsumer = Self::InitialConsumer,
@@ -904,6 +914,19 @@ impl_many!({
         ) -> Self::ConsumeJsonItemsAfterItem {
             const { _ = states::ThenItemsAfterItem::<S>::STATE }
             let Consumed { .. } = v.json_provide_into(ConsumeArrayItemsPrependCommaIfNotEmpty(
+                self.0.as_mut_consume_text_chunk(),
+            ));
+            CONSUME(self.0, PhantomData)
+        }
+
+        type ConsumeJsonKvsAfterObjectStartBeforeKv =
+            CONSUME<W, InitialConsumer, states::ThenKvsAfterObjectStartBeforeKv<S>, OC>;
+        fn json_kvs_after_object_start_before_kv<V: IntoJson<JsonKind = json_kinds::Object>>(
+            mut self,
+            v: V,
+        ) -> Self::ConsumeJsonKvsAfterObjectStartBeforeKv {
+            const { _ = states::ThenKvsAfterObjectStartBeforeKv::<S>::STATE }
+            let Consumed { .. } = v.json_provide_into(ConsumeObjectKvsAppendCommaIfNotEmpty(
                 self.0.as_mut_consume_text_chunk(),
             ));
             CONSUME(self.0, PhantomData)

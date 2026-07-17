@@ -99,7 +99,7 @@ pub struct ChainString<A, B>(pub A, pub B);
 #[derive(Debug, Clone, Copy)]
 pub struct ChainArray<A, B>(pub A, pub B);
 #[derive(Debug, Clone, Copy)]
-pub struct ChainObject<A: ToJsonObject, B: ToJsonObject>(pub A, pub B);
+pub struct ChainObject<A, B>(pub A, pub B);
 
 mod chain;
 

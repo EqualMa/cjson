@@ -202,8 +202,58 @@ macro_rules! __private_json_maybe_try {
 macro_rules! __private_json_write_const {
     (
         $maybe_try:tt
-        ($consumer:expr)
+        $consumer:tt
         $const_value:expr
+    ) => {
+        $crate::__private_json_write_const_value_str! {
+            $maybe_try
+            $consumer
+            ($const_value)
+            .const_into_json_value_string::<{
+                $crate::r#const::ConstIntoJsonValueString(
+                    $crate::r#const::ConstIntoJson($const_value).const_into_json(),
+                )
+                .const_into_json_value_string_len()
+            }>()
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_json_write_generic_const {
+    (
+        $maybe_try:tt
+        $consumer:tt
+        ($const_value:expr, $capacity:expr $(,)?)
+    ) => {
+        $crate::__private_json_write_const_value_str! {
+            $maybe_try
+            $consumer
+            ($const_value)
+            .const_into_json_value_string_with_cap::<{$capacity}>()
+        }
+    };
+    (
+        $maybe_try:tt
+        $consumer:tt
+        ($const_value:expr                 $(,)?)
+    ) => {
+        $crate::__private_json_write_const_value_str! {
+            $maybe_try
+            $consumer
+            ($const_value)
+            .const_into_json_value_string_without_const_len()
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_json_write_const_value_str {
+    (
+        $maybe_try:tt
+        ($consumer:expr)
+        ($const_value:expr)
+        $($after_value:tt)+
     ) => {
         $crate::__private_json_maybe_try! {
             $maybe_try
@@ -217,12 +267,7 @@ macro_rules! __private_json_write_const {
                             $crate::r#const::ConstIntoJsonValueString(
                                 $crate::r#const::ConstIntoJson($const_value).const_into_json(),
                             )
-                            .const_into_json_value_string::<{
-                                $crate::r#const::ConstIntoJsonValueString(
-                                    $crate::r#const::ConstIntoJson($const_value).const_into_json(),
-                                )
-                                .const_into_json_value_string_len()
-                            }>(),
+                            $($after_value)+
                         )
                     }
                     .const_as_json_value_str()
@@ -235,6 +280,18 @@ macro_rules! __private_json_write_const {
 
 #[macro_export]
 macro_rules! __private_json_write_eof {
+    (
+        json_value_generic_const
+        $json_value_generic_const_body:tt
+        $maybe_try:tt
+        $consumer:tt
+    ) => {
+        $crate::__private_json_write_generic_const! {
+            $maybe_try
+            $consumer
+            $json_value_generic_const_body
+        }
+    };
     (
         EmptyArray {}
         $maybe_try:tt
@@ -694,7 +751,7 @@ macro_rules! __private_json_write_chunks_prev {
                 compile_time[
                     $group_open:ident()
                 ]
-                runtime[$runtime_kind:ident $runtime_args:tt]
+                runtime[$runtime_kind:ident $($runtime:tt)+]
             }
         ]
         $args:tt
@@ -702,7 +759,7 @@ macro_rules! __private_json_write_chunks_prev {
     ) => {
         $crate::__private_json_write_chunks_group_open_runtime! {
             $group_open
-            $runtime_kind $runtime_args
+            $runtime_kind [{$($runtime)+}] // TODO: refactor
             $args
             $then
         }
@@ -1018,14 +1075,18 @@ macro_rules! __private_json_write_chunks_last {
             $w,
             const {
                 const {
-                    $crate::__private::write::$kind::ContentfulLastChunkAsArray::<
-                        {
-                            $crate::__private_json_concat_compile_time_tokens_len! {
-                                $chunk
-                            }
-                        },
-                        $PrevState,
-                    >::from_array_vec({
+                    <$crate::__private_json_concat_compile_time_tokens_type![
+                        ($crate::__private::write::$kind::contentful_last_chunk)
+                        $chunk
+                        (::ChunkType<
+                            {
+                                $crate::__private_json_concat_compile_time_tokens_len! {
+                                    $chunk
+                                }
+                            },
+                            $PrevState,
+                        >)
+                    ]>::from_array_vec({
                         let mut buf = $crate::r#const::StatedChunkBuf::new(
                             <$PrevState as $crate::r#const::HasConstState>::STATE,
                         );
@@ -1099,7 +1160,7 @@ macro_rules! __private_json_write_runtime {
 #[macro_export]
 macro_rules! __private_json_write_chunks_group_open_runtime {
     (
-        left_bracket json_value($item:expr)
+        left_bracket json_value[{($value:expr) $(as $Type:ty)?}]
         {
             kind NonEmptyArray
             maybe_try $maybe_try:tt
@@ -1107,9 +1168,11 @@ macro_rules! __private_json_write_chunks_group_open_runtime {
         }
         $then:tt
     ) => {
-        let w = <_ as $crate::ser::ReadyToConsumeJsonChunksOfNonEmptyArray>::left_bracket_value(
+        let w = <_ as $crate::ser::ReadyToConsumeJsonChunksOfNonEmptyArray>::left_bracket_value::<
+            $crate::__expand_or![[$($Type)?][_]]
+        >(
             $crate::__private_json_write_chunks_start_to_consume_non_empty!(NonEmptyArray $consumer),
-            $item
+            $value
         );
         use $crate::r#const::states::LeftBracketValue as __CJsonPrevState;
         $crate::__private_json_write_chunks_then! {
@@ -1118,7 +1181,10 @@ macro_rules! __private_json_write_chunks_group_open_runtime {
         }
     };
     (
-        left_bracket json_items_after_array_start_before_item($items:expr $(, $rest_items:expr)*)
+        left_bracket json_items_after_array_start_before_item[
+            {($items:expr) $(as $ItemsType:ty)?}
+            $({($rest_items:expr) $(as $RestItemsType:ty)?})*
+        ]
         {
             kind NonEmptyArray
             maybe_try $maybe_try:tt
@@ -1126,12 +1192,16 @@ macro_rules! __private_json_write_chunks_group_open_runtime {
         }
         $then:tt
     ) => {
-        let w = <_ as $crate::ser::ReadyToConsumeJsonChunksOfNonEmptyArray>::left_bracket_items_before_item(
+        let w = <_ as $crate::ser::ReadyToConsumeJsonChunksOfNonEmptyArray>::left_bracket_items_before_item::<
+            $crate::__expand_or![[$($ItemsType)?][_]]
+        >(
             $crate::__private_json_write_chunks_start_to_consume_non_empty!(NonEmptyArray $consumer),
             $items
         );
         $(
-            let w = <_ as $crate::ser::ConsumeJsonChunks<_>>::json_items_after_array_start_before_item(
+            let w = <_ as $crate::ser::ConsumeJsonChunks<_>>::json_items_after_array_start_before_item::<
+                $crate::__expand_or![[$($RestItemsType)?][_]]
+            >(
                 w,
                 $rest_items
             );
@@ -1143,26 +1213,10 @@ macro_rules! __private_json_write_chunks_group_open_runtime {
         }
     };
     (
-        left_brace json_value($item:expr)
-        {
-            kind NonEmptyArray
-            maybe_try $maybe_try:tt
-            consumer $consumer:tt
-        }
-        $then:tt
-    ) => {
-        let w = <_ as $crate::ser::ReadyToConsumeJsonChunksOfNonEmptyArray>::left_bracket_value(
-            $crate::__private_json_write_chunks_start_to_consume_non_empty!(NonEmptyArray $consumer),
-            $item
-        );
-        use $crate::r#const::states::LeftBracketValue as __CJsonPrevState;
-        $crate::__private_json_write_chunks_then! {
-            __CJsonPrevState w
-            $then
-        }
-    };
-    (
-        left_brace json_kvs_after_object_start_before_field_name($items:expr $(, $rest_items:expr)*)
+        left_brace json_kvs_after_object_start_before_kv[
+            {($items:expr) $(as $ItemsType:ty)?}
+            $({($rest_items:expr) $(as $RestItemsType:ty)?})*
+        ]
         {
             kind NonEmptyObject
             maybe_try $maybe_try:tt
@@ -1170,12 +1224,16 @@ macro_rules! __private_json_write_chunks_group_open_runtime {
         }
         $then:tt
     ) => {
-        let w = <_ as $crate::ser::ReadyToConsumeJsonChunksOfNonEmptyObject>::left_brace_kvs_before_kv(
+        let w = <_ as $crate::ser::ReadyToConsumeJsonChunksOfNonEmptyObject>::left_brace_kvs_before_kv::<
+            $crate::__expand_or![[$($ItemsType)?][_]]
+        >(
             $crate::__private_json_write_chunks_start_to_consume_non_empty!(NonEmptyObject $consumer),
             $items
         );
         $(
-            let w = <_ as $crate::ser::ConsumeJsonChunks<_>>::json_kvs_after_object_start_before_kv(
+            let w = <_ as $crate::ser::ConsumeJsonChunks<_>>::json_kvs_after_object_start_before_kv::<
+                $crate::__expand_or![[$($RestItemsType)?][_]]
+            >(
                 w,
                 $rest_items
             );

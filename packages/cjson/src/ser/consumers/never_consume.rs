@@ -58,6 +58,15 @@ impl<INITIAL: ConsumeJson, S: ?Sized + HasConstState, K: json_kinds::ArrayOrObje
         match self.0 {}
     }
 
+    type ConsumeJsonKvsAfterObjectStartBeforeKv =
+        NeverConsume<INITIAL, states::ThenKvsAfterObjectStartBeforeKv<S>>;
+    fn json_kvs_after_object_start_before_kv<V: IntoJson<JsonKind = json_kinds::Object>>(
+        self,
+        _: V,
+    ) -> Self::ConsumeJsonKvsAfterObjectStartBeforeKv {
+        match self.0 {}
+    }
+
     type ConsumeJsonKvsAfterFieldValue = NeverConsume<INITIAL, states::ThenKvsAfterFieldValue<S>>;
     fn json_kvs_after_field_value<V: IntoJson<JsonKind = json_kinds::Object>>(
         self,
@@ -143,15 +152,15 @@ impl<INITIAL: ConsumeJson> super::chunks::ReadyToConsumeJsonChunksOfNonEmptyArra
 {
     type LeftBracketValue = NeverConsume<INITIAL, states::LeftBracketValue>;
 
-    fn left_bracket_value(self, _: impl IntoJson) -> Self::LeftBracketValue {
+    fn left_bracket_value<V: IntoJson>(self, _: V) -> Self::LeftBracketValue {
         match self.0 {}
     }
 
     type LeftBracketItemsBeforeItem = NeverConsume<INITIAL, states::LeftBracketItemsBeforeItem>;
 
-    fn left_bracket_items_before_item(
+    fn left_bracket_items_before_item<V: IntoJson<JsonKind = json_kinds::Array>>(
         self,
-        _: impl IntoJson<JsonKind = json_kinds::Array>,
+        _: V,
     ) -> Self::LeftBracketItemsBeforeItem {
         match self.0 {}
     }
@@ -162,9 +171,9 @@ impl<INITIAL: ConsumeJson> super::chunks::ReadyToConsumeJsonChunksOfNonEmptyObje
 {
     type LeftBraceKvsBeforeKv = NeverConsume<INITIAL, states::LeftBraceKvsBeforeKv>;
 
-    fn left_brace_kvs_before_kv(
+    fn left_brace_kvs_before_kv<V: IntoJson<JsonKind = json_kinds::Object>>(
         self,
-        _: impl IntoJson<JsonKind = json_kinds::Object>,
+        _: V,
     ) -> Self::LeftBraceKvsBeforeKv {
         match self.0 {}
     }

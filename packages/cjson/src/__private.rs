@@ -12,12 +12,14 @@ pub use ::alloc::string::String;
 
 pub use crate::__expand_or;
 
+// TODO: move to pub module
 pub mod well_known_ident {
     pub use crate::values::Null as null;
 }
 
 pub mod well_known_macro {
     pub use crate::__private_json_well_known_macro_json_string as json_string;
+    pub use crate::__private_json_well_known_macro_json_value_generic_const as json_value_generic_const;
 }
 
 pub mod state_then_runtime {
@@ -25,6 +27,7 @@ pub mod state_then_runtime {
         ThenItemsAfterArrayStartBeforeItem as json_items_after_array_start_before_item,
         ThenItemsAfterItem as json_items_after_item,
         ThenKvsAfterFieldValue as json_kvs_after_field_value,
+        ThenKvsAfterObjectStartBeforeKv as json_kvs_after_object_start_before_kv,
         ThenStringFragment as json_string_fragment, ThenValue as json_value,
     };
 }
@@ -66,6 +69,7 @@ pub mod impl_to_json_kinds {
     pub mod full {
         pub use crate::ser::json_kinds::{
             //
+            AnyValue as json_value_generic_const,
             Array as EmptyArray,
             Array as ArrayOfItems,
             Object as EmptyObject,

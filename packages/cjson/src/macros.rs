@@ -978,6 +978,25 @@ macro_rules! __private_json_eof_normalize {
             $($then_macro_rest)*
         }
     };
+    // json_value_generic_const only_compile_time
+    (
+        kind(json_value_generic_const)
+        chunks[
+            prev_compile_runtime[]
+            last_compile_time[
+                json_value_generic_const
+                $json_value_generic_const_body:tt
+            ]
+        ]
+        then_macro_bang($($then_macro_bang:tt)+)
+        then_macro_rest($($then_macro_rest:tt)*)
+    ) => {
+        $($then_macro_bang)+ {
+            json_value_generic_const
+            $json_value_generic_const_body
+            $($then_macro_rest)*
+        }
+    };
 }
 
 #[macro_export]
@@ -1459,6 +1478,21 @@ macro_rules! __private_json_concat_compile_time_tokens_state {
 }
 
 #[macro_export]
+macro_rules! __private_json_concat_compile_time_tokens_type {
+    (
+        ($($base_mod:tt)*)
+        [
+            $($name:ident ( $($($args:tt)+)? ))*
+        ]
+        ($($after_mod:tt)*)
+    ) => {
+        $($base_mod)*
+        $(::$name)*
+        $($after_mod)*
+    };
+}
+
+#[macro_export]
 macro_rules! __private_json_concat_compile_time_tokens_len {
     (
         [
@@ -1496,12 +1530,23 @@ macro_rules! __private_json_concat_compile_time_tokens_buf {
     };
 }
 
+// TODO: remove recursive calls
 #[macro_export]
 macro_rules! __private_json_concat_compile_time_token_buf {
     (
         $buf:ident
         json_value
         ($json_value:expr)
+    ) => {
+        $crate::r#const::ConstIntoJsonValueString(
+            $crate::r#const::ConstIntoJson($json_value).const_into_json(),
+        )
+        .const_concat_after_stated_chunk_buf($buf)
+    };
+    (
+        $buf:ident
+        json_value_generic_const
+        ($json_value:expr $(, $($rest:tt)*)?)
     ) => {
         $crate::r#const::ConstIntoJsonValueString(
             $crate::r#const::ConstIntoJson($json_value).const_into_json(),
@@ -1527,6 +1572,9 @@ macro_rules! __private_json_concat_compile_time_token_buf {
 
 #[macro_export]
 macro_rules! __private_json_expand_token_args_for_len {
+    (json_value_generic_const $($json_value_generic_const_body:tt)*) => {
+        $crate::__private_json_expand_token_len_of_generic_const!($($json_value_generic_const_body)*)
+    };
     (json_value $v:expr) => {
         $crate::r#const::ConstIntoJsonValueString(
             $crate::r#const::ConstIntoJson($v).const_into_json(),
@@ -1535,6 +1583,13 @@ macro_rules! __private_json_expand_token_args_for_len {
     };
     (json_string_fragment $v:expr) => {
         $crate::r#const::ConstIntoJsonStringFragment($v).const_into_json_string_fragment_len()
+    };
+}
+
+#[macro_export]
+macro_rules! __private_json_expand_token_len_of_generic_const {
+    ($value:expr, $capacity:expr $(,)?) => {
+        $capacity
     };
 }
 
@@ -1769,7 +1824,7 @@ macro_rules! __private_json_after_runtime_kvs {
                     current {
                         compile_time $compile_time
                         runtime[
-                            json_kvs_after_object_start_before_field_name($runtime)
+                            json_kvs_after_object_start_before_kv($runtime)
                             $(as $runtime_type)?
                         ]
                     }

@@ -343,6 +343,14 @@ impl ChunkLen {
         self
     }
 
+    pub const fn json_value_generic_const(self, cap: usize) -> Self {
+        assert!(
+            cap > 0,
+            "The capacity is 0 in json_value_generic_const!(_, capacity)"
+        );
+        self.json_value(cap)
+    }
+
     pub const fn json_string_fragment(mut self, len: usize) -> Self {
         self.0 += len;
         self

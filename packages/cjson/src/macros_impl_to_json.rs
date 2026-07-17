@@ -941,6 +941,7 @@ macro_rules! __private_impl_to_json_kind {
 
 #[macro_export]
 macro_rules! __private_impl_to_json_const_impl {
+    (json_value_generic_const $json_value_generic_const_body:tt) => { false };
     (EmptyArray {}) => { true };
     (EmptyObject {}) => { true };
     (ArrayOfItems { ($runtime_expr:expr) $(as $RuntimeType:ty)? }) => {

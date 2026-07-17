@@ -19,16 +19,16 @@ pub trait ReadyToConsumeJsonChunksOfNonEmptyArray:
             CurrentState = states::LeftBracketValue,
             InitialConsumer = Self::InitialConsumer,
         >;
-    fn left_bracket_value(self, value: impl IntoJson) -> Self::LeftBracketValue;
+    fn left_bracket_value<V: IntoJson>(self, value: V) -> Self::LeftBracketValue;
 
     type LeftBracketItemsBeforeItem: ConsumeJsonChunks<
             json_kinds::Array,
             CurrentState = states::LeftBracketItemsBeforeItem,
             InitialConsumer = Self::InitialConsumer,
         >;
-    fn left_bracket_items_before_item(
+    fn left_bracket_items_before_item<V: IntoJson<JsonKind = json_kinds::Array>>(
         self,
-        items: impl IntoJson<JsonKind = json_kinds::Array>,
+        items: V,
     ) -> Self::LeftBracketItemsBeforeItem;
 }
 
@@ -40,9 +40,9 @@ pub trait ReadyToConsumeJsonChunksOfNonEmptyObject:
             CurrentState = states::LeftBraceKvsBeforeKv,
             InitialConsumer = Self::InitialConsumer,
         >;
-    fn left_brace_kvs_before_kv(
+    fn left_brace_kvs_before_kv<V: IntoJson<JsonKind = json_kinds::Object>>(
         self,
-        kvs: impl IntoJson<JsonKind = json_kinds::Object>,
+        kvs: V,
     ) -> Self::LeftBraceKvsBeforeKv;
 }
 
@@ -52,7 +52,7 @@ impl<W: ConsumeTextChunk, InitialConsumer, const OC: u8> ReadyToConsumeJsonChunk
     type LeftBracketValue =
         ConsumeChunksOfNonEmptyArray<W, InitialConsumer, states::LeftBracketValue, OC>;
 
-    fn left_bracket_value(mut self, value: impl IntoJson) -> Self::LeftBracketValue {
+    fn left_bracket_value<V: IntoJson>(mut self, value: V) -> Self::LeftBracketValue {
         match const { OpenClose::try_from_u8(OC).unwrap().open } {
             GroupOrComma::Nothing => {}
             GroupOrComma::Group => {
@@ -71,9 +71,9 @@ impl<W: ConsumeTextChunk, InitialConsumer, const OC: u8> ReadyToConsumeJsonChunk
     type LeftBracketItemsBeforeItem =
         ConsumeChunksOfNonEmptyArray<W, InitialConsumer, states::LeftBracketItemsBeforeItem, OC>;
 
-    fn left_bracket_items_before_item(
+    fn left_bracket_items_before_item<V: IntoJson<JsonKind = json_kinds::Array>>(
         mut self,
-        items: impl IntoJson<JsonKind = json_kinds::Array>,
+        items: V,
     ) -> Self::LeftBracketItemsBeforeItem {
         match const { OpenClose::try_from_u8(OC).unwrap().open } {
             GroupOrComma::Nothing => {}
@@ -99,9 +99,9 @@ impl<W: ConsumeTextChunk, InitialConsumer, const OC: u8> ReadyToConsumeJsonChunk
 {
     type LeftBraceKvsBeforeKv =
         ConsumeChunksOfNonEmptyObject<W, InitialConsumer, states::LeftBraceKvsBeforeKv, OC>;
-    fn left_brace_kvs_before_kv(
+    fn left_brace_kvs_before_kv<V: IntoJson<JsonKind = json_kinds::Object>>(
         mut self,
-        kvs: impl IntoJson<JsonKind = json_kinds::Object>,
+        kvs: V,
     ) -> Self::LeftBraceKvsBeforeKv {
         match const { OpenClose::try_from_u8(OC).unwrap().open } {
             GroupOrComma::Nothing => {}

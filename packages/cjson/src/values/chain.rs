@@ -2,33 +2,110 @@
 use crate::{
     ToJson,
     ser::{
-        ConsumeChainedArrays, ConsumeChainedStrings as _, ConsumeJson, Consumed, IntoJson,
-        ToJsonArray, ToJsonString, json_kinds, texts,
+        ConsumeChainedArrays, ConsumeChainedObjects as _, ConsumeChainedStrings as _, ConsumeJson,
+        Consumed, IntoJson, ToJson2, ToJsonArray, ToJsonString, json_kinds, texts,
         traits::{self, Array, EmptyOrCommaSeparatedElements, JsonString},
     },
+    utils::impl_many,
 };
 
 use super::{ChainArray, ChainString};
 
-impl<A: IntoJson<JsonKind = json_kinds::Array>, B: IntoJson<JsonKind = json_kinds::Array>> IntoJson
-    for ChainArray<A, B>
-{
-    type JsonKind = json_kinds::Array;
+impl_many!({
+    {
+        {
+            use crate::ser::json_kinds::Array as K;
 
-    fn json_provide_into<
-        W: ConsumeJson<ConsumeJsonKind: json_kinds::JsonKind<Contains<Self::JsonKind> = ()>>,
-    >(
-        self,
-        w: W,
-    ) -> Consumed<Self::JsonKind, W> {
-        let mut w = w.start_to_consume_chained_arrays(());
-        w.extend(self.0);
-        w.end_with(self.1)
+            use super::ChainArray as Chain;
+
+            #[inline]
+            fn start_to_consume_chained<
+                W: ConsumeJson<ConsumeJsonKind: json_kinds::JsonKind<Contains<K> = ()>>,
+            >(
+                w: W,
+            ) -> W::ConsumeChainedArrays {
+                w.start_to_consume_chained_arrays(())
+            }
+        }
+        {
+            use crate::ser::json_kinds::Object as K;
+
+            use super::ChainObject as Chain;
+
+            #[inline]
+            fn start_to_consume_chained<
+                W: ConsumeJson<ConsumeJsonKind: json_kinds::JsonKind<Contains<K> = ()>>,
+            >(
+                w: W,
+            ) -> W::ConsumeChainedObjects {
+                w.start_to_consume_chained_objects(())
+            }
+        }
+        {
+            use crate::ser::json_kinds::JsonString as K;
+
+            use super::ChainString as Chain;
+
+            #[inline]
+            fn start_to_consume_chained<
+                W: ConsumeJson<ConsumeJsonKind: json_kinds::JsonKind<Contains<K> = ()>>,
+            >(
+                w: W,
+            ) -> W::ConsumeChainedStrings {
+                w.start_to_consume_chained_strings(())
+            }
+        }
     }
 
-    const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool =
-        A::IS_CHAINABLE_AND_ALWAYS_EMPTY && B::IS_CHAINABLE_AND_ALWAYS_EMPTY;
-}
+    impl<A: IntoJson<JsonKind = K>, B: IntoJson<JsonKind = K>> IntoJson for Chain<A, B> {
+        type JsonKind = K;
+
+        fn json_provide_into<
+            W: ConsumeJson<ConsumeJsonKind: json_kinds::JsonKind<Contains<K> = ()>>,
+        >(
+            self,
+            w: W,
+        ) -> Consumed<Self::JsonKind, W> {
+            if const { A::IS_CHAINABLE_AND_ALWAYS_EMPTY } {
+                self.1.json_provide_into(w)
+            } else if const { B::IS_CHAINABLE_AND_ALWAYS_EMPTY } {
+                self.0.json_provide_into(w)
+            } else {
+                let mut w = start_to_consume_chained(w);
+                w.extend(self.0);
+                w.end_with(self.1)
+            }
+        }
+
+        const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool =
+            A::IS_CHAINABLE_AND_ALWAYS_EMPTY && B::IS_CHAINABLE_AND_ALWAYS_EMPTY;
+    }
+
+    impl<A: ToJson2<ToJsonKind = K>, B: ToJson2<ToJsonKind = K>> ToJson2 for Chain<A, B> {
+        type ToJsonKind = K;
+
+        fn json_provide_to<
+            W: ConsumeJson<ConsumeJsonKind: json_kinds::JsonKind<Contains<K> = ()>>,
+        >(
+            &self,
+            w: W,
+        ) -> Consumed<Self::ToJsonKind, W> {
+            if const { A::IS_CHAINABLE_AND_ALWAYS_EMPTY } {
+                self.1.json_provide_to(w)
+            } else if const { B::IS_CHAINABLE_AND_ALWAYS_EMPTY } {
+                self.0.json_provide_to(w)
+            } else {
+                let mut w = start_to_consume_chained(w);
+                w.extend(&self.0);
+                w.end_with(&self.1)
+            }
+        }
+
+        const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool =
+            A::IS_CHAINABLE_AND_ALWAYS_EMPTY && B::IS_CHAINABLE_AND_ALWAYS_EMPTY;
+    }
+});
+
 impl<A: ToJsonArray, B: ToJsonArray> ToJson for ChainArray<A, B> {
     type ToJson<'a>
         = <Self as ToJsonArray>::ToJsonArray<'a>
@@ -61,26 +138,6 @@ impl<A: ToJsonArray, B: ToJsonArray> ToJsonArray for ChainArray<A, B> {
                 .chain_with_comma(self.1.to_json_array().into_comma_separated_elements()),
         )
     }
-}
-
-impl<A: IntoJson<JsonKind = json_kinds::JsonString>, B: IntoJson<JsonKind = json_kinds::JsonString>>
-    IntoJson for ChainString<A, B>
-{
-    type JsonKind = json_kinds::JsonString;
-
-    fn json_provide_into<
-        W: ConsumeJson<ConsumeJsonKind: json_kinds::JsonKind<Contains<Self::JsonKind> = ()>>,
-    >(
-        self,
-        w: W,
-    ) -> Consumed<Self::JsonKind, W> {
-        let mut w = w.start_to_consume_chained_strings(());
-        w.extend(self.0);
-        w.end_with(self.1)
-    }
-
-    const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool =
-        A::IS_CHAINABLE_AND_ALWAYS_EMPTY && B::IS_CHAINABLE_AND_ALWAYS_EMPTY;
 }
 
 impl<A: ToJsonString, B: ToJsonString> ToJson for ChainString<A, B> {
