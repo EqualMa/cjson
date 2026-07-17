@@ -1,8 +1,6 @@
 use cjson::{
-    json, json_to_string, json_write,
-    ser::{
-        ConsumeJson, ConsumeJsonChunks as _, ConsumeJsonText, json_kinds, traits::ConsumeTextChunk,
-    },
+    json, json_to_string,
+    ser::{ConsumeJson, json_kinds},
     values::ObjectOfIter,
 };
 
@@ -63,10 +61,7 @@ fn test3<const V: u8>() {
         json_to_string!(const { "hello\x20world" }),
         "\"hello world\""
     );
-    #[cfg(todo)]
-    {
-        json_write!(w, json_value_generic_const!(V));
-    }
+    assert_eq!(json_to_string!(json_value_generic_const!(V)), "5");
     assert_eq!(json_to_string!(null), "null");
     assert_eq!(json_to_string!((1)), "1");
 
@@ -82,7 +77,6 @@ fn test3<const V: u8>() {
     assert_eq!(json_to_string!([true, (false)]), "[true,false]");
 
     assert_eq!(json_to_string!([..([1, 2]), false]), "[1,2,false]");
-    #[cfg(todo)]
     assert_eq!(
         json_to_string!([..([1, 2]), ..([3, 4]), false]),
         "[1,2,3,4,false]"
@@ -155,15 +149,15 @@ fn test3<const V: u8>() {
         }),
         r#"{"false":false,"one":1}"#
     );
-    #[cfg(todo)]
     assert_eq!(
         json_to_string!({
-            ..(ObjectOfKvs([]));
-            ..(ObjectOfKvs([]));
-            "one" = 1;
+            ..(ObjectOfIter([] as [(&str, u8); 0]));
+            ..(ObjectOfIter([] as [(&str, u8); 0]));
+            "one" = 1i8;
         }),
         r#"{"one":1}"#
     );
+
     assert_eq!(
         json_to_string!({
             "one" = 1u8;
