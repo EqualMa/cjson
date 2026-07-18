@@ -28,6 +28,8 @@ impl IntoJson for bool {
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false;
 }
 
+impl super::ToJsonByCopyIntoJson for bool {}
+
 mod r#const {
     use crate::{r#const::ConstIntoJson, ser::texts};
 
