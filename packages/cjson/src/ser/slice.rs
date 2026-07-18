@@ -1,7 +1,7 @@
-use crate::utils::iter_map::impl_iter_map;
+use crate::{utils::iter_map::impl_iter_map, values::ArrayOfIter};
 
 use super::{
-    ConsumeJson, Consumed, IntoJson, ToJson, ToJsonArray,
+    ConsumeJson, Consumed, IntoJson, ToJson, ToJson2, ToJsonArray,
     json_kinds::{self, JsonKind},
     texts,
 };
@@ -38,6 +38,24 @@ impl<T: ToJson> ToJson for [T] {
     }
 }
 
+impl<T> ToJson2 for [T]
+where
+    for<'a> &'a T: IntoJson,
+{
+    type ToJsonKind = json_kinds::Array;
+
+    fn json_provide_to<
+        W: ConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::ToJsonKind> = ()>>,
+    >(
+        &self,
+        w: W,
+    ) -> Consumed<Self::ToJsonKind, W> {
+        ArrayOfIter(self).json_provide_into(w)
+    }
+
+    const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false;
+}
+
 impl<T: ToJson, const N: usize> ToJsonArray for [T; N] {
     type ToJsonArray<'a>
         = <[T] as ToJsonArray>::ToJsonArray<'a>
@@ -69,7 +87,25 @@ impl<T: IntoJson, const N: usize> IntoJson for [T; N] {
         self,
         w: W,
     ) -> Consumed<Self::JsonKind, W> {
-        crate::values::ArrayOfIter(self).json_provide_into(w)
+        ArrayOfIter(self).json_provide_into(w)
+    }
+
+    const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false;
+}
+
+impl<T, const N: usize> ToJson2 for [T; N]
+where
+    for<'a> &'a T: IntoJson,
+{
+    type ToJsonKind = json_kinds::Array;
+
+    fn json_provide_to<
+        W: ConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::ToJsonKind> = ()>>,
+    >(
+        &self,
+        w: W,
+    ) -> Consumed<Self::ToJsonKind, W> {
+        <[T]>::json_provide_to(self, w)
     }
 
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false;
