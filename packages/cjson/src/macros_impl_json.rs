@@ -1,0 +1,338 @@
+///
+/// ```
+/// ```
+///
+/// `vis` default to `pub` if not specified.
+///
+/// ```compile_error
+/// pub enum Private {
+///     A,
+/// }
+///
+/// ::cjson::impl_to_json!(
+///     vis![],
+///     impl_generics![],
+///     where_clause![],
+///     |self: Private| match self {
+///         #[cjson(match_branch_name(A))]
+///         Self::A => json!("A"),
+///     }
+/// );
+/// ```
+#[macro_export]
+macro_rules! impl_json {
+    ($($t:tt)+) => {
+        $crate::__private_impl_json_options! {
+            {
+                parse_mod($crate::macro_helpers::impl_json_options)
+                on_parsed(($crate::__private_impl_json_options_resolved!))
+            }
+            {
+                impl_generics[] // empty
+                where_clause[] // empty
+                where_clause_to[] // empty
+                where_clause_into[] // empty
+            }
+            {$($t)+}
+            {$($t)+}
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_impl_json_options {
+    // []
+    (
+        {
+            parse_mod($($parse_mod:tt)+)
+            on_parsed $on_parsed:tt
+        }
+        $options:tt
+        { $_option_name:ident !        [$($_option_bracketed:tt)*] , $($_rest:tt)+ }
+        {  $option_name:ident $bang:tt     $option_bracketed:tt    ,  $($rest:tt)+ }
+    ) => {
+        $($parse_mod)+::$option_name $bang {
+            (($crate::__private_impl_json_options!)[{
+                parse_mod($($parse_mod)+)
+                on_parsed $on_parsed
+            }]{
+                {$($_rest)+}
+                { $($rest)+}
+            })
+            $options
+            $option_bracketed
+        }
+    };
+    // {}
+    (
+        {
+            parse_mod($($parse_mod:tt)+)
+            on_parsed $on_parsed:tt
+        }
+        $options:tt
+        { $_option_name:ident !        {$($_option:tt)*} , $($_rest:tt)+ }
+        {  $option_name:ident $bang:tt  {$($option:tt)*} ,  $($rest:tt)+ }
+    ) => {
+        $($parse_mod)+::$option_name $bang {
+            (($crate::__private_impl_json_options!)[{
+                parse_mod($($parse_mod)+)
+                on_parsed $on_parsed
+            }]{
+                {$($_rest)+}
+                { $($rest)+}
+            })
+            [$($option)*]
+            $option_bracketed
+        }
+    };
+    // ()
+    (
+        {
+            parse_mod($($parse_mod:tt)+)
+            on_parsed $on_parsed:tt
+        }
+        $options:tt
+        { $_option_name:ident !        ($($_option:tt)*) , $($_rest:tt)+ }
+        {  $option_name:ident $bang:tt  ($($option:tt)*) ,  $($rest:tt)+ }
+    ) => {
+        $($parse_mod)+::$option_name $bang {
+            (($crate::__private_impl_json_options!)[{
+                parse_mod($($parse_mod)+)
+                on_parsed $on_parsed
+            }]{
+                {$($_rest)+}
+                { $($rest)+}
+            })
+            [$($option)*]
+            $option_bracketed
+        }
+    };
+    (
+        {
+            parse_mod $parse_mod:tt
+            on_parsed(
+                ($($on_parsed_macro_bang:tt)+)
+                $([$($on_parsed_prepend:tt)*])?
+                $({$($on_parsed_append:tt)*})?
+            )
+        }
+        $options:tt
+        $_rest:tt
+         $rest:tt
+    ) => {
+        $($on_parsed_macro_bang)+ {
+            $($($on_parsed_prepend)*)?
+            $options
+            $rest
+            $($($on_parsed_append)*)?
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_impl_json_option_impl_generics {
+    (
+        (
+            ($($on_parsed_macro_bang:tt)+)
+            $([$($on_parsed_prepend:tt)*])?
+            $({$($on_parsed_append:tt)*})?
+        )
+        {
+            impl_generics[] // this forbids multiple impl_generics![]
+            where_clause $where_clause:tt
+            where_clause_to $where_clause_to:tt
+            where_clause_into $where_clause_into:tt
+        }
+        $option_bracketed:tt
+    ) => {
+        $($on_parsed_macro_bang)+ {
+            $($($on_parsed_prepend)*)?
+            {
+                impl_generics $option_bracketed
+                where_clause $where_clause
+                where_clause_to $where_clause_to
+                where_clause_into $where_clause_into
+            }
+            $($($on_parsed_append)*)?
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_impl_json_option_where_clause {
+    (
+        (
+            ($($on_parsed_macro_bang:tt)+)
+            $([$($on_parsed_prepend:tt)*])?
+            $({$($on_parsed_append:tt)*})?
+        )
+        {
+            impl_generics $impl_generics:tt
+            where_clause[] // this forbids multiple where_clause![]
+            where_clause_to $where_clause_to:tt
+            where_clause_into $where_clause_into:tt
+        }
+        $option_bracketed:tt
+    ) => {
+        $($on_parsed_macro_bang)+ {
+            $($($on_parsed_prepend)*)?
+            {
+                impl_generics $impl_generics
+                where_clause $option_bracketed
+                where_clause_to $where_clause_to
+                where_clause_into $where_clause_into
+            }
+            $($($on_parsed_append)*)?
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_impl_json_option_where_clause_to {
+    (
+        (
+            ($($on_parsed_macro_bang:tt)+)
+            $([$($on_parsed_prepend:tt)*])?
+            $({$($on_parsed_append:tt)*})?
+        )
+        {
+            impl_generics $impl_generics:tt
+            where_clause $where_clause:tt
+            where_clause_to[] // this forbids multiple where_clause_to![]
+            where_clause_into $where_clause_into:tt
+        }
+        $option_bracketed:tt
+    ) => {
+        $($on_parsed_macro_bang)+ {
+            $($($on_parsed_prepend)*)?
+            {
+                impl_generics $impl_generics
+                where_clause $where_clause
+                where_clause_to $option_bracketed
+                where_clause_into $where_clause_into
+            }
+            $($($on_parsed_append)*)?
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_impl_json_option_where_clause_into {
+    (
+        (
+            ($($on_parsed_macro_bang:tt)+)
+            $([$($on_parsed_prepend:tt)*])?
+            $({$($on_parsed_append:tt)*})?
+        )
+        {
+            impl_generics $impl_generics:tt
+            where_clause $where_clause:tt
+            where_clause_to $where_clause_to:tt
+            where_clause_into[] // this forbids multiple where_clause_to![]
+        }
+        $option_bracketed:tt
+    ) => {
+        $($on_parsed_macro_bang)+ {
+            $($($on_parsed_prepend)*)?
+            {
+                impl_generics $impl_generics
+                where_clause $where_clause
+                where_clause_to $where_clause_to
+                where_clause_into $option_bracketed
+            }
+            $($($on_parsed_append)*)?
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_impl_json_options_resolved {
+    (
+        $options:tt
+        {
+            |$_self:ident : $Type:ty|
+            $($json_comma:tt)*
+        }
+    ) => {
+        $crate::__private_impl_to_json_parse! {
+            ($($json_comma)*)
+            {
+                expand_macro_bang($crate::__private_impl_json_on_parsed!)
+                expand_macro_rest($options {
+                    self($_self)
+                    Self($Type)
+                })
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_impl_json_auto_ref_to   { ($($t:tt)*) => { &$($t)* }; }
+#[macro_export]
+macro_rules! __private_impl_json_auto_ref_into { ($($t:tt)*) => {  $($t)* }; }
+
+#[macro_export]
+macro_rules! __private_impl_json_auto_ref_to_type {
+    ($t:ty) => {
+        $crate::__private::refed::Refed::<$t>
+    };
+}
+
+#[macro_export]
+macro_rules! __private_impl_json_on_parsed {
+    (
+        $parsed:tt
+        {
+            impl_generics[ $($impl_generics:tt)* ]
+            where_clause[$($where_clause:tt)*]
+            where_clause_to[$($where_clause_to:tt)*]
+            where_clause_into[$($where_clause_into:tt)*]
+        }
+        {
+            self $_self:tt
+            Self($Type:ty)
+        }
+    ) => {
+        #[automatically_derived] // TODO: is this needed?
+        const _: () = {
+            #[allow(unused_imports)]
+            use $crate::macro_helpers::impl_json_auto_ref::into::*;
+            impl< $($impl_generics)* > $crate::ser::IntoJson
+                for $Type
+                where
+                    $($where_clause)*
+                    $($where_clause_into)*
+            {
+                $crate::__private_impl_to_json_parsed_as_into_body! {
+                    $parsed
+                    { self $_self }
+                }
+            }
+        };
+
+        #[automatically_derived] // TODO: is this needed?
+        const _: () = {
+            #[allow(unused_imports)]
+            use $crate::macro_helpers::impl_json_auto_ref::to_type::*;
+
+            impl< $($impl_generics)* > $crate::ser::ToJson2
+                for $Type
+                where
+                    $($where_clause)*
+                    $($where_clause_to)*
+            {
+                $crate::__private_impl_to_json_parsed_as_to_body! {
+                    $parsed
+                    {
+                        self $_self
+                        prepend_fn_and_const(
+                            #[allow(unused_imports)]
+                            use $crate::macro_helpers::impl_json_auto_ref::to::auto_ref;
+                        )
+                    }
+                }
+            }
+        };
+    };
+}

@@ -188,6 +188,7 @@ mod tuple;
 #[cfg(feature = "alloc")]
 mod alloc;
 
+// TODO: remove
 pub fn write_json_text(value: impl IntoJson, w: impl traits::ConsumeTextChunk) {
     let Consumed { .. } = value.json_provide_into(consumers::ConsumeJsonText(w));
 }
@@ -201,11 +202,11 @@ impl<T: ?Sized + ToJson2<ToJsonKind = json_kinds::Object>> ToJsonObject2 for T {
 pub trait ToJsonString2: ToJson2<ToJsonKind = json_kinds::JsonString> {}
 impl<T: ?Sized + ToJson2<ToJsonKind = json_kinds::JsonString>> ToJsonString2 for T {}
 
-pub trait IntoJsonArray2: IntoJson<JsonKind = json_kinds::Array> {}
-impl<T: ?Sized + IntoJson<JsonKind = json_kinds::Array>> IntoJsonArray2 for T {}
+pub trait IntoJsonArray: IntoJson<JsonKind = json_kinds::Array> {}
+impl<T: ?Sized + IntoJson<JsonKind = json_kinds::Array>> IntoJsonArray for T {}
 
-pub trait IntoJsonObject2: IntoJson<JsonKind = json_kinds::Object> {}
-impl<T: ?Sized + IntoJson<JsonKind = json_kinds::Object>> IntoJsonObject2 for T {}
+pub trait IntoJsonObject: IntoJson<JsonKind = json_kinds::Object> {}
+impl<T: ?Sized + IntoJson<JsonKind = json_kinds::Object>> IntoJsonObject for T {}
 
-pub trait IntoJsonString2: IntoJson<JsonKind = json_kinds::JsonString> {}
-impl<T: ?Sized + IntoJson<JsonKind = json_kinds::JsonString>> IntoJsonString2 for T {}
+pub trait IntoJsonString: IntoJson<JsonKind = json_kinds::JsonString> {}
+impl<T: ?Sized + IntoJson<JsonKind = json_kinds::JsonString>> IntoJsonString for T {}

@@ -21,9 +21,3 @@ impl<T: ToJson2> IntoJson for Refed<T> {
 
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = <T as ToJson2>::IS_CHAINABLE_AND_ALWAYS_EMPTY;
 }
-
-macro_rules! __private_json_refed {
-        ($Ty:ty) => {
-            Refed<$Ty>
-        };
-    }

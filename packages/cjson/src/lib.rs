@@ -72,8 +72,11 @@ json! {false}
 pub mod r#const;
 mod macros;
 mod macros_generic_const;
+mod macros_impl_json;
 mod macros_impl_to_json;
 mod macros_write;
+
+pub mod macro_helpers;
 
 #[doc(hidden)]
 pub mod __private;

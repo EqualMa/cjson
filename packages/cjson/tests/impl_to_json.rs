@@ -1,24 +1,26 @@
-use cjson::{impl_to_json, ser::ToJson2 as ToJson};
+use cjson::{impl_json, ser::IntoJson, ser::ToJson2 as ToJson};
 
 macro_rules! assert_json_eq {
     ($v:expr, $eq:expr) => {
-        assert_eq!(::cjson::ser::ToJsonExt::to_json_as_string(&$v), $eq)
+        assert_eq!(::cjson::ser::ToJsonExt::to_json_as_string(&$v), $eq);
+        assert_eq!(::cjson::ser::IntoJsonExt::into_json_as_string($v), $eq);
     };
 }
 
 struct Null;
-impl_to_json!(|self: Null| null);
+impl_json!(|self: Null| null);
 
 #[test]
 fn null() {
     assert_json_eq!(Null, "null");
 }
 
-struct Runtime<T: ToJson>(T);
-impl_to_json!(
+struct Runtime<T>(T);
+impl_json!(
     impl_generics![T],
-    where_clause![where T: ToJson],
-    |self: Runtime<T>| (&self.0) as &T,
+    where_clause_to![T: ToJson],
+    where_clause_into![T: IntoJson],
+    |self: Runtime<T>| (auto_ref!(self.0)) as auto_ref![T],
 );
 
 #[test]
@@ -27,14 +29,14 @@ fn runtime() {
 }
 
 struct Literal;
-impl_to_json!(|self: Literal| 1u8);
+impl_json!(|self: Literal| 1u8);
 #[test]
 fn literal() {
     assert_json_eq!(Literal, "1");
 }
 
 struct Const;
-impl_to_json!(|self: Const| const { false });
+impl_json!(|self: Const| const { false });
 
 #[test]
 fn r#const() {
@@ -43,14 +45,14 @@ fn r#const() {
 
 const V: &str = "hello\tworld!";
 struct Const2;
-impl_to_json!(|self: Const2| const { V });
+impl_json!(|self: Const2| const { V });
 #[test]
 fn const2() {
     assert_json_eq!(Const2, "\"hello\\tworld!\"");
 }
 
 struct Const3<const V: bool>;
-impl_to_json!(
+impl_json!(
     impl_generics![const V: bool],
     |self: Const3<V>| json_value_generic_const! { V }
 );
@@ -61,7 +63,7 @@ fn r#const3() {
 }
 
 struct ArrayCompileTime;
-impl_to_json!(|self: ArrayCompileTime| [true, false]);
+impl_json!(|self: ArrayCompileTime| [true, false]);
 #[test]
 fn array_compile_time() {
     assert_json_eq!(ArrayCompileTime, "[true,false]");
@@ -69,7 +71,7 @@ fn array_compile_time() {
 
 const V2: bool = true;
 struct ArrayCompileTime2<const NOT_USED: u8>;
-impl_to_json!(
+impl_json!(
     impl_generics![const N: u8],
     //
     |self: ArrayCompileTime2<N>| [[const { V2 }], null]
@@ -80,27 +82,27 @@ fn array_compile_time2() {
 }
 
 struct ArrayRuntime(u8);
-impl_to_json!(|self: ArrayRuntime| [1u8, (self.0) as u8, 3u8]);
+impl_json!(|self: ArrayRuntime| [1u8, (self.0) as u8, 3u8]);
 #[test]
 fn array_runtime() {
     assert_json_eq!(ArrayRuntime(2), "[1,2,3]");
 }
 
 struct ArrayRuntime2(u8);
-impl_to_json!(|self: ArrayRuntime2| [1u8, (&self.0) as &u8, 3u8]);
+impl_json!(|self: ArrayRuntime2| [1u8, (auto_ref!(self.0)) as auto_ref![u8], 3u8]);
 #[test]
 fn array_runtime2() {
     assert_json_eq!(ArrayRuntime2(20), "[1,20,3]");
 }
 
 struct MyU8<const V: u8>;
-impl_to_json!(
+impl_json!(
     impl_generics![const V: u8],
     //
     |self: MyU8<V>| json_value_generic_const! { V }
 );
 struct ArrayRuntime3<const V: u8>;
-impl_to_json!(impl_generics![const V: u8], |self: ArrayRuntime3<V>| [
+impl_json!(impl_generics![const V: u8], |self: ArrayRuntime3<V>| [
     1u8,
     (&MyU8) as &'static MyU8<V>,
     json_value_generic_const![V, 1],
@@ -113,7 +115,7 @@ fn array_runtime3() {
 }
 
 struct ObjectCompileTime;
-impl_to_json!(|self: ObjectCompileTime| { "name" = ["value"] });
+impl_json!(|self: ObjectCompileTime| { "name" = ["value"] });
 #[test]
 fn object_compile_time() {
     assert_json_eq!(ObjectCompileTime, r#"{"name":["value"]}"#);
@@ -121,22 +123,25 @@ fn object_compile_time() {
 
 struct ObjectRuntime<A, B>(A, B);
 
-impl_to_json!(
+impl_json!(
     impl_generics![A, B],
-    where_clause![
-        where
-            A: ToJson,
-            B: ToJson,
+    where_clause_to![
+        A: ToJson,
+        B: ToJson,
+    ],
+    where_clause_into![
+        A: IntoJson,
+        B: IntoJson,
     ],
     |self: ObjectRuntime<A, B>| {
         "values" = [
             {
                 "kind" = "A";
-                "value" = (&self.0) as &A;
+                "value" = (auto_ref!(self.0)) as auto_ref!(A);
             },
             {
                 "kind" = "B";
-                "value" = (&self.1) as &B;
+                "value" = (auto_ref!(self.1)) as auto_ref!(B);
             },
         ]
     }
@@ -151,16 +156,20 @@ fn object_runtime() {
 
 struct ObjectRuntime2<A, B>(A, B);
 
-impl_to_json!(
+impl_json!(
     impl_generics![A, B],
-    where_clause![
-        where
-            A: cjson::ser::ToJson2<ToJsonKind = ::cjson::ser::json_kinds::JsonString>,
-            B: ToJson,
+    where_clause_to![
+        A: cjson::ser::ToJsonString2,
+        B: ToJson,
+    ],
+    where_clause_into![
+        A: cjson::ser::IntoJsonString,
+        B: IntoJson,
     ],
     |self: ObjectRuntime2<A, B>| {
         //
-        json_string!("namespace:", (&self.0) as &A) = (&self.1) as &B
+        json_string!("namespace:", (auto_ref!(self.0)) as auto_ref![A]) =
+            (auto_ref!(self.1)) as auto_ref!(B)
     }
 );
 #[test]
@@ -172,7 +181,7 @@ fn object_runtime2() {
 }
 
 struct JsonStringCompileTime;
-impl_to_json!(|self: JsonStringCompileTime| json_string!["hello", " ", "world", "\n"]);
+impl_json!(|self: JsonStringCompileTime| json_string!["hello", " ", "world", "\n"]);
 
 #[test]
 fn json_string_compile_time() {
@@ -184,7 +193,7 @@ struct JsonStringRuntime<'a> {
     msg: &'a str,
     from: &'a str,
 }
-impl_to_json!(
+impl_json!(
     impl_generics!['a],
     |self: JsonStringRuntime<'a>| json_string![
         "Dear",
