@@ -272,7 +272,7 @@ pub trait ConsumeJson {
         yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
     ) -> json_string_chunks::ConsumeInJsonString<Self::EndJsonString, Self>;
 
-    type ConsumeChainedStrings: ConsumeChainedStrings<InitialConsumer = Self>;
+    type ConsumeChainedStrings: ConsumeChained<json_kinds::JsonString, InitialConsumer = Self>;
     fn start_to_consume_chained_strings(
         self,
         yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
@@ -294,7 +294,7 @@ pub trait ConsumeJson {
         yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
     ) -> Self::ConsumeChunksOfNonEmptyArray;
 
-    type ConsumeChainedArrays: ConsumeChainedArrays<InitialConsumer = Self>;
+    type ConsumeChainedArrays: ConsumeChained<json_kinds::Array, InitialConsumer = Self>;
 
     fn start_to_consume_chained_arrays(
         self,
@@ -323,7 +323,7 @@ pub trait ConsumeJson {
         yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
     ) -> Self::ConsumeChunksOfNonEmptyObject;
 
-    type ConsumeChainedObjects: ConsumeChainedObjects<InitialConsumer = Self>;
+    type ConsumeChainedObjects: ConsumeChained<json_kinds::Object, InitialConsumer = Self>;
     fn start_to_consume_chained_objects(
         self,
         yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
@@ -336,34 +336,11 @@ pub trait ConsumeJson {
     ) -> Consumed<json_kinds::Object, Self>;
 }
 
-pub trait ConsumeChainedStrings {
-    fn extend<V: IntoJson<JsonKind = json_kinds::JsonString>>(&mut self, s: V);
+pub trait ConsumeChained<K: json_kinds::ChainableJsonKind> {
+    fn extend<V: IntoJson<JsonKind = K>>(&mut self, s: V);
 
     type InitialConsumer: ?Sized;
-    fn end_with<V: IntoJson<JsonKind = json_kinds::JsonString>>(
-        self,
-        s: V,
-    ) -> Consumed<json_kinds::JsonString, Self::InitialConsumer>;
-}
-
-pub trait ConsumeChainedArrays {
-    fn extend<V: IntoJson<JsonKind = json_kinds::Array>>(&mut self, arr: V);
-
-    type InitialConsumer: ?Sized;
-    fn end_with<V: IntoJson<JsonKind = json_kinds::Array>>(
-        self,
-        arr: V,
-    ) -> Consumed<json_kinds::Array, Self::InitialConsumer>;
-}
-
-pub trait ConsumeChainedObjects {
-    fn extend<V: IntoJson<JsonKind = json_kinds::Object>>(&mut self, obj: V);
-
-    type InitialConsumer: ?Sized;
-    fn end_with<V: IntoJson<JsonKind = json_kinds::Object>>(
-        self,
-        obj: V,
-    ) -> Consumed<json_kinds::Object, Self::InitialConsumer>;
+    fn end_with<V: IntoJson<JsonKind = K>>(self, s: V) -> Consumed<K, Self::InitialConsumer>;
 }
 
 pub trait ConsumeJsonChunks<K: json_kinds::ArrayOrObject> {
@@ -1207,7 +1184,7 @@ impl_many!({
         }
     }
 
-    impl<W: ConsumeTextChunk> ConsumeChainedArrays for CONSUME<W> {
+    impl<W: ConsumeTextChunk> ConsumeChained<json_kinds::Array> for CONSUME<W> {
         fn extend<V: IntoJson<JsonKind = json_kinds::Array>>(&mut self, arr: V) {
             let Consumed { .. } =
                 arr.json_provide_into(CONSUME(self.0.as_mut_consume_text_chunk()));
@@ -1299,7 +1276,7 @@ impl_many!({
         }
     }
 
-    impl<W: ConsumeTextChunk> ConsumeChainedObjects for CONSUME<W> {
+    impl<W: ConsumeTextChunk> ConsumeChained<json_kinds::Object> for CONSUME<W> {
         fn extend<V: IntoJson<JsonKind = json_kinds::Object>>(&mut self, arr: V) {
             let Consumed { .. } =
                 arr.json_provide_into(CONSUME(self.0.as_mut_consume_text_chunk()));

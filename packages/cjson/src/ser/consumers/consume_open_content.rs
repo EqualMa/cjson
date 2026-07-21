@@ -6,8 +6,8 @@ use crate::{
 };
 
 use super::{
-    ConsumeChainedStrings, ConsumeChunksOfNonEmptyArray, ConsumeChunksOfNonEmptyObject,
-    ConsumeJson, ConsumeJsonText, Consumed,
+    ConsumeChunksOfNonEmptyArray, ConsumeChunksOfNonEmptyObject, ConsumeJson, ConsumeJsonText,
+    Consumed,
     consume_content::ConsumeStringFragment,
     json_kinds::{self, JsonKind},
     json_string_chunks,
@@ -227,18 +227,16 @@ impl<W: ConsumeTextChunk> ConsumeJson for ConsumeObjectOpenKvsIfNotEmpty<'_, W> 
 impl_many!({
     {
         {
-            use super::ConsumeChainedArrays as TraitConsumeChained;
             use ConsumeArrayOpenItemsIfNotEmpty as ConsumeOpenContentIfNotEmpty;
             use json_kinds::Array as K;
         }
         {
-            use super::ConsumeChainedObjects as TraitConsumeChained;
             use ConsumeObjectOpenKvsIfNotEmpty as ConsumeOpenContentIfNotEmpty;
             use json_kinds::Object as K;
         }
     }
 
-    impl<W: ConsumeTextChunk> TraitConsumeChained for ConsumeOpenContentIfNotEmpty<'_, W> {
+    impl<W: ConsumeTextChunk> super::ConsumeChained<K> for ConsumeOpenContentIfNotEmpty<'_, W> {
         fn extend<V: IntoJson<JsonKind = K>>(&mut self, content: V) {
             ConsumeOpenContentIfNotEmpty {
                 writer: self.writer.as_mut_consume_text_chunk(),
@@ -375,7 +373,9 @@ impl<W: ConsumeTextChunk> ConsumeStringOpenFragmentIfNotEmpty<'_, W> {
     }
 }
 
-impl<W: ConsumeTextChunk> ConsumeChainedStrings for ConsumeStringOpenFragmentIfNotEmpty<'_, W> {
+impl<W: ConsumeTextChunk> super::ConsumeChained<json_kinds::JsonString>
+    for ConsumeStringOpenFragmentIfNotEmpty<'_, W>
+{
     fn extend<V: IntoJson<JsonKind = json_kinds::JsonString>>(&mut self, s: V) {
         ConsumeStringOpenFragmentIfNotEmpty {
             writer: self.writer.as_mut_consume_text_chunk(),

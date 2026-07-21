@@ -1,5 +1,5 @@
 use cjson::ser::{
-    ConsumeChainedArrays, ConsumeJson, Consumed, IntoJson,
+    ConsumeChained as _, ConsumeJson, Consumed, IntoJson,
     json_kinds::{self, JsonKind},
 };
 

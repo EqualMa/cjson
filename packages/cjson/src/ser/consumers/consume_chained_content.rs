@@ -49,14 +49,12 @@ impl_many!({
     {
         {
             use super::ConsumeArrayItemsPrependCommaIfNotEmpty as ConsumeCommaContent;
-            use super::ConsumeChainedArrays as TraitConsumeChained;
             use super::consume_content_and_record::ConsumeArrayItemsAndRecord as ConsumeContentAndRecord;
             use ConsumeChainedArrayItems as ConsumeChainedContent;
             use ConsumeChainedArrayItemsInitialConsumer as TraitInitialConsumer;
             use json_kinds::Array as K;
         }
         {
-            use super::ConsumeChainedObjects as TraitConsumeChained;
             use super::ConsumeObjectKvsPrependCommaIfNotEmpty as ConsumeCommaContent;
             use super::consume_content_and_record::ConsumeObjectKvsAndRecord as ConsumeContentAndRecord;
             use ConsumeChainedObjectKvs as ConsumeChainedContent;
@@ -98,7 +96,7 @@ impl_many!({
         }
     }
 
-    impl<W: ConsumeTextChunk, S: BorrowMut<bool>, I: TraitInitialConsumer> TraitConsumeChained
+    impl<W: ConsumeTextChunk, S: BorrowMut<bool>, I: TraitInitialConsumer> super::ConsumeChained<K>
         for ConsumeChainedContent<W, S, I>
     {
         fn extend<V: IntoJson<JsonKind = K>>(&mut self, arr: V) {

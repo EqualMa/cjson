@@ -139,24 +139,18 @@ impl<W: ConsumeTextChunk> ConsumeJson for ConsumeObjectCommaKvsClose<W> {
 impl_many!({
     {
         {
-            use super::{
-                ConsumeArrayItemsPrependCommaIfNotEmpty as ConsumeCommaContent,
-                ConsumeChainedArrays as TraitConsumeChainedContent,
-            };
+            use super::ConsumeArrayItemsPrependCommaIfNotEmpty as ConsumeCommaContent;
             use ConsumeArrayCommaItemsClose as ConsumeCommaContentClose;
             use json_kinds::Array as K;
         }
         {
-            use super::{
-                ConsumeChainedObjects as TraitConsumeChainedContent,
-                ConsumeObjectKvsPrependCommaIfNotEmpty as ConsumeCommaContent,
-            };
+            use super::ConsumeObjectKvsPrependCommaIfNotEmpty as ConsumeCommaContent;
             use ConsumeObjectCommaKvsClose as ConsumeCommaContentClose;
             use json_kinds::Object as K;
         }
     }
 
-    impl<W: ConsumeTextChunk> TraitConsumeChainedContent for ConsumeCommaContentClose<W> {
+    impl<W: ConsumeTextChunk> super::ConsumeChained<K> for ConsumeCommaContentClose<W> {
         fn extend<V: IntoJson<JsonKind = K>>(&mut self, arr: V) {
             let Consumed { .. } =
                 arr.json_provide_into(ConsumeCommaContent(self.0.as_mut_consume_text_chunk()));

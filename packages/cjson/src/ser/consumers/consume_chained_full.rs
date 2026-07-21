@@ -1,8 +1,8 @@
 use crate::{ser::traits::ConsumeTextChunk, utils::impl_many};
 
 use super::{
-    ConsumeChainedStrings, ConsumeJsonText, Consumed, IntoJson,
-    consume_content::ConsumeStringFragment, consume_content_close::ConsumeStringFragmentClose,
+    ConsumeChained, ConsumeJsonText, Consumed, IntoJson, consume_content::ConsumeStringFragment,
+    consume_content_close::ConsumeStringFragmentClose,
     consume_open_content::ConsumeStringOpenFragmentIfNotEmpty, json_kinds,
 };
 
@@ -44,7 +44,7 @@ impl_many!({
     }
 });
 
-impl<W: ConsumeTextChunk> ConsumeChainedStrings for ConsumeChainedStringsFull<W> {
+impl<W: ConsumeTextChunk> ConsumeChained<json_kinds::JsonString> for ConsumeChainedStringsFull<W> {
     fn extend<V: IntoJson<JsonKind = json_kinds::JsonString>>(&mut self, s: V) {
         if self.started {
             let Consumed { .. } = s.json_provide_into(ConsumeStringFragment(
@@ -76,14 +76,12 @@ impl_many!({
     {
         {
             use super::ConsumeArrayItemsPrependCommaIfNotEmpty as ConsumeCommaContent;
-            use super::ConsumeChainedArrays as TraitConsumeChained;
             use super::consume_comma_content_close::ConsumeArrayCommaItemsClose as ConsumeCommaContentClose;
             use super::consume_open_content::ConsumeArrayOpenItemsIfNotEmpty as ConsumeOpenContentIfNotEmpty;
             use ConsumeChainedArraysFull as ConsumeChainedFull;
             use json_kinds::Array as K;
         }
         {
-            use super::ConsumeChainedObjects as TraitConsumeChained;
             use super::ConsumeObjectKvsPrependCommaIfNotEmpty as ConsumeCommaContent;
             use super::consume_comma_content_close::ConsumeObjectCommaKvsClose as ConsumeCommaContentClose;
             use super::consume_open_content::ConsumeObjectOpenKvsIfNotEmpty as ConsumeOpenContentIfNotEmpty;
@@ -92,7 +90,7 @@ impl_many!({
         }
     }
 
-    impl<W: ConsumeTextChunk> TraitConsumeChained for ConsumeChainedFull<W> {
+    impl<W: ConsumeTextChunk> ConsumeChained<K> for ConsumeChainedFull<W> {
         fn extend<V: IntoJson<JsonKind = K>>(&mut self, arr: V) {
             if self.started {
                 let Consumed { .. } = arr.json_provide_into(ConsumeCommaContent(

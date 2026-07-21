@@ -1,6 +1,6 @@
 pub use self::consumers::{
-    ConsumeChainedArrays, ConsumeChainedObjects, ConsumeChainedStrings, ConsumeJson,
-    ConsumeJsonChunks, ConsumeJsonChunksFromInit, ConsumeJsonText, Consumed,
+    ConsumeChained, ConsumeJson, ConsumeJsonChunks, ConsumeJsonChunksFromInit, ConsumeJsonText,
+    Consumed,
     chunks::{ReadyToConsumeJsonChunksOfNonEmptyArray, ReadyToConsumeJsonChunksOfNonEmptyObject},
     json_kinds,
     json_string_chunks::ConsumeInJsonString,

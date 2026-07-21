@@ -6,8 +6,7 @@ use crate::{
 };
 
 use super::{
-    ConsumeChainedArrays, ConsumeChainedObjects, ConsumeChainedStrings, ConsumeJson,
-    ConsumeJsonChunks, ConsumeJsonChunksFromInit, Consumed,
+    ConsumeChained, ConsumeJson, ConsumeJsonChunks, ConsumeJsonChunksFromInit, Consumed,
     json_kinds::{self, JsonKind},
     runtime_chunks::RuntimeChunks,
 };
@@ -199,45 +198,15 @@ impl<INITIAL: ConsumeJson, K: JsonKind> ConsumeOpenContentBeforeContent<K>
     }
 }
 
-impl<INITIAL: ConsumeJson> ConsumeChainedArrays for NeverConsume<INITIAL> {
-    fn extend<V: IntoJson<JsonKind = json_kinds::Array>>(&mut self, _: V) {
+impl<INITIAL: ConsumeJson, K: json_kinds::ChainableJsonKind> ConsumeChained<K>
+    for NeverConsume<INITIAL>
+{
+    fn extend<V: IntoJson<JsonKind = K>>(&mut self, _: V) {
         match self.0 {}
     }
 
     type InitialConsumer = INITIAL;
-    fn end_with<V: IntoJson<JsonKind = json_kinds::Array>>(
-        self,
-        _: V,
-    ) -> Consumed<json_kinds::Array, Self::InitialConsumer> {
-        match self.0 {}
-    }
-}
-
-impl<INITIAL: ConsumeJson> ConsumeChainedObjects for NeverConsume<INITIAL> {
-    fn extend<V: IntoJson<JsonKind = json_kinds::Object>>(&mut self, _: V) {
-        match self.0 {}
-    }
-
-    type InitialConsumer = INITIAL;
-    fn end_with<V: IntoJson<JsonKind = json_kinds::Object>>(
-        self,
-        _: V,
-    ) -> Consumed<json_kinds::Object, Self::InitialConsumer> {
-        match self.0 {}
-    }
-}
-
-impl<INITIAL: ConsumeJson> ConsumeChainedStrings for NeverConsume<INITIAL> {
-    fn extend<V: IntoJson<JsonKind = json_kinds::JsonString>>(&mut self, _: V) {
-        match self.0 {}
-    }
-
-    type InitialConsumer = INITIAL;
-
-    fn end_with<V: IntoJson<JsonKind = json_kinds::JsonString>>(
-        self,
-        _: V,
-    ) -> Consumed<json_kinds::JsonString, Self::InitialConsumer> {
+    fn end_with<V: IntoJson<JsonKind = K>>(self, _: V) -> Consumed<K, Self::InitialConsumer> {
         match self.0 {}
     }
 }

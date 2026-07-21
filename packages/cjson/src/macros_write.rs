@@ -311,7 +311,7 @@ macro_rules! __private_json_write_eof {
         ($consumer:expr)
     ) => {
         $crate::__private_json_write_chained_content! {
-            ConsumeChainedArrays
+            ($crate::ser::json_kinds::Array)
             [$v]
             $maybe_try
             <_ as $crate::ser::ConsumeJson>::start_to_consume_chained_arrays(
@@ -338,7 +338,7 @@ macro_rules! __private_json_write_eof {
         ($consumer:expr)
     ) => {
         $crate::__private_json_write_chained_content! {
-            ConsumeChainedObjects
+            ($crate::ser::json_kinds::Object)
             [$v]
             $maybe_try
             <_ as $crate::ser::ConsumeJson>::start_to_consume_chained_objects(
@@ -413,17 +413,17 @@ macro_rules! __private_json_write_eof {
 macro_rules! __private_json_write_chained_content {
     (
         $(@)?
-        $TraitConsumeChainedContent:ident
+        ($ChainableJsonKind:ty)
         [{($last_items:expr) $(as $LastItemsType:ty)?}]
         { $maybe_try:ident $($question:tt)? }
         $w:expr
     ) => {
-        <_ as $crate::ser::$TraitConsumeChainedContent>::end_with::<
+        <_ as $crate::ser::ConsumeChained<$ChainableJsonKind>>::end_with::<
             $crate::__expand_or![[$($LastItemsType)?][_]]
         >($w, $last_items) $($question)?
     };
     (
-        $TraitConsumeChainedContent:ident
+        ($ChainableJsonKind:ty)
         [
             {($items:expr) $(as $ItemsType:ty)?}
             $($rest:tt)+
@@ -432,11 +432,11 @@ macro_rules! __private_json_write_chained_content {
         $w:expr
     ) => {{
         let mut w = $w;
-        <_ as $crate::ser::$TraitConsumeChainedContent>::extend::<
+        <_ as $crate::ser::ConsumeChained<$ChainableJsonKind>>::extend::<
             $crate::__expand_or![[$($ItemsType)?][_]]
         >(&mut w, $items) $($question)? ;
         $crate::__private_json_write_chained_content! {
-            @$TraitConsumeChainedContent
+            @($ChainableJsonKind)
             [$($rest)+]
             { $maybe_try $($question)? }
             w
@@ -444,7 +444,7 @@ macro_rules! __private_json_write_chained_content {
     }};
     (
         @
-        $TraitConsumeChainedContent:ident
+        ($ChainableJsonKind:ty)
         [
             {($items:expr) $(as $ItemsType:ty)?}
             $($rest:tt)+
@@ -452,11 +452,11 @@ macro_rules! __private_json_write_chained_content {
         { $maybe_try:ident $($question:tt)? }
         $w:ident
     ) => {
-        <_ as $crate::ser::$TraitConsumeChainedContent>::extend::<
+        <_ as $crate::ser::ConsumeChained<$ChainableJsonKind>>::extend::<
             $crate::__expand_or![[$($ItemsType)?][_]]
         >(&mut $w, $items) $($question)? ;
         $crate::__private_json_write_chained_content! {
-            @$TraitConsumeChainedContent
+            @($ChainableJsonKind)
             [$($rest)+]
             { $maybe_try $($question)? }
             $w

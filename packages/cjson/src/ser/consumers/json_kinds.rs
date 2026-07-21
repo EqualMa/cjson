@@ -195,3 +195,9 @@ impl ArrayOrObject for Object {
         ContentfulLastChunkOfObjectAsStr<'a, Prev>;
     type ContentfulFullChunkAsAtr<'a> = NonEmptyObjectAsStr<'a>;
 }
+
+pub trait ChainableJsonKind: JsonKind {}
+
+impl ChainableJsonKind for JsonString {}
+impl ChainableJsonKind for Array {}
+impl ChainableJsonKind for Object {}

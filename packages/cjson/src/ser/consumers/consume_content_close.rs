@@ -1,8 +1,8 @@
 use crate::ser::traits::{ConsumeTextChunk, IntoTextChunks};
 
 use super::{
-    ConsumeChainedStrings, ConsumeJson, Consumed, consume_content::ConsumeStringFragment,
-    json_kinds, json_string_chunks,
+    ConsumeChained, ConsumeJson, Consumed, consume_content::ConsumeStringFragment, json_kinds,
+    json_string_chunks,
 };
 
 pub(super) struct ConsumeStringFragmentClose<W: ConsumeTextChunk>(pub W);
@@ -71,7 +71,7 @@ impl<W: ConsumeTextChunk> ConsumeJson for ConsumeStringFragmentClose<W> {
     }
 }
 
-impl<W: ConsumeTextChunk> ConsumeChainedStrings for ConsumeStringFragmentClose<W> {
+impl<W: ConsumeTextChunk> ConsumeChained<json_kinds::JsonString> for ConsumeStringFragmentClose<W> {
     fn extend<V: crate::ser::IntoJson<JsonKind = json_kinds::JsonString>>(&mut self, s: V) {
         let Consumed { .. } =
             s.json_provide_into(ConsumeStringFragment(self.0.as_mut_consume_text_chunk()));

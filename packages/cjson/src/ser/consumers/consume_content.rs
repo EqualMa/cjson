@@ -6,8 +6,8 @@ use crate::ser::{
 };
 
 use super::{
-    ConsumeChainedStrings, ConsumeChunksOfNonEmptyArray, ConsumeChunksOfNonEmptyObject,
-    ConsumeJson, ConsumeJsonText, Consumed,
+    ConsumeChained, ConsumeChunksOfNonEmptyArray, ConsumeChunksOfNonEmptyObject, ConsumeJson,
+    ConsumeJsonText, Consumed,
     consume_chained_content::{ConsumeChainedArrayItems, ConsumeChainedObjectKvs},
     json_kinds::{self, JsonKind},
     json_string_chunks,
@@ -82,7 +82,7 @@ impl<W: ConsumeTextChunk> ConsumeJson for ConsumeStringFragment<W> {
     }
 }
 
-impl<W: ConsumeTextChunk> ConsumeChainedStrings for ConsumeStringFragment<W> {
+impl<W: ConsumeTextChunk> ConsumeChained<json_kinds::JsonString> for ConsumeStringFragment<W> {
     fn extend<V: IntoJson<JsonKind = json_kinds::JsonString>>(&mut self, s: V) {
         let Consumed { .. } =
             s.json_provide_into(ConsumeStringFragment(self.0.as_mut_consume_text_chunk()));
