@@ -17,8 +17,22 @@ either = { version = "1.15.0", default-features = false, optional = true }
 [features]
 default = ["std", "default_no_std"]
 default_no_std = ["itoa", "proc-macro"]
+
+# Enable all features for rust stable channel including `std`
+stable_all = ["std", "stable_all_no_std"]
+# Enable all features for rust stable channel excluding `std`
+stable_all_no_std = ["default_no_std", "proc-macro", "either"]
+
 alloc = []
 std = ["alloc"]
+
+# # Default Enabled Features
+#
 itoa = ["dep:itoa"]
+
 proc-macro = ["dep:cjson-proc-macro"]
 either = ["dep:either"]
+
+# # Features for nightly rust
+# This enables #[feature = "write_all_vectored"]
+write_all_vectored = []

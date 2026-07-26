@@ -21,8 +21,8 @@ impl<W: ?Sized + io::Write> TryConsumeTextChunk for IoWrite<W> {
 
         #[cfg(feature = "write_all_vectored")]
         self.0.write_all_vectored(&mut [
-            IoSlice::new(chunk1.as_bytes()),
-            IoSlice::new(chunk2.as_bytes()),
+            io::IoSlice::new(chunk1.as_bytes()),
+            io::IoSlice::new(chunk2.as_bytes()),
         ])
     }
 

@@ -1,5 +1,6 @@
 #![no_std]
 #![deny(clippy::missing_safety_doc)]
+#![cfg_attr(feature = "write_all_vectored", feature(write_all_vectored))]
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
