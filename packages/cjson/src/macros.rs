@@ -27,7 +27,7 @@ macro_rules! json {
     ($well_known_ident:ident) => {
         $crate::__private_json_const!(
             {}
-            $crate::__private::well_known_ident::$well_known_ident
+            $crate::macro_helpers::well_known_ident::$well_known_ident
         )
     };
     (($runtime_expr:expr)) => {
@@ -487,7 +487,7 @@ macro_rules! __private_json_value {
                 current_compile_time[
                     $($current_compile_time)*
                     $($before_value)*
-                    json_value($crate::__private::well_known_ident::$well_known_ident)
+                    json_value($crate::macro_helpers::well_known_ident::$well_known_ident)
                 ]
                 after_value $after_value
             ]

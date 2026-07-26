@@ -1,6 +1,6 @@
-use crate::ser::{IntoJson, json_kinds::JsonKind};
+use crate::ser::IntoJson;
 
-use super::{ConsumeJson, Consumed, ToJson, json_kinds, texts};
+use super::{ToJson, helpers::json_fns, json_kinds, texts};
 
 impl ToJson for bool {
     type ToJson<'a>
@@ -16,14 +16,10 @@ impl ToJson for bool {
 impl IntoJson for bool {
     type JsonKind = json_kinds::AnyValue;
 
-    fn json_provide_into<
-        W: ConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::JsonKind> = ()>>,
-    >(
-        self,
-        w: W,
-    ) -> Consumed<Self::JsonKind, W> {
-        w.consume_any_value(texts::Value::bool(self), ())
-    }
+    json_fns!({
+        json_provide_into::json_provide_into_try::json_provide_into_async_try::JsonKind;
+        |self, w| w.consume_any_value(texts::Value::bool(self), ())
+    });
 
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false;
 }

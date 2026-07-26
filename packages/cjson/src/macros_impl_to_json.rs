@@ -68,7 +68,8 @@ macro_rules! __private_impl_to_json_parsed_as_to_body {
                 {
                     ToJsonKind ToJsonKind
                     provide json_provide_to
-                    try_provide json_try_provide_to
+                    provide_try json_provide_to_try
+                    provide_async_try json_provide_to_async_try
                     ref(&)
                 }
                 $data
@@ -89,7 +90,8 @@ macro_rules! __private_impl_to_json_parsed_as_into_body {
                 {
                     ToJsonKind JsonKind
                     provide json_provide_into
-                    try_provide json_try_provide_into
+                    provide_try json_provide_into_try
+                    provide_async_try json_provide_into_async_try
                     ref()
                 }
                 $data
@@ -110,7 +112,8 @@ macro_rules! __private_impl_to_json_parsed_as_body {
     ({
         ToJsonKind $ToJsonKind:ident
         provide $provide:ident
-        try_provide $try_provide:ident
+        provide_try $provide_try:ident
+        provide_async_try $provide_async_try:ident
         ref($($ref:tt)?)
     }{
         self($_self:ident)
@@ -128,10 +131,50 @@ macro_rules! __private_impl_to_json_parsed_as_body {
             $($($prepend_fn_and_const)*)?
             $($write_macro_bang)+ {
                 $($($write_prev)*)?
-                { no_try }
+                { base }
                 (w)
                 $($($write_rest)*)?
             }
+        }
+
+        fn $provide_try<__CJsonWriter: $crate::ser::TryConsumeJson<
+            ConsumeJsonKind: $crate::ser::json_kinds::JsonKind<
+                Contains<Self::$ToJsonKind> = ()
+            >
+        >>(
+            $($ref)? $_self,
+            w: __CJsonWriter,
+        ) -> $crate::__private::Result<
+            $crate::ser::Consumed<Self::$ToJsonKind, __CJsonWriter>,
+            <<__CJsonWriter as $crate::ser::TryConsumeJson>::Writer as $crate::ser::traits::TryConsumeTextChunk>::Err
+        > {
+            $($($prepend_fn_and_const)*)?
+            $crate::__private::Result::Ok($($write_macro_bang)+ {
+                $($($write_prev)*)?
+                { try_ ? }
+                (w)
+                $($($write_rest)*)?
+            })
+        }
+
+        async fn $provide_async_try<__CJsonWriter: $crate::ser::AsyncTryConsumeJson<
+            ConsumeJsonKind: $crate::ser::json_kinds::JsonKind<
+                Contains<Self::$ToJsonKind> = ()
+            >
+        >>(
+            $($ref)? $_self,
+            w: __CJsonWriter,
+        ) -> $crate::__private::Result<
+            $crate::ser::Consumed<Self::$ToJsonKind, __CJsonWriter>,
+            <<__CJsonWriter as $crate::ser::AsyncTryConsumeJson>::Writer as $crate::ser::traits::AsyncTryConsumeTextChunk>::Err
+        > {
+            $($($prepend_fn_and_const)*)?
+            $crate::__private::Result::Ok($($write_macro_bang)+ {
+                $($($write_prev)*)?
+                { async_try .await? }
+                (w)
+                $($($write_rest)*)?
+            })
         }
 
         const IS_CHAINABLE_AND_ALWAYS_EMPTY: $crate::__private::bool = {

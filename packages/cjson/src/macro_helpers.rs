@@ -20,3 +20,8 @@ pub mod impl_json_auto_ref {
         pub use crate::__private_impl_json_auto_ref_into as auto_ref;
     }
 }
+
+// TODO: move to pub module
+pub mod well_known_ident {
+    pub use crate::values::Null as null;
+}

@@ -215,6 +215,13 @@ impl<I: Iterator<Item: traits::Text>> IntoTextChunks for CommaSeparatedElementsO
             Ok(())
         }
     }
+
+    fn async_try_write_into<W: ?Sized + traits::AsyncTryConsumeTextChunk>(
+        self,
+        w: &mut W,
+    ) -> impl Future<Output = Result<(), W::Err>> {
+        async { todo!() }
+    }
 }
 
 impl<I: Iterator<Item: traits::Text>> traits::sealed::Text for CommaSeparatedElementsOfIter<I> {}
@@ -306,6 +313,13 @@ impl<I: Iterator<Item: traits::Text>> IntoTextChunks for PrependLeadingCommaIfNo
             w.try_consume_text_chunk(",")?;
             item.try_write_into(w)
         })
+    }
+
+    async fn async_try_write_into<W: ?Sized + traits::AsyncTryConsumeTextChunk>(
+        self,
+        w: &mut W,
+    ) -> Result<(), W::Err> {
+        todo!()
     }
 }
 
@@ -457,6 +471,13 @@ impl<I: Iterator<Item: traits::Text>> IntoTextChunks for AppendTrailingCommaIfNo
             w.try_consume_text_chunk(",")
         })
     }
+
+    fn async_try_write_into<W: ?Sized + traits::AsyncTryConsumeTextChunk>(
+        self,
+        w: &mut W,
+    ) -> impl Future<Output = Result<(), W::Err>> {
+        async { todo!() }
+    }
 }
 
 impl<I: Iterator<Item: traits::Text>> traits::sealed::EmptyOrCommaSeparatedElementsWithTrailingComma
@@ -493,6 +514,13 @@ impl<I: Iterator<Item: traits::Text>, Other: traits::EmptyOrCommaSeparatedElemen
     ) -> Result<(), W::Err> {
         AppendTrailingCommaIfNotEmpty(self.0).try_write_into(w)?;
         self.1.try_write_into(w)
+    }
+
+    fn async_try_write_into<W: ?Sized + traits::AsyncTryConsumeTextChunk>(
+        self,
+        w: &mut W,
+    ) -> impl Future<Output = Result<(), W::Err>> {
+        async { todo!() }
     }
 }
 

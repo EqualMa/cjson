@@ -1,6 +1,6 @@
 use core::{borrow::BorrowMut, marker::PhantomData};
 
-use crate::{ser::traits::ConsumeTextChunk, utils::impl_many};
+use crate::utils::impl_many;
 
 use super::{
     Consumed, IntoJson,
@@ -10,7 +10,7 @@ use super::{
 };
 
 pub struct ConsumeChainedArrayItems<
-    W: ConsumeTextChunk,
+    W,
     S: BorrowMut<bool>,
     I: ConsumeChainedArrayItemsInitialConsumer,
 > {
@@ -20,7 +20,8 @@ pub struct ConsumeChainedArrayItems<
 }
 
 pub struct ConsumeChainedObjectKvs<
-    W: ConsumeTextChunk,
+    //
+    W,
     S: BorrowMut<bool>,
     I: ConsumeChainedObjectKvsInitialConsumer,
 > {
@@ -31,19 +32,13 @@ pub struct ConsumeChainedObjectKvs<
 
 pub trait ConsumeChainedArrayItemsInitialConsumer {}
 
-impl<W: ConsumeTextChunk> ConsumeChainedArrayItemsInitialConsumer for ConsumeArrayItems<W> {}
-impl<W: ConsumeTextChunk> ConsumeChainedArrayItemsInitialConsumer
-    for ConsumeArrayItemsAndRecord<'_, W>
-{
-}
+impl<W> ConsumeChainedArrayItemsInitialConsumer for ConsumeArrayItems<W> {}
+impl<W> ConsumeChainedArrayItemsInitialConsumer for ConsumeArrayItemsAndRecord<'_, W> {}
 
 pub trait ConsumeChainedObjectKvsInitialConsumer {}
 
-impl<W: ConsumeTextChunk> ConsumeChainedObjectKvsInitialConsumer for ConsumeObjectKvs<W> {}
-impl<W: ConsumeTextChunk> ConsumeChainedObjectKvsInitialConsumer
-    for ConsumeObjectKvsAndRecord<'_, W>
-{
-}
+impl<W> ConsumeChainedObjectKvsInitialConsumer for ConsumeObjectKvs<W> {}
+impl<W> ConsumeChainedObjectKvsInitialConsumer for ConsumeObjectKvsAndRecord<'_, W> {}
 
 impl_many!({
     {
@@ -63,7 +58,7 @@ impl_many!({
         }
     }
 
-    impl<W: ConsumeTextChunk, I: TraitInitialConsumer> ConsumeChainedContent<W, bool, I> {
+    impl<W, I: TraitInitialConsumer> ConsumeChainedContent<W, bool, I> {
         pub(super) fn new_owned(writer: W) -> Self {
             Self {
                 writer,
@@ -73,9 +68,7 @@ impl_many!({
         }
     }
 
-    impl<W: ConsumeTextChunk, S: BorrowMut<bool>, I: TraitInitialConsumer>
-        ConsumeChainedContent<W, S, I>
-    {
+    impl<W, S: BorrowMut<bool>, I: TraitInitialConsumer> ConsumeChainedContent<W, S, I> {
         pub(super) fn new(writer: W, mut started: S) -> Self {
             debug_assert!(!*started.borrow_mut());
             Self {
@@ -84,34 +77,76 @@ impl_many!({
                 initial_consumer: PhantomData,
             }
         }
-
-        fn impl_extend(mut self, arr: impl IntoJson<JsonKind = K>) {
-            let started = self.started.borrow_mut();
-            if *started {
-                let Consumed { .. } = arr.json_provide_into(ConsumeCommaContent(self.writer));
-            } else {
-                let Consumed { .. } =
-                    arr.json_provide_into(ConsumeContentAndRecord::new(started, self.writer));
-            }
-        }
     }
 
-    impl<W: ConsumeTextChunk, S: BorrowMut<bool>, I: TraitInitialConsumer> super::ConsumeChained<K>
-        for ConsumeChainedContent<W, S, I>
-    {
-        fn extend<V: IntoJson<JsonKind = K>>(&mut self, arr: V) {
-            ConsumeChainedContent {
-                writer: self.writer.as_mut_consume_text_chunk(),
-                started: self.started.borrow_mut(),
-                initial_consumer: PhantomData::<I>,
+    impl_many!({
+        {
+            {
+                use crate::ser::consumers::define_traits::base as trait_mod;
             }
-            .impl_extend(arr)
+            {
+                use crate::ser::consumers::define_traits::try_ as trait_mod;
+            }
+            {
+                use crate::ser::consumers::define_traits::async_try as trait_mod;
+            }
         }
 
-        type InitialConsumer = I;
-        fn end_with<V: IntoJson<JsonKind = K>>(self, arr: V) -> Consumed<K, Self::InitialConsumer> {
-            self.impl_extend(arr);
-            Consumed::assert(K)
+        use trait_mod::{
+            AwaitedOutput, CONSUME_CHAINED, CONSUME_JSON, CONSUME_TEXT_CHUNK, Output,
+            XHelpers as _, await_try, de_async, last_expr,
+        };
+
+        struct ImplExtend<T>(T);
+
+        impl<W: CONSUME_TEXT_CHUNK, S: BorrowMut<bool>, I: TraitInitialConsumer>
+            ImplExtend<ConsumeChainedContent<W, S, I>>
+        {
+            de_async!(
+                async fn impl_extend(
+                    self,
+                    arr: impl IntoJson<JsonKind = K>,
+                ) -> AwaitedOutput![(), W] {
+                    let Self(mut this) = self;
+                    let started = this.started.borrow_mut();
+                    if *started {
+                        let Consumed { .. } =
+                            await_try!(arr.json_provide_into_x(ConsumeCommaContent(this.writer)));
+                    } else {
+                        let Consumed { .. } = await_try!(arr.json_provide_into_x(
+                            ConsumeContentAndRecord::new(started, this.writer)
+                        ));
+                    }
+
+                    last_expr!(())
+                }
+            );
         }
-    }
+
+        impl<
+            W: CONSUME_TEXT_CHUNK,
+            S: BorrowMut<bool>,
+            I: TraitInitialConsumer + CONSUME_JSON<Writer = W>,
+        > CONSUME_CHAINED<K> for ConsumeChainedContent<W, S, I>
+        {
+            fn extend<V: IntoJson<JsonKind = K>>(&mut self, arr: V) -> Output![(), W] {
+                ImplExtend(ConsumeChainedContent {
+                    writer: self.writer.as_mut_x_consume_text_chunk(),
+                    started: self.started.borrow_mut(),
+                    initial_consumer: PhantomData::<I>,
+                })
+                .impl_extend(arr)
+            }
+
+            type InitialConsumer = I;
+            fn end_with<V: IntoJson<JsonKind = K>>(
+                self,
+                arr: V,
+            ) -> Output![Consumed<K, Self::InitialConsumer>, W] {
+                ImplExtend(self)
+                    .impl_extend(arr)
+                    .x_map_ok(|()| const { Consumed::assert(K) })
+            }
+        }
+    });
 });

@@ -4,9 +4,10 @@ use crate::{
     r#const::array_string::ArrayString,
     ser::{
         ConsumeJson, Consumed, IntoJson, ToJson, ToJsonByCopyIntoJson,
+        helpers::json_fns,
         json_kinds::{self, JsonKind},
         texts,
-        traits::{ConsumeTextChunk, IntoTextChunks, TryConsumeTextChunk},
+        traits::{AsyncTryConsumeTextChunk, ConsumeTextChunk, IntoTextChunks, TryConsumeTextChunk},
     },
     utils::impl_many,
 };
@@ -57,15 +58,10 @@ impl_many!(
         ]
     {
         type JsonKind = json_kinds::AnyValue;
-        fn json_provide_into<
-            W: ConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::JsonKind> = ()>>,
-        >(
-            self,
-            w: W,
-        ) -> Consumed<Self::JsonKind, W> {
-            w.consume_any_value(texts::Value::new_without_validation(self), ())
-        }
-
+        json_fns!({
+            json_provide_into::json_provide_into_try::json_provide_into_async_try::JsonKind;
+            |self, w| w.consume_any_value(texts::Value::new_without_validation(self), ())
+        });
         const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false;
     }
 );
@@ -94,6 +90,17 @@ impl_many!(
                 &mut MaybeUninit::uninit(),
                 self,
             ))
+        }
+
+        async fn async_try_write_into<W: ?Sized + AsyncTryConsumeTextChunk>(
+            self,
+            w: &mut W,
+        ) -> Result<(), W::Err> {
+            w.async_try_consume_text_chunk(imp::format::<{ <Self as imp::Integer>::MAX_STR_LEN }>(
+                &mut MaybeUninit::uninit(),
+                self,
+            ))
+            .await
         }
     }
 );

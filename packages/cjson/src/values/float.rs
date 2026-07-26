@@ -1,7 +1,9 @@
 use crate::{
     r#const::array_string::ArrayString,
     ser::{
-        IntoJson, ToJson, ToJsonByCopyIntoJson, json_kinds, texts,
+        IntoJson, ToJson, ToJsonByCopyIntoJson,
+        helpers::json_fns,
+        json_kinds, texts,
         traits::{self, IntoTextChunks},
     },
     utils::impl_many,
@@ -23,16 +25,10 @@ impl_many!({
 
     impl IntoJson for Finite<Float> {
         type JsonKind = json_kinds::AnyValue;
-        fn json_provide_into<
-            W: crate::ser::ConsumeJson<
-                    ConsumeJsonKind: json_kinds::JsonKind<Contains<Self::JsonKind> = ()>,
-                >,
-        >(
-            self,
-            w: W,
-        ) -> crate::ser::Consumed<Self::JsonKind, W> {
-            w.consume_any_value(texts::Value::new_without_validation(self), ())
-        }
+        json_fns!({
+            json_provide_into::json_provide_into_try::json_provide_into_async_try::JsonKind;
+            |self, w| w.consume_any_value(texts::Value::new_without_validation(self), ())
+        });
         const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false;
     }
 
@@ -76,6 +72,15 @@ impl_many!({
             let mut buf = ryu::Buffer::new();
             let s = buf.format_finite(self.0);
             w.try_consume_text_chunk(s)
+        }
+
+        async fn async_try_write_into<W: ?Sized + traits::AsyncTryConsumeTextChunk>(
+            self,
+            w: &mut W,
+        ) -> Result<(), W::Err> {
+            let mut buf = ryu::Buffer::new();
+            let s = buf.format_finite(self.0);
+            w.async_try_consume_text_chunk(s).await
         }
     }
 });

@@ -94,6 +94,13 @@ impl<T: Kvs> traits::IntoTextChunks for Braced<T> {
         self.0.try_write_into(w)?;
         w.try_consume_text_chunk("}")
     }
+
+    async fn async_try_write_into<W: ?Sized + traits::AsyncTryConsumeTextChunk>(
+        self,
+        w: &mut W,
+    ) -> Result<(), W::Err> {
+        todo!()
+    }
 }
 impl<T: Kvs> traits::sealed::Text for Braced<T> {}
 impl<T: Kvs> traits::Text for Braced<T> {}

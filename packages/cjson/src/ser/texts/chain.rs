@@ -25,6 +25,13 @@ impl<A: IntoTextChunks, B: IntoTextChunks> IntoTextChunks for Chain<A, B> {
         self.0.try_write_into(w)?;
         self.1.try_write_into(w)
     }
+
+    async fn async_try_write_into<W: ?Sized + traits::AsyncTryConsumeTextChunk>(
+        self,
+        w: &mut W,
+    ) -> Result<(), W::Err> {
+        todo!()
+    }
 }
 
 impl<A: traits::JsonStringFragment, B: traits::JsonStringFragment>

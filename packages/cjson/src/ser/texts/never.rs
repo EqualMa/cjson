@@ -1,4 +1,5 @@
 use crate::{
+    never_future::NeverFuture,
     ser::{
         iter_text_chunk::NeverTextChunk,
         traits::{self, IntoTextChunks},
@@ -27,6 +28,13 @@ impl IntoTextChunks for Never {
         _: &mut W,
     ) -> Result<(), W::Err> {
         match self {}
+    }
+
+    fn async_try_write_into<W: ?Sized + traits::AsyncTryConsumeTextChunk>(
+        self,
+        _: &mut W,
+    ) -> impl Future<Output = Result<(), W::Err>> {
+        (match self {}) as NeverFuture<Result<(), W::Err>>
     }
 }
 
@@ -78,6 +86,13 @@ impl traits::IntoTextChunks for NeverElements {
         _: &mut W,
     ) -> Result<(), W::Err> {
         match self {}
+    }
+
+    fn async_try_write_into<W: ?Sized + traits::AsyncTryConsumeTextChunk>(
+        self,
+        w: &mut W,
+    ) -> impl Future<Output = Result<(), W::Err>> {
+        (match self {}) as NeverFuture<Result<(), W::Err>>
     }
 }
 

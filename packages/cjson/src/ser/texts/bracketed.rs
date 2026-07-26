@@ -114,6 +114,13 @@ impl<Values: EmptyOrCommaSeparatedElements> traits::IntoTextChunks for Bracketed
         self.0.try_write_into(w)?;
         w.try_consume_text_chunk("]")
     }
+
+    async fn async_try_write_into<W: ?Sized + traits::AsyncTryConsumeTextChunk>(
+        self,
+        w: &mut W,
+    ) -> Result<(), W::Err> {
+        todo!()
+    }
 }
 impl<Values: EmptyOrCommaSeparatedElements> traits::sealed::Text for Bracketed<Values> {}
 impl<Values: EmptyOrCommaSeparatedElements> traits::Text for Bracketed<Values> {}

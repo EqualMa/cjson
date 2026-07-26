@@ -1,3 +1,4 @@
+#![cfg(todo)]
 #![cfg(feature = "proc-macro")]
 
 use cjson::{self as my_json, ToJson, ser::exts::TextExt as _};

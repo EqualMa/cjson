@@ -17,6 +17,13 @@ impl IntoTextChunks for Empty {
     ) -> Result<(), W::Err> {
         Ok(())
     }
+
+    fn async_try_write_into<W: ?Sized + traits::AsyncTryConsumeTextChunk>(
+        self,
+        _: &mut W,
+    ) -> impl Future<Output = Result<(), W::Err>> {
+        ::core::future::ready(Ok(()))
+    }
 }
 impl traits::sealed::JsonStringFragment for Empty {}
 impl traits::JsonStringFragment for Empty {}

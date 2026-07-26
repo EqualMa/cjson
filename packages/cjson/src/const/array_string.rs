@@ -104,4 +104,11 @@ impl<Len, const CAP: usize> crate::ser::traits::IntoTextChunks for ArrayString<L
     ) -> Result<(), W::Err> {
         todo!()
     }
+
+    fn async_try_write_into<W: ?Sized + crate::ser::traits::AsyncTryConsumeTextChunk>(
+        self,
+        w: &mut W,
+    ) -> impl Future<Output = Result<(), W::Err>> {
+        async { todo!() }
+    }
 }

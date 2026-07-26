@@ -1,10 +1,6 @@
 use ref_cast::{RefCastCustom, ref_cast_custom};
 
-use crate::ser::{
-    ConsumeJson, Consumed, IntoJson, IntoJsonKeyColonValue, ToJson, ToJsonArray, ToJsonObject,
-    ToJsonString,
-    json_kinds::{self, JsonKind},
-};
+use crate::ser::{IntoJson, IntoJsonKeyColonValue, ToJson, helpers::json_fns, json_kinds};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Never {}
@@ -48,14 +44,10 @@ crate::utils::impl_many!(
 crate::utils::impl_many!(
     impl<__> IntoJson for each_of![Null, False, True] {
         type JsonKind = json_kinds::AnyValue;
-        fn json_provide_into<
-            W: ConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::JsonKind> = ()>>,
-        >(
-            self,
-            w: W,
-        ) -> Consumed<Self::JsonKind, W> {
-            w.consume_any_value(Self::JSON_VALUE_STR, ())
-        }
+        json_fns!({
+            json_provide_into::json_provide_into_try::json_provide_into_async_try::JsonKind;
+            |self, w| w.consume_any_value(Self::JSON_VALUE_STR, ())
+        });
 
         const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false;
     }
@@ -111,14 +103,10 @@ pub struct ObjectOfIter<I: IntoIterator<Item: IntoJsonKeyColonValue>>(pub I);
 impl<I: IntoIterator<Item: IntoJson>> IntoJson for ArrayOfIter<I> {
     type JsonKind = json_kinds::Array;
 
-    fn json_provide_into<
-        W: ConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::JsonKind> = ()>>,
-    >(
-        self,
-        w: W,
-    ) -> Consumed<Self::JsonKind, W> {
-        w.consume_array_of_items(self.0, ())
-    }
+    json_fns!({
+        json_provide_into::json_provide_into_try::json_provide_into_async_try::JsonKind;
+        |self, w| w.consume_array_of_items(self.0, ())
+    });
 
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false;
 }
@@ -126,14 +114,10 @@ impl<I: IntoIterator<Item: IntoJson>> IntoJson for ArrayOfIter<I> {
 impl<I: IntoIterator<Item: IntoJsonKeyColonValue>> IntoJson for ObjectOfIter<I> {
     type JsonKind = json_kinds::Object;
 
-    fn json_provide_into<
-        W: ConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::JsonKind> = ()>>,
-    >(
-        self,
-        w: W,
-    ) -> Consumed<Self::JsonKind, W> {
-        w.consume_object_of_iter(self.0, ())
-    }
+    json_fns!({
+        json_provide_into::json_provide_into_try::json_provide_into_async_try::JsonKind;
+        |self, w| w.consume_object_of_iter(self.0, ())
+    });
 
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false;
 }

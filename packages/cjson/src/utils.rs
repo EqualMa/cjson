@@ -3,9 +3,9 @@ pub(crate) mod iter_map;
 pub(crate) mod size_hint;
 
 macro_rules! impl_many {
-    (impl$(<__>)? $Trait:ident for each_of![$($Ty:ty),+ $(,)?] $body:tt) => {
+    ($impl:tt $(<__>)? $Trait:ident $for:tt each_of![$($Ty:ty),+ $(,)?] $body:tt) => {
         $(
-            impl $Trait for $Ty $body
+            $impl $Trait $for $Ty $body
         )+
     };
     (

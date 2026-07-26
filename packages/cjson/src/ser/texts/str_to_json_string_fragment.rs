@@ -78,6 +78,40 @@ impl<'a> IntoTextChunks for StrToJsonStringFragment<'a> {
 
         Ok(())
     }
+
+    async fn async_try_write_into<W: ?Sized + traits::AsyncTryConsumeTextChunk>(
+        self,
+        w: &mut W,
+    ) -> Result<(), W::Err> {
+        let mut iter_bytes = self.0.as_bytes().iter();
+
+        while iter_bytes.len() > 0 {
+            let bytes = iter_bytes.as_slice();
+
+            match iter_bytes.position(escape::needs_escape) {
+                Some(i) => {
+                    let byte = bytes[i];
+
+                    let escaped = unsafe { escape::escape_to_bytes_unchecked(byte) };
+
+                    if i > 0 {
+                        let prev = bytes.split_at(i).0;
+                        w.async_try_consume_text_chunk(unsafe { str::from_utf8_unchecked(prev) })
+                            .await?;
+                    }
+
+                    w.async_try_consume_text_chunk(unsafe { str::from_utf8_unchecked(escaped) })
+                        .await?;
+                }
+                None => {
+                    w.async_try_consume_text_chunk(unsafe { str::from_utf8_unchecked(bytes) })
+                        .await?
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl traits::sealed::JsonStringFragment for StrToJsonStringFragment<'_> {}

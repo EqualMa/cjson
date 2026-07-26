@@ -122,6 +122,13 @@ impl<T: traits::JsonStringFragment> IntoTextChunks for QuotedJsonStringFragment<
         self.0.try_write_into(w)?;
         w.try_consume_text_chunk("\"")
     }
+
+    async fn async_try_write_into<W: ?Sized + traits::AsyncTryConsumeTextChunk>(
+        self,
+        w: &mut W,
+    ) -> Result<(), W::Err> {
+        todo!()
+    }
 }
 
 impl<T: traits::JsonStringFragment> traits::sealed::Text for QuotedJsonStringFragment<T> {}

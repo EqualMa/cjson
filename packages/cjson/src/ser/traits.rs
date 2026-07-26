@@ -19,6 +19,30 @@ pub trait TryConsumeTextChunk {
     type Err;
 
     fn try_consume_text_chunk(&mut self, chunk: &str) -> Result<(), Self::Err>;
+    fn try_consume_2_text_chunks(&mut self, chunk1: &str, chunk2: &str) -> Result<(), Self::Err>;
+
+    fn as_mut_try_consume_text_chunk(&mut self) -> impl TryConsumeTextChunk<Err = Self::Err>
+    where
+        Self: Sized;
+}
+
+pub trait AsyncTryConsumeTextChunk {
+    type Err;
+    fn async_try_consume_text_chunk(
+        &mut self,
+        chunk: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>>;
+    fn async_try_consume_2_text_chunks(
+        &mut self,
+        chunk1: &str,
+        chunk2: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>>;
+
+    fn as_mut_async_try_consume_text_chunk(
+        &mut self,
+    ) -> impl AsyncTryConsumeTextChunk<Err = Self::Err>
+    where
+        Self: Sized;
 }
 
 impl<C: ?Sized + ConsumeTextChunk> TryConsumeTextChunk for C {
@@ -27,6 +51,17 @@ impl<C: ?Sized + ConsumeTextChunk> TryConsumeTextChunk for C {
     fn try_consume_text_chunk(&mut self, chunk: &str) -> Result<(), Self::Err> {
         self.consume_text_chunk(chunk);
         Ok(())
+    }
+    fn try_consume_2_text_chunks(&mut self, chunk1: &str, chunk2: &str) -> Result<(), Self::Err> {
+        self.consume_2_text_chunks(chunk1, chunk2);
+        Ok(())
+    }
+
+    fn as_mut_try_consume_text_chunk(&mut self) -> impl TryConsumeTextChunk<Err = Self::Err>
+    where
+        Self: Sized,
+    {
+        self.as_mut_consume_text_chunk()
     }
 }
 
@@ -47,12 +82,21 @@ impl<'a, T: ?Sized + ConsumeTextChunk> ConsumeTextChunk for MutConsume<'a, T> {
         MutConsume(self.0)
     }
 }
-pub struct MutTryConsume<'a, T: ?Sized + TryConsumeTextChunk>(pub &'a mut T);
+struct MutTryConsume<'a, T: ?Sized + TryConsumeTextChunk>(pub &'a mut T);
 
 impl<'a, T: ?Sized + TryConsumeTextChunk> TryConsumeTextChunk for MutTryConsume<'a, T> {
     type Err = T::Err;
     fn try_consume_text_chunk(&mut self, chunk: &str) -> Result<(), Self::Err> {
         T::try_consume_text_chunk(self.0, chunk)
+    }
+    fn try_consume_2_text_chunks(&mut self, chunk1: &str, chunk2: &str) -> Result<(), Self::Err> {
+        T::try_consume_2_text_chunks(self.0, chunk1, chunk2)
+    }
+    fn as_mut_try_consume_text_chunk(&mut self) -> impl TryConsumeTextChunk<Err = Self::Err>
+    where
+        Self: Sized,
+    {
+        MutTryConsume(self.0)
     }
 }
 
@@ -73,6 +117,11 @@ pub trait IntoTextChunks {
     fn write_into<W: ?Sized + ConsumeTextChunk>(self, w: &mut W);
 
     fn try_write_into<W: ?Sized + TryConsumeTextChunk>(self, w: &mut W) -> Result<(), W::Err>;
+
+    fn async_try_write_into<W: ?Sized + AsyncTryConsumeTextChunk>(
+        self,
+        w: &mut W,
+    ) -> impl Future<Output = Result<(), W::Err>>;
 }
 
 macro_rules! proxy_IntoTextChunks {
@@ -103,6 +152,10 @@ macro_rules! proxy_IntoTextChunks_write {
         fn try_write_into<W: ?Sized + crate::ser::traits::TryConsumeTextChunk>($self_, w: &mut W) -> Result<(), W::Err> {
             <$Proxy as crate::ser::traits::IntoTextChunks>::try_write_into($proxy, w)
         }
+
+        fn async_try_write_into<W: ?Sized + crate::ser::traits::AsyncTryConsumeTextChunk>($self_, w: &mut W) -> impl Future<Output = Result<(), W::Err>>{
+            <$Proxy as crate::ser::traits::IntoTextChunks>::async_try_write_into($proxy, w)
+        }
     };
 }
 
@@ -122,6 +175,13 @@ impl IntoTextChunks for &str {
     fn try_write_into<W: TryConsumeTextChunk + ?Sized>(self, w: &mut W) -> Result<(), W::Err> {
         w.try_consume_text_chunk(self)
     }
+
+    fn async_try_write_into<W: ?Sized + AsyncTryConsumeTextChunk>(
+        self,
+        w: &mut W,
+    ) -> impl Future<Output = Result<(), W::Err>> {
+        w.async_try_consume_text_chunk(self)
+    }
 }
 
 #[cfg(feature = "alloc")]
@@ -138,6 +198,13 @@ impl IntoTextChunks for alloc::string::String {
 
     fn try_write_into<W: ?Sized + TryConsumeTextChunk>(self, w: &mut W) -> Result<(), W::Err> {
         w.try_consume_text_chunk(&self)
+    }
+
+    fn async_try_write_into<W: ?Sized + AsyncTryConsumeTextChunk>(
+        self,
+        w: &mut W,
+    ) -> impl Future<Output = Result<(), W::Err>> {
+        async move { w.async_try_consume_text_chunk(&self).await }
     }
 }
 

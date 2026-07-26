@@ -55,6 +55,13 @@ impl<A: IntoTextChunks, B: IntoTextChunks> IntoTextChunks for Either<A, B> {
             Either::B(this) => B::try_write_into(this, w),
         }
     }
+
+    fn async_try_write_into<W: ?Sized + traits::AsyncTryConsumeTextChunk>(
+        self,
+        w: &mut W,
+    ) -> impl Future<Output = Result<(), W::Err>> {
+        async { todo!() }
+    }
 }
 
 derive_either!(

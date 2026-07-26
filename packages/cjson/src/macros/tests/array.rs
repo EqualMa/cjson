@@ -209,7 +209,7 @@ fn test_chunks() {
                                     .left_bracket()
                                     .json_value(
                                         crate::__private_json_expand_token_args_for_len! {
-                                            json_value crate::__private::well_known_ident::null
+                                            json_value crate::macro_helpers::well_known_ident::null
                                         },
                                     )
                                     .right_bracket()
@@ -222,7 +222,7 @@ fn test_chunks() {
                                     buf = buf.left_bracket();
                                     buf = crate::r#const::ConstIntoJsonValueString(
                                         crate::r#const::ConstIntoJson(
-                                            (crate::__private::well_known_ident::null),
+                                            (crate::macro_helpers::well_known_ident::null),
                                         )
                                         .const_into_json(),
                                     )

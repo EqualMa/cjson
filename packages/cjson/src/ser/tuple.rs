@@ -228,6 +228,17 @@ macro_rules! impl_IntoTextChunks_for_NonEmptyTupleItemsChunks {
                     )+
                     Ok(())
                 }
+
+                async fn async_try_write_into<W: ?Sized + traits::AsyncTryConsumeTextChunk>(
+                    self,
+                    w: &mut W,
+                ) -> Result<(), W::Err> {
+                    let ($($tn,)+) = self.0;
+                    $(
+                        $TN::async_try_write_into($tn, w).await?;
+                    )+
+                    Ok(())
+                }
             }
         };
     };

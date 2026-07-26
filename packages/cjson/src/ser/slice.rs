@@ -1,10 +1,6 @@
 use crate::{utils::iter_map::impl_iter_map, values::ArrayOfIter};
 
-use super::{
-    ConsumeJson, Consumed, IntoJson, ToJson, ToJson2, ToJsonArray,
-    json_kinds::{self, JsonKind},
-    texts,
-};
+use super::{IntoJson, ToJson, ToJson2, ToJsonArray, helpers::json_fns, json_kinds, texts};
 
 pub struct IterMapToJson<'a, T: 'a + ToJson> {
     iter: core::slice::Iter<'a, T>,
@@ -44,14 +40,14 @@ where
 {
     type ToJsonKind = json_kinds::Array;
 
-    fn json_provide_to<
-        W: ConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::ToJsonKind> = ()>>,
-    >(
-        &self,
-        w: W,
-    ) -> Consumed<Self::ToJsonKind, W> {
-        ArrayOfIter(self).json_provide_into(w)
-    }
+    json_fns!({
+        json_provide_to::json_provide_to_try::json_provide_to_async_try::ToJsonKind;
+        use trait_mod;
+        |&self, w| {
+            use trait_mod::XHelpers as _;
+            ArrayOfIter(self).json_provide_into_x(w)
+        }
+    });
 
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false;
 }
@@ -81,14 +77,14 @@ impl<T: ToJson, const N: usize> ToJson for [T; N] {
 impl<T: IntoJson, const N: usize> IntoJson for [T; N] {
     type JsonKind = json_kinds::Array;
 
-    fn json_provide_into<
-        W: ConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::JsonKind> = ()>>,
-    >(
-        self,
-        w: W,
-    ) -> Consumed<Self::JsonKind, W> {
-        ArrayOfIter(self).json_provide_into(w)
-    }
+    json_fns!({
+        json_provide_into::json_provide_into_try::json_provide_into_async_try::JsonKind;
+        use trait_mod;
+        |self, w| {
+            use trait_mod::XHelpers as _;
+            ArrayOfIter(self).json_provide_into_x(w)
+        }
+    });
 
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false;
 }
@@ -99,14 +95,14 @@ where
 {
     type ToJsonKind = json_kinds::Array;
 
-    fn json_provide_to<
-        W: ConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::ToJsonKind> = ()>>,
-    >(
-        &self,
-        w: W,
-    ) -> Consumed<Self::ToJsonKind, W> {
-        <[T]>::json_provide_to(self, w)
-    }
+    json_fns!({
+        json_provide_to::json_provide_to_try::json_provide_to_async_try::ToJsonKind;
+        use trait_mod;
+        |&self, w| {
+            use trait_mod::XHelpers as _;
+            <[T]>::json_provide_to_x(self, w)
+        }
+    });
 
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false;
 }

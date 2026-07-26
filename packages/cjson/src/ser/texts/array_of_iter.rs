@@ -191,6 +191,27 @@ impl<I: Iterator<Item: traits::Text>> traits::IntoTextChunks for ArrayOfIter<I> 
             w.try_consume_text_chunk(const { super::Value::EMPTY_ARRAY.inner() })
         }
     }
+
+    fn async_try_write_into<W: ?Sized + traits::AsyncTryConsumeTextChunk>(
+        self,
+        w: &mut W,
+    ) -> impl Future<Output = Result<(), W::Err>> {
+        async {
+            let mut items = self.0;
+            if let Some(first) = items.next() {
+                w.async_try_consume_text_chunk("[").await?;
+                first.async_try_write_into(w).await?;
+                for text in items {
+                    w.async_try_consume_text_chunk(",").await?;
+                    text.async_try_write_into(w).await?;
+                }
+                w.async_try_consume_text_chunk("]").await
+            } else {
+                w.async_try_consume_text_chunk(const { super::Value::EMPTY_ARRAY.inner() })
+                    .await
+            }
+        }
+    }
 }
 impl<I: Iterator<Item: traits::Text>> traits::sealed::Text for ArrayOfIter<I> {}
 impl<I: Iterator<Item: traits::Text>> traits::Text for ArrayOfIter<I> {}

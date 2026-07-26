@@ -33,6 +33,7 @@ macro_rules! json_to_string {
     }};
 }
 
+mod never_future;
 mod utils;
 /*
 macro_rules! json_string {

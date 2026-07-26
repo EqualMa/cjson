@@ -1,14 +1,19 @@
+use crate::ser::traits::{AsyncTryConsumeTextChunk, TryConsumeTextChunk};
+
 pub use self::consumers::{
-    ConsumeChained, ConsumeJson, ConsumeJsonChunks, ConsumeJsonChunksFromInit, ConsumeJsonText,
-    Consumed,
+    AsyncTryConsumeJson, ConsumeChained, ConsumeJson, ConsumeJsonChunks, ConsumeJsonChunksFromInit,
+    ConsumeJsonText, Consumed, TryConsumeJson,
     chunks::{ReadyToConsumeJsonChunksOfNonEmptyArray, ReadyToConsumeJsonChunksOfNonEmptyObject},
     json_kinds,
     json_string_chunks::ConsumeInJsonString,
 };
 
+pub(crate) use self::consumers::define_traits;
+
 use json_kinds::JsonKind;
 
 mod consumers;
+pub(crate) mod helpers;
 pub mod iter_text_chunk;
 pub mod open_close;
 pub mod texts;
@@ -24,6 +29,22 @@ pub trait IntoJson {
         w: W,
     ) -> Consumed<Self::JsonKind, W>;
 
+    fn json_provide_into_try<
+        W: TryConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::JsonKind> = ()>>,
+    >(
+        self,
+        w: W,
+    ) -> Result<Consumed<Self::JsonKind, W>, <W::Writer as TryConsumeTextChunk>::Err>;
+
+    fn json_provide_into_async_try<
+        W: AsyncTryConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::JsonKind> = ()>>,
+    >(
+        self,
+        w: W,
+    ) -> impl Future<
+        Output = Result<Consumed<Self::JsonKind, W>, <W::Writer as AsyncTryConsumeTextChunk>::Err>,
+    >;
+
     /// If implemented as `true`, chaining with another json value is optimized.
     /// Note that it is always correct to implement as `false`.
     ///
@@ -37,6 +58,23 @@ pub trait ToJson2 {
         &self,
         w: W,
     ) -> Consumed<Self::ToJsonKind, W>;
+    fn json_provide_to_try<
+        W: TryConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::ToJsonKind> = ()>>,
+    >(
+        &self,
+        w: W,
+    ) -> Result<Consumed<Self::ToJsonKind, W>, <W::Writer as TryConsumeTextChunk>::Err>;
+    fn json_provide_to_async_try<
+        W: AsyncTryConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::ToJsonKind> = ()>>,
+    >(
+        &self,
+        w: W,
+    ) -> impl Future<
+        Output = Result<
+            Consumed<Self::ToJsonKind, W>,
+            <W::Writer as AsyncTryConsumeTextChunk>::Err,
+        >,
+    >;
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool;
 }
 
@@ -56,6 +94,24 @@ impl<T: ?Sized + ToJson2> IntoJson for &T {
     ) -> Consumed<Self::JsonKind, W> {
         T::json_provide_to(self, w)
     }
+    fn json_provide_into_try<
+        W: TryConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::JsonKind> = ()>>,
+    >(
+        self,
+        w: W,
+    ) -> Result<Consumed<Self::JsonKind, W>, <W::Writer as TryConsumeTextChunk>::Err> {
+        T::json_provide_to_try(self, w)
+    }
+    fn json_provide_into_async_try<
+        W: AsyncTryConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::JsonKind> = ()>>,
+    >(
+        self,
+        w: W,
+    ) -> impl Future<
+        Output = Result<Consumed<Self::JsonKind, W>, <W::Writer as AsyncTryConsumeTextChunk>::Err>,
+    > {
+        T::json_provide_to_async_try(self, w)
+    }
 
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = T::IS_CHAINABLE_AND_ALWAYS_EMPTY;
 }
@@ -70,6 +126,27 @@ impl<T: ToJsonByCopyIntoJson> ToJson2 for T {
         w: W,
     ) -> Consumed<Self::ToJsonKind, W> {
         T::json_provide_into(*self, w)
+    }
+    fn json_provide_to_try<
+        W: TryConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::ToJsonKind> = ()>>,
+    >(
+        &self,
+        w: W,
+    ) -> Result<Consumed<Self::ToJsonKind, W>, <W::Writer as TryConsumeTextChunk>::Err> {
+        T::json_provide_into_try(*self, w)
+    }
+    fn json_provide_to_async_try<
+        W: AsyncTryConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::ToJsonKind> = ()>>,
+    >(
+        &self,
+        w: W,
+    ) -> impl Future<
+        Output = Result<
+            Consumed<Self::ToJsonKind, W>,
+            <W::Writer as AsyncTryConsumeTextChunk>::Err,
+        >,
+    > {
+        T::json_provide_into_async_try(*self, w)
     }
 
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = <T as IntoJson>::IS_CHAINABLE_AND_ALWAYS_EMPTY;

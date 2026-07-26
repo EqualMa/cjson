@@ -25,14 +25,5 @@ impl IntoTextChunks for Comma {
         alloc::vec![b',']
     }
 
-    fn write_into<W: ?Sized + crate::ser::traits::ConsumeTextChunk>(self, w: &mut W) {
-        w.consume_text_chunk(Comma::STR)
-    }
-
-    fn try_write_into<W: ?Sized + crate::ser::traits::TryConsumeTextChunk>(
-        self,
-        w: &mut W,
-    ) -> Result<(), W::Err> {
-        w.try_consume_text_chunk(Comma::STR)
-    }
+    crate::ser::traits::proxy_IntoTextChunks_write!(|self| -> _ { Comma::STR });
 }
