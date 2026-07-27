@@ -25,6 +25,30 @@ macro_rules! json_to {
     }};
 }
 
+#[macro_export]
+macro_rules! json_to_try {
+    ($($json:tt)+) => {{
+        let mut s = $crate::__private::Default::default();
+        let w = $crate::ser::ConsumeJsonText(
+            <_ as $crate::ser::traits::TryConsumeTextChunk>::as_mut_try_consume_text_chunk(&mut s)
+        );
+        let $crate::ser::Consumed { .. } = $crate::json_write_try! { w, $($json)+ };
+        s
+    }};
+}
+
+#[macro_export]
+macro_rules! json_to_async_try {
+    ($($json:tt)+) => {{
+        let mut s = $crate::__private::Default::default();
+        let w = $crate::ser::ConsumeJsonText(
+            <_ as $crate::ser::traits::AsyncTryConsumeTextChunk>::as_mut_async_try_consume_text_chunk(&mut s)
+        );
+        let $crate::ser::Consumed { .. } = $crate::json_write_async_try! { w, $($json)+ };
+        s
+    }};
+}
+
 #[cfg(feature = "alloc")]
 #[macro_export]
 macro_rules! json_to_string {

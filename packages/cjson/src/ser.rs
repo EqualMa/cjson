@@ -8,6 +8,9 @@ pub use self::consumers::{
     json_string_chunks::ConsumeInJsonString,
 };
 
+#[cfg(feature = "std")]
+pub use self::traits::impl_std::IoWrite;
+
 pub(crate) use self::consumers::define_traits;
 
 use json_kinds::JsonKind;
@@ -162,6 +165,27 @@ pub trait IntoJsonExt: IntoJson + Sized {
         w
     }
 
+    fn into_json_as_try<W: Default + traits::TryConsumeTextChunk>(self) -> Result<W, W::Err> {
+        let mut w = W::default();
+        let Consumed { .. } =
+            self.json_provide_into_try(ConsumeJsonText(w.as_mut_try_consume_text_chunk()))?;
+        Ok(w)
+    }
+
+    fn into_json_as_async_try<W: Default + traits::AsyncTryConsumeTextChunk>(
+        self,
+    ) -> impl Future<Output = Result<W, W::Err>> {
+        async {
+            let mut w = W::default();
+            let Consumed { .. } = self
+                .json_provide_into_async_try(ConsumeJsonText(
+                    w.as_mut_async_try_consume_text_chunk(),
+                ))
+                .await?;
+            Ok(w)
+        }
+    }
+
     #[cfg(feature = "alloc")]
     fn into_json_as_string(self) -> ::alloc::string::String {
         self.into_json_as()
@@ -171,6 +195,16 @@ pub trait IntoJsonExt: IntoJson + Sized {
 pub trait ToJsonExt: ToJson2 {
     fn to_json_as<W: Default + traits::ConsumeTextChunk>(&self) -> W {
         <&Self as IntoJsonExt>::into_json_as(self)
+    }
+
+    fn to_json_as_try<W: Default + traits::TryConsumeTextChunk>(&self) -> Result<W, W::Err> {
+        <&Self as IntoJsonExt>::into_json_as_try(self)
+    }
+
+    fn to_json_as_async_try<W: Default + traits::AsyncTryConsumeTextChunk>(
+        &self,
+    ) -> impl Future<Output = Result<W, W::Err>> {
+        <&Self as IntoJsonExt>::into_json_as_async_try(self)
     }
 
     #[cfg(feature = "alloc")]

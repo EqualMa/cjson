@@ -2,6 +2,7 @@ use std::io;
 
 use super::TryConsumeTextChunk;
 
+#[derive(Debug, Clone, Copy, Default)]
 pub struct IoWrite<W: ?Sized + io::Write>(pub W);
 
 impl<W: ?Sized + io::Write> TryConsumeTextChunk for IoWrite<W> {

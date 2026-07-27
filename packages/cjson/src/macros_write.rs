@@ -13,7 +13,7 @@ macro_rules! json_write {
 }
 
 #[macro_export]
-macro_rules! json_try_write {
+macro_rules! json_write_try {
     (
         $consumer:expr,
         $($json:tt)*
@@ -27,7 +27,7 @@ macro_rules! json_try_write {
 }
 
 #[macro_export]
-macro_rules! json_async_try_write {
+macro_rules! json_write_async_try {
     (
         $consumer:expr,
         $($json:tt)*
@@ -328,14 +328,14 @@ macro_rules! __private_json_write_eof {
     (
         ArrayOfItems
         $v:tt // TODO: refactor
-        $maybe_try:tt
+        { $async_try_mod:ident $($async_try_postfix:tt)* }
         ($consumer:expr)
     ) => {
         $crate::__private_json_write_chained_content! {
             ($crate::ser::json_kinds::Array)
             [$v]
-            $maybe_try
-            <_ as $crate::ser::ConsumeJson>::start_to_consume_chained_arrays(
+            { $async_try_mod $($async_try_postfix)* }
+            <_ as $crate::__private::macro_used_names::$async_try_mod::CONSUME_JSON>::start_to_consume_chained_arrays(
                 $consumer, ()
             )
         }
@@ -353,14 +353,14 @@ macro_rules! __private_json_write_eof {
     (
         ObjectOfKvs
         $v:tt // TODO: refactor
-        $maybe_try:tt
+        { $async_try_mod:ident $($async_try_postfix:tt)* }
         ($consumer:expr)
     ) => {
         $crate::__private_json_write_chained_content! {
             ($crate::ser::json_kinds::Object)
             [$v]
-            $maybe_try
-            <_ as $crate::ser::ConsumeJson>::start_to_consume_chained_objects(
+            { $async_try_mod $($async_try_postfix)* }
+            <_ as $crate::__private::macro_used_names::$async_try_mod::CONSUME_JSON>::start_to_consume_chained_objects(
                 $consumer, ()
             )
         }
@@ -1042,15 +1042,6 @@ macro_rules! __private_json_write_chunks_first {
 #[macro_export]
 macro_rules! __private_json_write_chunks_start_to_consume_non_empty {
     (
-        *{$async_try_mod:ident $($async_try_postfix:tt)*}
-        $($rest:tt)*
-    ) => {
-        $crate::__private_json_write_chunks_start_to_consume_non_empty! {
-            $async_try_mod
-            $($rest)*
-        }
-    };
-    (
         $async_try_mod:ident
         NonEmptyArray
         ($consumer:expr)
@@ -1189,17 +1180,17 @@ macro_rules! __private_json_write_chunks_group_open_runtime {
         left_bracket json_value[{($value:expr) $(as $Type:ty)?}]
         {
             kind NonEmptyArray
-            maybe_try $maybe_try:tt
+            maybe_try {$async_try_mod:ident $($async_try_postfix:tt)*}
             consumer $consumer:tt
         }
         $then:tt
     ) => {
-        let w = <_ as $crate::ser::ReadyToConsumeJsonChunksOfNonEmptyArray>::left_bracket_value::<
+        let w = <_ as $crate::__private::macro_used_names::$async_try_mod::READY_TO_CONSUME_CHUNKS_OF_NON_EMPTY_ARRAY>::left_bracket_value::<
             $crate::__expand_or![[$($Type)?][_]]
         >(
-            $crate::__private_json_write_chunks_start_to_consume_non_empty!(*$maybe_try NonEmptyArray $consumer),
+            $crate::__private_json_write_chunks_start_to_consume_non_empty!($async_try_mod NonEmptyArray $consumer),
             $value
-        );
+        ) $($async_try_postfix)*;
         use $crate::r#const::states::LeftBracketValue as __CJsonPrevState;
         $crate::__private_json_write_chunks_then! {
             __CJsonPrevState w
@@ -1213,25 +1204,30 @@ macro_rules! __private_json_write_chunks_group_open_runtime {
         ]
         {
             kind NonEmptyArray
-            maybe_try $maybe_try:tt
+            maybe_try {$async_try_mod:ident $($async_try_postfix:tt)*}
             consumer $consumer:tt
         }
         $then:tt
     ) => {
-        let w = <_ as $crate::ser::ReadyToConsumeJsonChunksOfNonEmptyArray>::left_bracket_items_before_item::<
+        let w = <_ as $crate::__private::macro_used_names::$async_try_mod::READY_TO_CONSUME_CHUNKS_OF_NON_EMPTY_ARRAY>::left_bracket_items_before_item::<
             $crate::__expand_or![[$($ItemsType)?][_]]
         >(
-            $crate::__private_json_write_chunks_start_to_consume_non_empty!(*$maybe_try NonEmptyArray $consumer),
+            $crate::__private_json_write_chunks_start_to_consume_non_empty!($async_try_mod NonEmptyArray $consumer),
             $items
-        );
-        $(
-            let w = <_ as $crate::ser::ConsumeJsonChunks<_>>::json_items_after_array_start_before_item::<
-                $crate::__expand_or![[$($RestItemsType)?][_]]
-            >(
-                w,
-                $rest_items
-            );
-        )*
+        ) $($async_try_postfix)*;
+
+        $crate::__wrap_each! {
+            [$({
+                let w = <_ as $crate::__private::macro_used_names::CONSUME_JSON_CHUNKS<_>>::json_items_after_array_start_before_item::<
+                    $crate::__expand_or![[$($RestItemsType)?][_]]
+                >(
+                    w,
+                    $rest_items
+                )
+            })*]
+            ( $($async_try_postfix)*; )
+        }
+
         use $crate::r#const::states::LeftBracketItemsBeforeItem as __CJsonPrevState;
         $crate::__private_json_write_chunks_then! {
             __CJsonPrevState w
@@ -1245,25 +1241,29 @@ macro_rules! __private_json_write_chunks_group_open_runtime {
         ]
         {
             kind NonEmptyObject
-            maybe_try $maybe_try:tt
+            maybe_try {$async_try_mod:ident $($async_try_postfix:tt)*}
             consumer $consumer:tt
         }
         $then:tt
     ) => {
-        let w = <_ as $crate::ser::ReadyToConsumeJsonChunksOfNonEmptyObject>::left_brace_kvs_before_kv::<
+        let w = <_ as $crate::__private::macro_used_names::$async_try_mod::READY_TO_CONSUME_CHUNKS_OF_NON_EMPTY_OBJECT>::left_brace_kvs_before_kv::<
             $crate::__expand_or![[$($ItemsType)?][_]]
         >(
-            $crate::__private_json_write_chunks_start_to_consume_non_empty!(*$maybe_try NonEmptyObject $consumer),
+            $crate::__private_json_write_chunks_start_to_consume_non_empty!($async_try_mod NonEmptyObject $consumer),
             $items
-        );
-        $(
-            let w = <_ as $crate::ser::ConsumeJsonChunks<_>>::json_kvs_after_object_start_before_kv::<
-                $crate::__expand_or![[$($RestItemsType)?][_]]
-            >(
-                w,
-                $rest_items
-            );
-        )*
+        ) $($async_try_postfix)*;
+        $crate::__wrap_each! {
+            [$({
+                let w = <_ as $crate::__private::macro_used_names::$async_try_mod::CONSUME_JSON_CHUNKS<_>>::json_kvs_after_object_start_before_kv::<
+                    $crate::__expand_or![[$($RestItemsType)?][_]]
+                >(
+                    w,
+                    $rest_items
+                )
+            })*]
+            ( $($async_try_postfix)*; )
+        }
+
         use $crate::r#const::states::LeftBraceKvsBeforeKv as __CJsonPrevState;
         $crate::__private_json_write_chunks_then! {
             __CJsonPrevState w
@@ -1302,5 +1302,24 @@ macro_rules! __private_json_chunk_as_str {
             }
             .as_str()
         }
+    };
+}
+
+#[macro_export]
+macro_rules! __wrap_each {
+    ([$($braced_t:tt)*]$append:tt) => {
+        $(
+            $crate::__wrap_one! {
+                $braced_t
+                $append
+            }
+        )*
+    };
+}
+
+#[macro_export]
+macro_rules! __wrap_one {
+    ({$($t:tt)*}($($append:tt)*)) => {
+        $($t)* $($append)*
     };
 }
