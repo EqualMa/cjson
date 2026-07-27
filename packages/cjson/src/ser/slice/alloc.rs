@@ -1,6 +1,7 @@
+#![cfg(todo)] // impl IntoJson for Vec
 use alloc::{rc::Rc, vec::Vec};
 
-use crate::ser::{ToJson, ToJsonArray};
+use crate::ser::{IntoJson, ToJson2};
 
 impl<T: ToJson> ToJson for Vec<T> {
     type ToJson<'a>

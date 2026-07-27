@@ -4,7 +4,6 @@ use ref_cast::{RefCastCustom, ref_cast_custom};
 
 use crate::{
     ser::{
-        ToJson, ToJsonArray, ToJsonString,
         texts::{self, Chain},
         traits::{
             self, Array, ConsumeTextChunk, EmptyOrCommaSeparatedElements, IntoTextChunks,
@@ -159,7 +158,6 @@ mod ser {
 
     use crate::{
         ser::{
-            ToJson,
             iter_text_chunk::IterNonLending,
             texts::{self, ConstChunk, Empty},
             traits::{self, IntoTextChunks},
@@ -174,17 +172,6 @@ mod ser {
     impl<T: ?Sized + HasConstJsonValue> AsRef<[u8]> for Chunk<T> {
         fn as_ref(&self) -> &[u8] {
             T::JSON_VALUE.inner().as_bytes()
-        }
-    }
-
-    impl<T: ?Sized + HasConstJsonValue> ToJson for ConstJsonValue<T> {
-        type ToJson<'a>
-            = Self
-        where
-            Self: 'a;
-
-        fn to_json(&self) -> Self::ToJson<'_> {
-            *self
         }
     }
 
@@ -355,20 +342,6 @@ impl ChunkLen {
         self.0 += len;
         self
     }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct ChunkConcatJsonValue<C: RuntimeChunk, V: ToJson>(pub C, pub V);
-
-impl<C: RuntimeChunk, V: ToJson> ChunkConcatJsonValue<C, V> {
-    const IMPL_NEXT_STATE: State = C::NEXT_STATE.json_value();
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct ChunkConcatJsonStringFragment<C: RuntimeChunk, V: ToJsonString>(pub C, pub V);
-
-impl<C: RuntimeChunk, V: ToJsonString> ChunkConcatJsonStringFragment<C, V> {
-    const IMPL_NEXT_STATE: State = C::NEXT_STATE.json_string_fragment();
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -748,9 +721,6 @@ impl<T: ?Sized + HasConstCompileTimeChunk> HasConstCompileTimeChunk for ConstRem
 /// [v1, ..items,]    -> [v1 $(,$item)*     ]
 /// [v1, ..items, v2] -> [v1 $(,$item)* , v2]
 /// ```
-#[derive(Debug, Clone, Copy)]
-pub struct ChunkConcatJsonItemsAfterItem<C: RuntimeChunk, V: ToJsonArray>(pub C, pub V);
-
 type JsonItemsAfterItem<T> =
     <JsonItemsBetweenBrackets<T> as traits::EmptyOrCommaSeparatedElements>::PrependLeadingCommaIfNotEmpty;
 
@@ -759,12 +729,6 @@ type JsonItemsAfterItem<T> =
 /// ```ignore
 /// [..items, v]      -> [   $($item,)*  v ]
 /// ```
-#[derive(Debug, Clone, Copy)]
-pub struct ChunkConcatJsonItemsAfterArrayStartBeforeItem<C: RuntimeChunk, V: ToJsonArray>(
-    pub C,
-    pub V,
-);
-
 type JsonItemsAfterArrayStartBeforeItem<T> =
     <JsonItemsBetweenBrackets<T> as traits::EmptyOrCommaSeparatedElements>::AppendTrailingCommaIfNotEmpty;
 
@@ -773,137 +737,4 @@ type JsonItemsAfterArrayStartBeforeItem<T> =
 /// ```ignore
 /// [..items]         -> [   $($item),*     ]
 /// ```
-#[derive(Debug, Clone, Copy)]
-pub struct ChunkConcatJsonItemsBetweenBrackets<C: RuntimeChunk, V: ToJsonArray>(pub C, pub V);
-
 type JsonItemsBetweenBrackets<T> = <T as traits::Array>::IntoCommaSeparatedElements;
-
-impl<C: RuntimeChunk, V: ToJsonArray> ChunkConcatJsonItemsAfterItem<C, V> {
-    const IMPL_NEXT_STATE: State = C::NEXT_STATE.json_items_after_item();
-}
-
-impl<C: RuntimeChunk, V: ToJsonArray> ChunkConcatJsonItemsAfterArrayStartBeforeItem<C, V> {
-    const IMPL_NEXT_STATE: State = C::NEXT_STATE.json_items_after_array_start_before_item();
-}
-
-impl<C: RuntimeChunk, V: ToJsonArray> ChunkConcatJsonItemsBetweenBrackets<C, V> {
-    const IMPL_NEXT_STATE: State = C::NEXT_STATE.json_items_between_brackets();
-}
-
-impl_many!({
-    {
-        {
-            use ChunkConcatJsonValue as CR;
-            use ToJson as ToTrait;
-            type RuntimeChunkToTextChunk<'a, V> = <V as ToJson>::ToJson<'a>;
-            fn runtime_chunk_to_text_chunk<V: ToJson>(v: &V) -> RuntimeChunkToTextChunk<V> {
-                V::to_json(v)
-            }
-        }
-        {
-            use ChunkConcatJsonStringFragment as CR;
-            use ToJsonString as ToTrait;
-            type FragmentsOf<S> = <S as traits::JsonString>::IntoJsonStringFragments;
-            type RuntimeChunkToTextChunk<'a, V> =
-                FragmentsOf<<V as ToJsonString>::ToJsonString<'a>>;
-            fn runtime_chunk_to_text_chunk<V: ToJsonString>(v: &V) -> RuntimeChunkToTextChunk<V> {
-                V::to_json_string(v).into_json_string_fragments()
-            }
-        }
-        {
-            use ChunkConcatJsonItemsAfterItem as CR;
-            use ToJsonArray as ToTrait;
-            type RuntimeChunkToTextChunk<'a, V> =
-                JsonItemsAfterItem<<V as ToJsonArray>::ToJsonArray<'a>>;
-            fn runtime_chunk_to_text_chunk<V: ToJsonArray>(v: &V) -> RuntimeChunkToTextChunk<V> {
-                V::to_json_array(v)
-                    .into_comma_separated_elements()
-                    .prepend_leading_comma_if_not_empty()
-            }
-        }
-        {
-            use ChunkConcatJsonItemsAfterArrayStartBeforeItem as CR;
-            use ToJsonArray as ToTrait;
-            type RuntimeChunkToTextChunk<'a, V> =
-                JsonItemsAfterArrayStartBeforeItem<<V as ToJsonArray>::ToJsonArray<'a>>;
-            fn runtime_chunk_to_text_chunk<V: ToJsonArray>(v: &V) -> RuntimeChunkToTextChunk<V> {
-                V::to_json_array(v)
-                    .into_comma_separated_elements()
-                    .append_trailing_comma_if_not_empty()
-            }
-        }
-        {
-            use ChunkConcatJsonItemsBetweenBrackets as CR;
-            use ToJsonArray as ToTrait;
-            type RuntimeChunkToTextChunk<'a, V> =
-                JsonItemsBetweenBrackets<<V as ToJsonArray>::ToJsonArray<'a>>;
-            fn runtime_chunk_to_text_chunk<V: ToJsonArray>(v: &V) -> RuntimeChunkToTextChunk<V> {
-                V::to_json_array(v).into_comma_separated_elements()
-            }
-        }
-    }
-
-    impl<C: RuntimeChunkStartingWithCompileTime, V: ToTrait> RuntimeChunk for CR<C, V> {
-        const PREV_STATE: State = C::PREV_STATE;
-        const NEXT_STATE: State = Self::IMPL_NEXT_STATE;
-
-        type ToIntoTextChunks<'a>
-            = Chain<
-            //
-            C::ToIntoTextChunks<'a>,
-            RuntimeChunkToTextChunk<'a, V>,
-        >
-        where
-            Self: 'a;
-        fn to_into_text_chunks(&self) -> Self::ToIntoTextChunks<'_> {
-            const {
-                _ = Self::PREV_STATE;
-                _ = Self::NEXT_STATE;
-            }
-            Chain(
-                self.0.to_into_text_chunks(),
-                runtime_chunk_to_text_chunk(&self.1),
-            )
-        }
-
-        fn runtime_chunk_write_into<W: ?Sized + ConsumeTextChunk>(self, w: &mut W) {
-            self.0.runtime_chunk_write_into(w);
-            runtime_chunk_to_text_chunk(&self.1).write_into(w)
-        }
-        fn runtime_chunk_try_write_into<W: ?Sized + TryConsumeTextChunk>(
-            self,
-            w: &mut W,
-        ) -> Result<(), W::Err> {
-            self.0.runtime_chunk_try_write_into(w)?;
-            runtime_chunk_to_text_chunk(&self.1).try_write_into(w)
-        }
-    }
-
-    impl<C: RuntimeChunkStartingWithCompileTime, V: ToTrait> RuntimeChunkStartingWithCompileTime
-        for CR<C, V>
-    {
-        type ChunksReadyToRemoveGroupOpen<'a>
-            = Chain<
-            //
-            C::ChunksReadyToRemoveGroupOpen<'a>,
-            RuntimeChunkToTextChunk<'a, V>,
-        >
-        where
-            Self: 'a;
-
-        const PREV_STATE_REMOVE_GROUP_OPEN: State = C::PREV_STATE_REMOVE_GROUP_OPEN;
-
-        fn to_text_chunks_ready_to_remove_group_open(
-            &self,
-        ) -> Self::ChunksReadyToRemoveGroupOpen<'_> {
-            const {
-                _ = Self::PREV_STATE_REMOVE_GROUP_OPEN;
-                _ = Self::NEXT_STATE;
-            }
-            Chain(
-                self.0.to_text_chunks_ready_to_remove_group_open(),
-                runtime_chunk_to_text_chunk(&self.1),
-            )
-        }
-    }
-});

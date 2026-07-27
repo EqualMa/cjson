@@ -1,7 +1,7 @@
 use crate::{
     r#const::array_string::ArrayString,
     ser::{
-        IntoJson, ToJson, ToJsonByCopyIntoJson,
+        IntoJson, ToJsonByCopyIntoJson,
         helpers::json_fns,
         json_kinds, texts,
         traits::{self, IntoTextChunks},
@@ -33,17 +33,6 @@ impl_many!({
     }
 
     impl ToJsonByCopyIntoJson for Finite<Float> {}
-
-    impl ToJson for Finite<Float> {
-        type ToJson<'a>
-            = Self
-        where
-            Self: 'a;
-
-        fn to_json(&self) -> Self::ToJson<'_> {
-            *self
-        }
-    }
 
     impl traits::sealed::Text for Finite<Float> {}
     impl traits::Text for Finite<Float> {}

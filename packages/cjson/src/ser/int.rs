@@ -3,10 +3,9 @@ use core::mem::MaybeUninit;
 use crate::{
     r#const::array_string::ArrayString,
     ser::{
-        ConsumeJson, Consumed, IntoJson, ToJson, ToJsonByCopyIntoJson,
+        ConsumeJson, IntoJson, ToJsonByCopyIntoJson,
         helpers::json_fns,
-        json_kinds::{self, JsonKind},
-        texts,
+        json_kinds, texts,
         traits::{AsyncTryConsumeTextChunk, ConsumeTextChunk, IntoTextChunks, TryConsumeTextChunk},
     },
     utils::impl_many,
@@ -21,24 +20,6 @@ mod impl_itoa;
 use self::impl_display as imp;
 #[cfg(feature = "itoa")]
 use self::impl_itoa as imp;
-
-impl_many!(
-    impl<__> ToJson
-        for each_of![
-            i8, i16, i32, i64, isize, i128, //
-            u8, u16, u32, u64, usize, u128,
-        ]
-    {
-        type ToJson<'a>
-            = texts::Number<Self>
-        where
-            Self: 'a;
-
-        fn to_json(&self) -> Self::ToJson<'_> {
-            texts::Number::new_without_validation(*self)
-        }
-    }
-);
 
 impl_many!(
     impl<__> ToJsonByCopyIntoJson

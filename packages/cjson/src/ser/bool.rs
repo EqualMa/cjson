@@ -1,17 +1,6 @@
 use crate::ser::IntoJson;
 
-use super::{ToJson, helpers::json_fns, json_kinds, texts};
-
-impl ToJson for bool {
-    type ToJson<'a>
-        = texts::Boolean
-    where
-        Self: 'a;
-
-    fn to_json(&self) -> Self::ToJson<'_> {
-        texts::Boolean(*self)
-    }
-}
+use super::{helpers::json_fns, json_kinds, texts};
 
 impl IntoJson for bool {
     type JsonKind = json_kinds::AnyValue;

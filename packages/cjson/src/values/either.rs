@@ -1,5 +1,8 @@
+#![cfg(todo)] // TODO: impl IntoJson for Either
 use crate::{
-    ToJson, ser::ToJsonArray, ser::ToJsonString, utils::impl_many, values::Either as CrateEither,
+    ser::{IntoJson, ToJson2},
+    utils::impl_many,
+    values::Either as CrateEither,
 };
 
 impl_many!({

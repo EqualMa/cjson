@@ -1,3 +1,4 @@
+#![cfg(todo)] // TODO: json!()
 use crate::ser::{ToJson, exts::TextExt};
 
 mod array;

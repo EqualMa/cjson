@@ -26,14 +26,3 @@ impl<T: ?Sized + HasConstCompileTimeChunk> Value<CompileTimeChunk<T>> {
         texts::Value::new_without_validation(T::CHUNK.into_inner())
     }
 }
-
-impl<C: RuntimeChunk> ToJson for Value<C> {
-    type ToJson<'a>
-        = texts::Value<C::ToIntoTextChunks<'a>>
-    where
-        Self: 'a;
-
-    fn to_json(&self) -> Self::ToJson<'_> {
-        texts::Value::new_without_validation(self.inner().to_into_text_chunks())
-    }
-}

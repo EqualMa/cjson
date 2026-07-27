@@ -1,8 +1,9 @@
+#![cfg(todo)] // TODO: impl IntoJson for Box, Rc
 use alloc::{boxed::Box, rc::Rc};
 
 use crate::utils::impl_many;
 
-use super::{ToJson, ToJsonArray, ToJsonObject, ToJsonString};
+use super::{IntoJson, ToJson2 as ToJson};
 
 impl_many!({
     {

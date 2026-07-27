@@ -1,32 +1,6 @@
 use alloc::string::String;
 
-use crate::ser::{
-    ConsumeJson, Consumed, IntoJson, ToJson, ToJsonString,
-    helpers::json_fns,
-    json_kinds::{self, JsonKind},
-};
-
-impl ToJson for String {
-    type ToJson<'a>
-        = <Self as ToJsonString>::ToJsonString<'a>
-    where
-        Self: 'a;
-
-    fn to_json(&self) -> Self::ToJson<'_> {
-        Self::to_json_string(self)
-    }
-}
-
-impl ToJsonString for String {
-    type ToJsonString<'a>
-        = <&'a str as ToJsonString>::ToJsonString<'a>
-    where
-        Self: 'a;
-
-    fn to_json_string(&self) -> Self::ToJsonString<'_> {
-        str::to_json_string(self)
-    }
-}
+use crate::ser::{ConsumeJson, IntoJson, ToJson2, helpers::json_fns, json_kinds};
 
 impl IntoJson for String {
     type JsonKind = json_kinds::JsonString;
@@ -44,3 +18,5 @@ impl IntoJson for String {
 
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false;
 }
+
+// TODO: impl ToJson for String

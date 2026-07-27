@@ -1,4 +1,5 @@
-use crate::ToJson;
+#![cfg(todo)] // impl IntoJson for Option
+use crate::ser::{IntoJson, ToJson2};
 
 use super::{Either, Null};
 

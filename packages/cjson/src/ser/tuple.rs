@@ -1,3 +1,4 @@
+#![cfg(todo)] // impl IntoJson for tuple
 use polonius_the_crab::{ForLt, PoloniusResult, polonius};
 
 use crate::{
@@ -9,7 +10,7 @@ use crate::{
     utils::size_hint::SizeHint,
 };
 
-use super::{ToJson, ToJsonArray, traits};
+use super::{IntoJson, ToJson2, traits};
 
 macro_rules! impl_tuple {
     ($pre:tt) => {};

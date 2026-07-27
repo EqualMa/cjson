@@ -1,41 +1,4 @@
-use crate::ser::{ToJson, iter_text_chunk::IterNonLending, texts};
-
 use super::Number;
-
-impl ToJson for Number<str> {
-    type ToJson<'a>
-        = texts::Number<&'a str>
-    where
-        Self: 'a;
-
-    fn to_json(&self) -> Self::ToJson<'_> {
-        texts::Number::new_without_validation(&self.0)
-    }
-}
-
-#[cfg(todo)]
-impl ToJson for Number<[u8]> {
-    type ToJson<'a>
-        = texts::Number<&'a [u8]>
-    where
-        Self: 'a;
-
-    fn to_json(&self) -> Self::ToJson<'_> {
-        texts::Number::new_without_validation(&self.0)
-    }
-}
-
-#[cfg(todo)]
-impl<const LEN: usize> ToJson for Number<[u8; LEN]> {
-    type ToJson<'a>
-        = texts::Number<IterNonLending<core::iter::Once<&'a [u8; LEN]>>>
-    where
-        Self: 'a;
-
-    fn to_json(&self) -> Self::ToJson<'_> {
-        texts::Number::new_without_validation(IterNonLending(core::iter::once(&self.0)))
-    }
-}
 
 impl Number<str> {
     pub const fn new_str_checked(s: &str) -> Option<&Self> {

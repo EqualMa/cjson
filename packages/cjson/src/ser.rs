@@ -216,78 +216,6 @@ pub trait ToJsonExt: ToJson2 {
 impl<T: IntoJson> IntoJsonExt for T {}
 impl<T: ToJson2 + ?Sized> ToJsonExt for T {}
 
-pub trait ToJson {
-    type ToJson<'a>: traits::Text
-    where
-        Self: 'a;
-    fn to_json(&self) -> Self::ToJson<'_>;
-}
-
-impl<'this, T: ?Sized + ToJson> ToJson for &'this T {
-    type ToJson<'a>
-        = T::ToJson<'this>
-    where
-        Self: 'a;
-
-    fn to_json(&self) -> Self::ToJson<'_> {
-        T::to_json(self)
-    }
-}
-
-pub trait ToJsonString {
-    type ToJsonString<'a>: traits::JsonString
-    where
-        Self: 'a;
-    fn to_json_string(&self) -> Self::ToJsonString<'_>;
-}
-
-impl<'this, T: ?Sized + ToJsonString> ToJsonString for &'this T {
-    type ToJsonString<'a>
-        = T::ToJsonString<'this>
-    where
-        Self: 'a;
-
-    fn to_json_string(&self) -> Self::ToJsonString<'_> {
-        T::to_json_string(self)
-    }
-}
-
-pub trait ToJsonArray: ToJson {
-    type ToJsonArray<'a>: traits::Array
-    where
-        Self: 'a;
-    fn to_json_array(&self) -> Self::ToJsonArray<'_>;
-}
-
-impl<'this, T: ?Sized + ToJsonArray> ToJsonArray for &'this T {
-    type ToJsonArray<'a>
-        = T::ToJsonArray<'this>
-    where
-        Self: 'a;
-
-    fn to_json_array(&self) -> Self::ToJsonArray<'_> {
-        T::to_json_array(self)
-    }
-}
-
-pub trait ToJsonObject: ToJson {
-    type ToJsonObject<'a>: traits::Object
-    where
-        Self: 'a;
-    fn to_json_object(&self) -> Self::ToJsonObject<'_>;
-}
-
-impl<'this, T: ?Sized + ToJsonObject> ToJsonObject for &'this T {
-    type ToJsonObject<'a>
-        = T::ToJsonObject<'this>
-    where
-        Self: 'a;
-
-    fn to_json_object(&self) -> Self::ToJsonObject<'_> {
-        T::to_json_object(self)
-    }
-}
-
 mod bool;
 mod int;
 mod string;
@@ -298,11 +226,6 @@ mod tuple;
 
 #[cfg(feature = "alloc")]
 mod alloc;
-
-// TODO: remove
-pub fn write_json_text(value: impl IntoJson, w: impl traits::ConsumeTextChunk) {
-    let Consumed { .. } = value.json_provide_into(consumers::ConsumeJsonText(w));
-}
 
 pub trait ToJsonArray2: ToJson2<ToJsonKind = json_kinds::Array> {}
 impl<T: ?Sized + ToJson2<ToJsonKind = json_kinds::Array>> ToJsonArray2 for T {}

@@ -1,39 +1,15 @@
-use crate::{
-    ToJson,
-    ser::{ToJsonArray, ToJsonString},
-};
+use crate::ser::{IntoJson, ToJsonByCopyIntoJson, helpers::json_fns, json_kinds};
 
 use super::Never;
 
-impl ToJson for Never {
-    type ToJson<'a>
-        = Self
-    where
-        Self: 'a;
-
-    fn to_json(&self) -> Self::ToJson<'_> {
-        match *self {}
-    }
+impl IntoJson for Never {
+    type JsonKind = json_kinds::AnyValue; // TODO: NeverJsonKind
+    json_fns!({
+        json_provide_into::json_provide_into_try::json_provide_into_async_try::JsonKind;
+        use trait_mod;
+        |self, _| trait_mod::never_future!(match self {})
+    });
+    const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false; // TODO: should this be true or false?
 }
 
-impl ToJsonString for Never {
-    type ToJsonString<'a>
-        = Self
-    where
-        Self: 'a;
-
-    fn to_json_string(&self) -> Self::ToJsonString<'_> {
-        match *self {}
-    }
-}
-
-impl ToJsonArray for Never {
-    type ToJsonArray<'a>
-        = Self
-    where
-        Self: 'a;
-
-    fn to_json_array(&self) -> Self::ToJsonArray<'_> {
-        match *self {}
-    }
-}
+impl ToJsonByCopyIntoJson for Never {}

@@ -1,6 +1,8 @@
 use ref_cast::{RefCastCustom, ref_cast_custom};
 
-use crate::ser::{IntoJson, IntoJsonKeyColonValue, ToJson, helpers::json_fns, json_kinds};
+use crate::ser::{
+    IntoJson, IntoJsonKeyColonValue, ToJsonByCopyIntoJson, helpers::json_fns, json_kinds,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Never {}
@@ -28,21 +30,20 @@ pub struct False;
 #[derive(Debug, Clone, Copy)]
 pub struct True;
 
-crate::utils::impl_many!(
-    impl<__> ToJson for each_of![Null, False, True] {
-        type ToJson<'a>
-            = Self
-        where
-            Self: 'a;
-
-        fn to_json(&self) -> Self::ToJson<'_> {
-            *self
+crate::utils::impl_many!({
+    {
+        {
+            use Null as JsonLiteral;
+        }
+        {
+            use False as JsonLiteral;
+        }
+        {
+            use True as JsonLiteral;
         }
     }
-);
 
-crate::utils::impl_many!(
-    impl<__> IntoJson for each_of![Null, False, True] {
+    impl IntoJson for JsonLiteral {
         type JsonKind = json_kinds::AnyValue;
         json_fns!({
             json_provide_into::json_provide_into_try::json_provide_into_async_try::JsonKind;
@@ -51,7 +52,9 @@ crate::utils::impl_many!(
 
         const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false;
     }
-);
+
+    impl ToJsonByCopyIntoJson for JsonLiteral {}
+});
 
 #[derive(Debug, Clone, Copy, RefCastCustom)]
 #[repr(transparent)]
