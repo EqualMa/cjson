@@ -333,6 +333,23 @@ define!({
                 self._map_ok(f),
             )
         }
+
+        de_async!(
+            async fn x_map_ref_1<U, A1>(
+                self,
+                arg: A1,
+                f: select_type![
+                    impl FnOnce(&Self, A1) -> U,
+                    impl FnOnce(&Self, A1) -> U,
+                    impl AsyncFnOnce(&Self, A1) -> U,
+                ],
+            ) -> U
+            where
+                Self: Sized,
+            {
+                await_!(f(&self, arg))
+            }
+        );
     }
 
     impl<T: ?Sized> XHelpers for T {}
