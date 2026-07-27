@@ -1,5 +1,5 @@
 use cjson::{
-    json, json_to_string,
+    json, json_to_async_try, json_to_string, json_to_try,
     ser::{ConsumeJson, json_kinds},
     values::ObjectOfIter,
 };
@@ -54,202 +54,145 @@ fn test_all() {
     test3::<5>();
 }
 
+#[expect(unused_imports)] // TODO: test async try
+use json_to_async_try as __todo;
+
+macro_rules! assert_json {
+    ($eq:expr, $($json:tt)*) => {{
+        assert_eq!(json_to_string!($($json)*), $eq);
+        assert_eq!(
+            (|| -> Result<
+                ::cjson::ser::IoWrite<Vec<u8>>,
+                <::cjson::ser::IoWrite<Vec<u8>> as ::cjson::ser::traits::TryConsumeTextChunk>::Err,
+            > {
+                Ok(json_to_try!($($json)*))
+            })().unwrap().0,
+            $eq.as_bytes()
+        );
+    }};
+}
+
 fn test3<const V: u8>() {
     const { assert!(V == 5) }
-    assert_eq!(json_to_string!(1i8), "1");
-    assert_eq!(
-        json_to_string!(const { "hello\x20world" }),
-        "\"hello world\""
-    );
-    assert_eq!(json_to_string!(json_value_generic_const!(V)), "5");
-    assert_eq!(json_to_string!(null), "null");
-    assert_eq!(json_to_string!((1)), "1");
 
-    assert_eq!(json_to_string!([]), "[]");
-    assert_eq!(json_to_string!([true]), "[true]");
+    assert_json!("1", 1i8);
+    assert_json!("\"hello world\"", const { "hello\x20world" },);
+    assert_json!("5", json_value_generic_const!(V));
+    assert_json!("null", null);
+    assert_json!("1", (1));
 
-    assert_eq!(json_to_string!([true, (1), (2), false]), "[true,1,2,false]");
-    assert_eq!(
-        json_to_string!([true, (1), ..([2, 3]), false]),
-        "[true,1,2,3,false]"
-    );
-    assert_eq!(json_to_string!([([1, 2]), false]), "[[1,2],false]");
-    assert_eq!(json_to_string!([true, (false)]), "[true,false]");
+    assert_json!("[]", []);
+    assert_json!("[true]", [true]);
 
-    assert_eq!(json_to_string!([..([1, 2]), false]), "[1,2,false]");
-    assert_eq!(
-        json_to_string!([..([1, 2]), ..([3, 4]), false]),
-        "[1,2,3,4,false]"
-    );
-    assert_eq!(json_to_string!([true, ..([1, 2])]), "[true,1,2]");
-    assert_eq!(
-        json_to_string!([true, ..([1, 2]), false]),
-        "[true,1,2,false]"
-    );
-    assert_eq!(
-        json_to_string!([..([1, 2]), ..([false, true])]),
-        "[1,2,false,true]"
-    );
+    assert_json!("[true,1,2,false]", [true, (1), (2), false]);
+    assert_json!("[true,1,2,3,false]", [true, (1), ..([2, 3]), false],);
+    assert_json!("[[1,2],false]", [([1, 2]), false],);
+    assert_json!("[true,false]", [true, (false)]);
 
-    assert_eq!(json_to_string!({}), "{}");
-    assert_eq!(
-        json_to_string!({ "hello" = "world" }),
-        r#"{"hello":"world"}"#
-    );
+    assert_json!("[1,2,false]", [..([1, 2]), false]);
+    assert_json!("[1,2,3,4,false]", [..([1, 2]), ..([3, 4]), false],);
+    assert_json!("[true,1,2]", [true, ..([1, 2])]);
+    assert_json!("[true,1,2,false]", [true, ..([1, 2]), false],);
+    assert_json!("[1,2,false,true]", [..([1, 2]), ..([false, true])],);
 
-    assert_eq!(
-        json_to_string!({
-            "false" = (false);
-            "" = null;
-        }),
-        r#"{"false":false,"":null}"#
-    );
-    assert_eq!(
-        json_to_string!({
-            "one" = 1u8;
-            ("true") = true;
-        }),
-        r#"{"one":1,"true":true}"#
-    );
-    assert_eq!(
-        json_to_string!({
-            "one" = (1);
-            ("false") = false;
-        }),
-        r#"{"one":1,"false":false}"#
-    );
-    assert_eq!(
-        json_to_string!({
-            "one" = (1);
-            ..(ObjectOfIter([] as [(&str, &str); 0]));
-            ("false") = false;
-        }),
-        r#"{"one":1,"false":false}"#
-    );
-    assert_eq!(
-        json_to_string!({
-            "one" = (1);
-            ..(ObjectOfIter([("two", 2)]));
-            ("false") = false;
-        }),
-        r#"{"one":1,"two":2,"false":false}"#
-    );
-    assert_eq!(json_to_string!({ ("one") = 1u8 }), r#"{"one":1}"#);
-    assert_eq!(
-        json_to_string!({
-            ..(ObjectOfIter([] as [(&str, u8); 0]));
-            "one" = 1u8;
-        }),
-        r#"{"one":1}"#
-    );
-    assert_eq!(
-        json_to_string!({
-            ..(ObjectOfIter([("false", false)]));
-            "one" = 1u8;
-        }),
-        r#"{"false":false,"one":1}"#
-    );
-    assert_eq!(
-        json_to_string!({
-            ..(ObjectOfIter([] as [(&str, u8); 0]));
-            ..(ObjectOfIter([] as [(&str, u8); 0]));
-            "one" = 1i8;
-        }),
-        r#"{"one":1}"#
-    );
+    assert_json!("{}", {});
+    assert_json!(r#"{"hello":"world"}"#, { "hello" = "world" },);
 
-    assert_eq!(
-        json_to_string!({
-            "one" = 1u8;
-            ..(ObjectOfIter([] as [(&str, u8); 0]));
-        }),
-        r#"{"one":1}"#
-    );
-    assert_eq!(
-        json_to_string!({
-            "one" = 1i8;
-            ..(ObjectOfIter([("two", 2)]));
-        }),
-        r#"{"one":1,"two":2}"#
-    );
-    assert_eq!(
-        json_to_string!({
-            "one" = 1i8;
-            "two" = (2);
-        }),
-        r#"{"one":1,"two":2}"#
-    );
-    assert_eq!(
-        json_to_string!({
-            "one" = 1i8;
-            ..(ObjectOfIter([] as [(&str, i8); 0]));
-            "three" = 3u8;
-        }),
-        r#"{"one":1,"three":3}"#
-    );
-    assert_eq!(
-        json_to_string!({
-            "one" = 1i8;
-            ..(ObjectOfIter([("two", 2)]));
-            "three" = 3u8;
-        }),
-        r#"{"one":1,"two":2,"three":3}"#
-    );
+    assert_json!(r#"{"false":false,"":null}"#, {
+        "false" = (false);
+        "" = null;
+    },);
+    assert_json!(r#"{"one":1,"true":true}"#, {
+        "one" = 1u8;
+        ("true") = true;
+    },);
+    assert_json!(r#"{"one":1,"false":false}"#, {
+        "one" = (1);
+        ("false") = false;
+    },);
+    assert_json!(r#"{"one":1,"false":false}"#, {
+        "one" = (1);
+        ..(ObjectOfIter([] as [(&str, &str); 0]));
+        ("false") = false;
+    },);
+    assert_json!(r#"{"one":1,"two":2,"false":false}"#, {
+        "one" = (1);
+        ..(ObjectOfIter([("two", 2)]));
+        ("false") = false;
+    },);
+    assert_json!(r#"{"one":1}"#, { ("one") = 1u8 });
+    assert_json!(r#"{"one":1}"#, {
+        ..(ObjectOfIter([] as [(&str, u8); 0]));
+        "one" = 1u8;
+    },);
+    assert_json!(r#"{"false":false,"one":1}"#, {
+        ..(ObjectOfIter([("false", false)]));
+        "one" = 1u8;
+    },);
+    assert_json!(r#"{"one":1}"#, {
+        ..(ObjectOfIter([] as [(&str, u8); 0]));
+        ..(ObjectOfIter([] as [(&str, u8); 0]));
+        "one" = 1i8;
+    },);
 
-    assert_eq!(
-        json_to_string!({ ..(ObjectOfIter([] as [(&str, &str); 0])) }),
-        r#"{}"#
-    );
-    assert_eq!(
-        json_to_string!({ ..(ObjectOfIter([("one", 1), ("two", 2)])) }),
-        r#"{"one":1,"two":2}"#
-    );
+    assert_json!(r#"{"one":1}"#, {
+        "one" = 1u8;
+        ..(ObjectOfIter([] as [(&str, u8); 0]));
+    });
+    assert_json!(r#"{"one":1,"two":2}"#, {
+        "one" = 1i8;
+        ..(ObjectOfIter([("two", 2)]));
+    });
+    assert_json!(r#"{"one":1,"two":2}"#, {
+        "one" = 1i8;
+        "two" = (2);
+    });
+    assert_json!(r#"{"one":1,"three":3}"#, {
+        "one" = 1i8;
+        ..(ObjectOfIter([] as [(&str, i8); 0]));
+        "three" = 3u8;
+    });
+    assert_json!(r#"{"one":1,"two":2,"three":3}"#, {
+        "one" = 1i8;
+        ..(ObjectOfIter([("two", 2)]));
+        "three" = 3u8;
+    });
 
-    assert_eq!(json_to_string!(""), "\"\"");
-    assert_eq!(json_to_string!(json_string!()), "\"\"");
-    assert_eq!(json_to_string!(json_string!("a", ":", "b")), "\"a:b\"");
-    assert_eq!(json_to_string!(json_string!("a", "b", "", "c")), "\"abc\"");
+    assert_json!(r#"{}"#, { ..(ObjectOfIter([] as [(&str, &str); 0])) },);
+    assert_json!(r#"{"one":1,"two":2}"#, {
+        ..(ObjectOfIter([("one", 1), ("two", 2)]))
+    },);
 
-    assert_eq!(json_to_string!(json_string!("a", ("b"), "c")), "\"abc\"");
-    assert_eq!(json_to_string!(json_string!("a", (""), "b")), "\"ab\"");
-    assert_eq!(
-        json_to_string!(json_string!("a", ("b"), ("_"), "c")),
-        "\"ab_c\""
-    );
-    assert_eq!(
-        json_to_string!(json_string!("a", (""), ("bc"), "d")),
-        "\"abcd\""
-    );
+    assert_json!("\"\"", "");
+    assert_json!("\"\"", json_string!());
+    assert_json!("\"a:b\"", json_string!("a", ":", "b"));
+    assert_json!("\"abc\"", json_string!("a", "b", "", "c"));
 
-    assert_eq!(json_to_string!(json_string!(("a"), "b")), "\"ab\"");
-    assert_eq!(json_to_string!(json_string!((""), "b")), "\"b\"");
-    assert_eq!(json_to_string!(json_string!(("a"), ("b"), "c")), "\"abc\"");
-    assert_eq!(json_to_string!(json_string!((""), ("b"), "c")), "\"bc\"");
-    assert_eq!(json_to_string!(json_string!(("a"), (""), "c")), "\"ac\"");
-    assert_eq!(json_to_string!(json_string!((""), (""), "c")), "\"c\"");
+    assert_json!("\"abc\"", json_string!("a", ("b"), "c"));
+    assert_json!("\"ab\"", json_string!("a", (""), "b"));
+    assert_json!("\"ab_c\"", json_string!("a", ("b"), ("_"), "c"),);
+    assert_json!("\"abcd\"", json_string!("a", (""), ("bc"), "d"),);
 
-    assert_eq!(json_to_string!(json_string!("01", ("2"),)), "\"012\"");
-    assert_eq!(json_to_string!(json_string!("01", (""),)), "\"01\"");
-    assert_eq!(
-        json_to_string!(json_string!("012", ("3"), ("45"))),
-        "\"012345\""
-    );
-    assert_eq!(
-        json_to_string!(json_string!("012", ("3"), (""))),
-        "\"0123\""
-    );
-    assert_eq!(
-        json_to_string!(json_string!("012", (""), ("34"))),
-        "\"01234\""
-    );
-    assert_eq!(json_to_string!(json_string!("012", (""), (""))), "\"012\"");
+    assert_json!("\"ab\"", json_string!(("a"), "b"));
+    assert_json!("\"b\"", json_string!((""), "b"));
+    assert_json!("\"abc\"", json_string!(("a"), ("b"), "c"));
+    assert_json!("\"bc\"", json_string!((""), ("b"), "c"));
+    assert_json!("\"ac\"", json_string!(("a"), (""), "c"));
+    assert_json!("\"c\"", json_string!((""), (""), "c"));
 
-    assert_eq!(json_to_string!(json_string!(("0"), "1", ("2"),)), "\"012\"");
-    assert_eq!(json_to_string!(json_string!((""), "1", ("2"),)), "\"12\"");
-    assert_eq!(json_to_string!(json_string!(("0"), "1", (""),)), "\"01\"");
-    assert_eq!(json_to_string!(json_string!((""), "1", (""),)), "\"1\"");
-    assert_eq!(
-        json_to_string!(json_string!(("0"), ("1"), "23", ("45"), ("67"))),
-        "\"01234567\""
+    assert_json!("\"012\"", json_string!("01", ("2"),));
+    assert_json!("\"01\"", json_string!("01", (""),));
+    assert_json!("\"012345\"", json_string!("012", ("3"), ("45")),);
+    assert_json!("\"0123\"", json_string!("012", ("3"), ("")),);
+    assert_json!("\"01234\"", json_string!("012", (""), ("34")),);
+    assert_json!("\"012\"", json_string!("012", (""), ("")));
+
+    assert_json!("\"012\"", json_string!(("0"), "1", ("2"),));
+    assert_json!("\"12\"", json_string!((""), "1", ("2"),));
+    assert_json!("\"01\"", json_string!(("0"), "1", (""),));
+    assert_json!("\"1\"", json_string!((""), "1", (""),));
+    assert_json!(
+        "\"01234567\"",
+        json_string!(("0"), ("1"), "23", ("45"), ("67")),
     );
 }
