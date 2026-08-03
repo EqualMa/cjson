@@ -14,7 +14,6 @@
 ///     impl_generics![],
 ///     where_clause![],
 ///     |self: Private| match self {
-///         #[cjson(match_branch_name(A))]
 ///         Self::A => json!("A"),
 ///     }
 /// );

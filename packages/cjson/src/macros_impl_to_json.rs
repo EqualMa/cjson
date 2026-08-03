@@ -1032,7 +1032,6 @@ macro_rules! __private_impl_to_json_match {
     (
         ($matched:tt)
         { $(
-            #[cjson(match_branch_name($match_branch_name:ident))]
             $pat:pat $(if $pat_if:expr)? => json! $json:tt
         ),+ $(,)? }
         $on_match_parsed:tt
@@ -1041,7 +1040,6 @@ macro_rules! __private_impl_to_json_match {
             // expanded
             {}
             [$({
-                match_branch_name { $match_branch_name }
                 pat { $pat }
                 pat_if { $(if $pat_if)? }
                 json { $json }
@@ -1087,7 +1085,6 @@ macro_rules! __private_impl_to_json_match_variants {
         // branches
         [
             {
-                match_branch_name { $match_branch_name:ident }
                 pat $pat:tt
                 pat_if $pat_if:tt
                 json { $json:tt }
@@ -1103,7 +1100,6 @@ macro_rules! __private_impl_to_json_match_variants {
                 expand_macro_rest(
                     expanded $expanded
                     cur_variant {
-                        match_branch_name { $match_branch_name }
                         pat $pat
                         pat_if $pat_if
                     }
@@ -1178,7 +1174,6 @@ macro_rules! __private_impl_to_json_variant_expand {
         }
         expanded {}
         cur_variant {
-            match_branch_name { $match_branch_name:ident }
             pat { $pat:pat }
             pat_if { $($pat_if:tt)* }
         }
@@ -1216,7 +1211,6 @@ macro_rules! __private_impl_to_json_variant_expand {
             IS_CHAINABLE_AND_ALWAYS_EMPTY($expanded_IS_CHAINABLE_AND_ALWAYS_EMPTY:expr)
         }
         cur_variant {
-            match_branch_name { $match_branch_name:ident }
             pat { $pat:pat }
             pat_if { $($pat_if:tt)* }
         }

@@ -339,10 +339,9 @@ impl ContextOfEnum {
             };
             let variant = ctx_variant.variant();
             let span = variant.name.span();
-            let ref variant_name = variant.name.clone();
+            let variant_name = &variant.name;
 
             let pat_start = quote!(
-                #[cjson(match_branch_name(#variant_name))]
                 Self::#variant_name
             )
             .with_default_span(item_span)
