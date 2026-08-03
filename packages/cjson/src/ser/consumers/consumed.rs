@@ -10,6 +10,10 @@ impl<K: JsonKind, W: ?Sized> Consumed<K, W> {
     pub(super) const fn assert(kind: K) -> Self {
         Consumed(kind, PhantomData)
     }
+
+    pub(crate) fn upcast<A: JsonKind<Contains<K> = ()>>(self) -> Consumed<A, W> {
+        Consumed(self.0.upcast(), self.1)
+    }
 }
 
 impl<W: ?Sized> Consumed<json_kinds::AnyValue, W> {

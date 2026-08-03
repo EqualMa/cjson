@@ -311,6 +311,7 @@ define!({
             })
         }
 
+        #[inline]
         fn x_map_ok<U>(
             self,
             f: select_type![

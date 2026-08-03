@@ -32,7 +32,9 @@ impl_many!({
 
         fn consume_empty_string(
             mut self,
-            (): <Self::ConsumeJsonKind as json_kinds::JsonKind>::Contains<json_kinds::JsonString>,
+            (): <Self::ConsumeJsonKind as json_kinds::JsonKindContains>::Contains<
+                json_kinds::JsonString,
+            >,
         ) -> Output![Consumed<json_kinds::JsonString, Self>, W] {
             de_async_move!(async move {
                 () = await_try!(self.0.x_consume_text_chunk("\""));
@@ -43,7 +45,9 @@ impl_many!({
         fn consume_str(
             mut self,
             s: &str,
-            (): <Self::ConsumeJsonKind as json_kinds::JsonKind>::Contains<json_kinds::JsonString>,
+            (): <Self::ConsumeJsonKind as json_kinds::JsonKindContains>::Contains<
+                json_kinds::JsonString,
+            >,
         ) -> Output![Consumed<json_kinds::JsonString, Self>, W] {
             de_async_move!(async move {
                 () = await_try!(
@@ -57,7 +61,9 @@ impl_many!({
         fn consume_json_string_as_str(
             mut self,
             v: crate::r#const::JsonStringAsStr<'_>,
-            (): <Self::ConsumeJsonKind as json_kinds::JsonKind>::Contains<json_kinds::JsonString>,
+            (): <Self::ConsumeJsonKind as json_kinds::JsonKindContains>::Contains<
+                json_kinds::JsonString,
+            >,
         ) -> Output![Consumed<json_kinds::JsonString, Self>, W] {
             de_async_move!(async move {
                 () = await_try!(self.0.x_consume_text_chunk(v.fragment_close()));
@@ -69,7 +75,9 @@ impl_many!({
         fn start_to_consume_chunks_of_json_string_with_first_chunk(
             mut self,
             v: crate::r#const::FirstChunkOfJsonStringAsStr<'_>,
-            (): <Self::ConsumeJsonKind as json_kinds::JsonKind>::Contains<json_kinds::JsonString>,
+            (): <Self::ConsumeJsonKind as json_kinds::JsonKindContains>::Contains<
+                json_kinds::JsonString,
+            >,
         ) -> Output![CONSUME_IN_JSON_STRING<Self::EndJsonString, Self>, W] {
             de_async_move!(async move {
                 () = await_try!(self.0.x_consume_text_chunk(v.fragment()));
@@ -80,7 +88,9 @@ impl_many!({
         fn start_to_consume_chunks_of_json_string(
             mut self,
             v: impl crate::ser::IntoJson<JsonKind = json_kinds::JsonString>,
-            (): <Self::ConsumeJsonKind as json_kinds::JsonKind>::Contains<json_kinds::JsonString>,
+            (): <Self::ConsumeJsonKind as json_kinds::JsonKindContains>::Contains<
+                json_kinds::JsonString,
+            >,
         ) -> Output![CONSUME_IN_JSON_STRING<Self::EndJsonString, Self>, W] {
             de_async_move!(async move {
                 let Consumed { .. } = await_try!(v.json_provide_into_x(
@@ -96,7 +106,9 @@ impl_many!({
         type ConsumeChainedStrings = Self;
         fn start_to_consume_chained_strings(
             self,
-            (): <Self::ConsumeJsonKind as json_kinds::JsonKind>::Contains<json_kinds::JsonString>,
+            (): <Self::ConsumeJsonKind as json_kinds::JsonKindContains>::Contains<
+                json_kinds::JsonString,
+            >,
         ) -> Self::ConsumeChainedStrings {
             self
         }

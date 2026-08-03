@@ -1,4 +1,5 @@
 pub mod base {
+    pub(crate) use crate::ser::consumers::help_ancestor::HelpAncestorToConsumeChild as HELP_ANCESTOR_TO_CONSUME_CHILD;
 
     pub use crate::ser::{
         //
@@ -24,6 +25,8 @@ pub mod base {
 }
 
 pub mod try_ {
+    pub(crate) use crate::ser::consumers::help_ancestor::HelpAncestorToTryConsumeChild as HELP_ANCESTOR_TO_CONSUME_CHILD;
+
     pub use crate::ser::{
         //
         consumers::{
@@ -48,6 +51,8 @@ pub mod try_ {
 }
 
 pub mod async_try {
+    pub(crate) use crate::ser::consumers::help_ancestor::HelpAncestorToAsyncTryConsumeChild as HELP_ANCESTOR_TO_CONSUME_CHILD;
+
     pub use crate::ser::{
         consumers::{
             //

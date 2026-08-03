@@ -17,7 +17,7 @@ use crate::{
 use self::{
     consume_chained_full::ConsumeChainedArraysFull,
     consume_open_content::ConsumeArrayOpenItemsIfNotEmpty,
-    json_kinds::JsonKind,
+    json_kinds::{JsonKind, JsonKindContains},
     never_consume::NeverConsume,
     open_close::{GroupOrComma, MakeChunks, OpenClose},
 };
@@ -27,10 +27,19 @@ pub use self::consumed::Consumed;
 #[rustfmt::skip]
 macro_rules! not_any_value {
     () => {
+        fn consume_any_value_of_any_kind(
+            self,
+            _: impl crate::ser::IntoJson,
+            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKindContains>::Contains<
+                json_kinds::AnyValue,
+            >,
+        ) -> trait_mod::Output![Consumed<json_kinds::AnyValue, Self>] {
+            trait_mod::never_future!(match yes {})
+        }
         fn consume_any_value(
             self,
             _: crate::ser::texts::Value<impl crate::ser::traits::IntoTextChunks>,
-            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKind>::Contains<
+            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKindContains>::Contains<
                 json_kinds::AnyValue,
             >,
         ) -> trait_mod::Output![Consumed<json_kinds::AnyValue, Self>] {
@@ -44,7 +53,7 @@ macro_rules! not_string {
     () => {
         fn consume_empty_string(
             self,
-            yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+            yes: <Self::ConsumeJsonKind as crate::ser::consumers::json_kinds::JsonKindContains>::Contains<json_kinds::JsonString>,
         ) -> trait_mod::Output![Consumed<json_kinds::JsonString, Self>] {
             trait_mod::never_future!(match yes {})
         }
@@ -52,7 +61,7 @@ macro_rules! not_string {
         fn consume_json_string_as_str(
             self,
             _: crate::r#const::JsonStringAsStr<'_>,
-            yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+            yes: <Self::ConsumeJsonKind as crate::ser::consumers::json_kinds::JsonKindContains>::Contains<json_kinds::JsonString>,
         ) -> trait_mod::Output![Consumed<json_kinds::JsonString, Self>] {
             trait_mod::never_future!(match yes {})
         }
@@ -60,7 +69,7 @@ macro_rules! not_string {
         fn consume_str(
             self,
             _: &str,
-            yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+            yes: <Self::ConsumeJsonKind as crate::ser::consumers::json_kinds::JsonKindContains>::Contains<json_kinds::JsonString>,
         ) -> trait_mod::Output![Consumed<json_kinds::JsonString, Self>] {
             trait_mod::never_future!(match yes {})
         }
@@ -69,14 +78,14 @@ macro_rules! not_string {
         fn start_to_consume_chunks_of_json_string_with_first_chunk(
             self,
             _: crate::r#const::FirstChunkOfJsonStringAsStr<'_>,
-            yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+            yes: <Self::ConsumeJsonKind as crate::ser::consumers::json_kinds::JsonKindContains>::Contains<json_kinds::JsonString>,
         ) -> trait_mod::Output![trait_mod::CONSUME_IN_JSON_STRING<Self::EndJsonString, Self>] {
             trait_mod::never_future!(match yes {})
         }
         fn start_to_consume_chunks_of_json_string(
             self,
             _: impl IntoJson<JsonKind = json_kinds::JsonString>,
-            yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+            yes: <Self::ConsumeJsonKind as crate::ser::consumers::json_kinds::JsonKindContains>::Contains<json_kinds::JsonString>,
         ) -> trait_mod::Output![trait_mod::CONSUME_IN_JSON_STRING<Self::EndJsonString, Self>] {
             trait_mod::never_future!(match yes {})
         }
@@ -84,7 +93,7 @@ macro_rules! not_string {
         type ConsumeChainedStrings = crate::ser::consumers::never_consume::NeverConsume<Self>;
         fn start_to_consume_chained_strings(
             self,
-            yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+            yes: <Self::ConsumeJsonKind as crate::ser::consumers::json_kinds::JsonKindContains>::Contains<json_kinds::JsonString>,
         ) -> Self::ConsumeChainedStrings {
             match yes {}
         }
@@ -96,7 +105,7 @@ macro_rules! not_array {
     () => {
         fn consume_empty_array(
             self,
-            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKind>::Contains<
+            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKindContains>::Contains<
                 crate::ser::json_kinds::Array,
             >,
         ) -> trait_mod::Output![Consumed<crate::ser::json_kinds::Array, Self>] {
@@ -105,7 +114,7 @@ macro_rules! not_array {
         fn consume_non_empty_array_as_str(
             self,
             _: crate::r#const::NonEmptyArrayAsStr<'_>,
-            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKind>::Contains<
+            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKindContains>::Contains<
                 crate::ser::json_kinds::Array,
             >,
         ) -> trait_mod::Output![Consumed<crate::ser::json_kinds::Array, Self>] {
@@ -117,7 +126,7 @@ macro_rules! not_array {
 
         fn start_to_consume_chunks_of_non_empty_array(
             self,
-            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKind>::Contains<
+            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKindContains>::Contains<
                 crate::ser::json_kinds::Array,
             >,
         ) -> Self::ConsumeChunksOfNonEmptyArray {
@@ -127,7 +136,7 @@ macro_rules! not_array {
         type ConsumeChainedArrays = crate::ser::consumers::never_consume::NeverConsume<Self>;
         fn start_to_consume_chained_arrays(
             self,
-            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKind>::Contains<
+            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKindContains>::Contains<
                 crate::ser::json_kinds::Array,
             >,
         ) -> Self::ConsumeChainedArrays {
@@ -137,7 +146,7 @@ macro_rules! not_array {
         fn consume_array_of_items(
             self,
             _: impl IntoIterator<Item: crate::ser::IntoJson>,
-            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKind>::Contains<
+            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKindContains>::Contains<
                 crate::ser::json_kinds::Array,
             >,
         ) -> trait_mod::Output![Consumed<crate::ser::json_kinds::Array, Self>] {
@@ -151,7 +160,7 @@ macro_rules! not_object {
     () => {
         fn consume_empty_object(
             self,
-            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKind>::Contains<
+            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKindContains>::Contains<
                 crate::ser::json_kinds::Object,
             >,
         ) -> trait_mod::Output![Consumed<json_kinds::Object, Self>] {
@@ -160,7 +169,7 @@ macro_rules! not_object {
         fn consume_non_empty_object_as_str(
             self,
             _: crate::r#const::NonEmptyObjectAsStr<'_>,
-            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKind>::Contains<
+            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKindContains>::Contains<
                 crate::ser::json_kinds::Object,
             >,
         ) -> trait_mod::Output![Consumed<json_kinds::Object, Self>] {
@@ -171,7 +180,7 @@ macro_rules! not_object {
             crate::ser::consumers::never_consume::NeverConsume<Self, crate::r#const::states::Init>;
         fn start_to_consume_chunks_of_non_empty_object(
             self,
-            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKind>::Contains<
+            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKindContains>::Contains<
                 crate::ser::json_kinds::Object,
             >,
         ) -> Self::ConsumeChunksOfNonEmptyObject {
@@ -181,7 +190,7 @@ macro_rules! not_object {
         type ConsumeChainedObjects = crate::ser::consumers::never_consume::NeverConsume<Self>;
         fn start_to_consume_chained_objects(
             self,
-            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKind>::Contains<
+            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKindContains>::Contains<
                 crate::ser::json_kinds::Object,
             >,
         ) -> Self::ConsumeChainedObjects {
@@ -191,7 +200,7 @@ macro_rules! not_object {
         fn consume_object_of_iter(
             self,
             _: impl IntoIterator<Item: crate::ser::IntoJsonKeyColonValue>,
-            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKind>::Contains<
+            yes: <Self::ConsumeJsonKind as crate::ser::json_kinds::JsonKindContains>::Contains<
                 json_kinds::Object,
             >,
         ) -> trait_mod::Output![Consumed<json_kinds::Object, Self>] {
@@ -294,6 +303,9 @@ macro_rules! define_traits {
     };
 }
 
+mod help_ancestor;
+mod yes_or_no;
+
 pub mod json_kinds;
 pub mod runtime_chunks;
 
@@ -334,55 +346,61 @@ define_traits!({
     type ConsumeJsonKind: JsonKind;
     type Writer: CONSUME_TEXT_CHUNK;
 
+    fn consume_any_value_of_any_kind(
+        self,
+        value: impl IntoJson,
+        yes: <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::AnyValue>,
+    ) -> Output![Consumed<json_kinds::AnyValue, Self>];
+
     fn consume_any_value(
         self,
         value: texts::Value<impl traits::IntoTextChunks>,
-        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::AnyValue>,
+        yes: <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::AnyValue>,
     ) -> Output![Consumed<json_kinds::AnyValue, Self>];
 
     fn consume_empty_string(
         self,
-        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+        yes: <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::JsonString>,
     ) -> Output![Consumed<json_kinds::JsonString, Self>];
     fn consume_json_string_as_str(
         self,
         v: crate::r#const::JsonStringAsStr<'_>,
-        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+        yes: <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::JsonString>,
     ) -> Output![Consumed<json_kinds::JsonString, Self>];
 
     /// Consume a json string from `&str`.
     fn consume_str(
         self,
         s: &str,
-        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+        yes: <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::JsonString>,
     ) -> Output![Consumed<json_kinds::JsonString, Self>];
 
     type EndJsonString: END_JSON_STRING;
     fn start_to_consume_chunks_of_json_string_with_first_chunk(
         self,
         v: crate::r#const::FirstChunkOfJsonStringAsStr<'_>,
-        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+        yes: <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::JsonString>,
     ) -> Output![CONSUME_IN_JSON_STRING<Self::EndJsonString, Self>];
     fn start_to_consume_chunks_of_json_string(
         self,
         v: impl IntoJson<JsonKind = json_kinds::JsonString>,
-        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+        yes: <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::JsonString>,
     ) -> Output![CONSUME_IN_JSON_STRING<Self::EndJsonString, Self>];
 
     type ConsumeChainedStrings: CONSUME_CHAINED<json_kinds::JsonString, InitialConsumer = Self>;
     fn start_to_consume_chained_strings(
         self,
-        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+        yes: <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::JsonString>,
     ) -> Self::ConsumeChainedStrings;
 
     fn consume_empty_array(
         self,
-        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
+        yes: <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Array>,
     ) -> Output![ Consumed<json_kinds::Array, Self>];
     fn consume_non_empty_array_as_str(
         self,
         v: crate::r#const::NonEmptyArrayAsStr<'_>,
-        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
+        yes: <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Array>,
     ) -> Output![Consumed<json_kinds::Array, Self>];
 
     type ConsumeChunksOfNonEmptyArray: READY_TO_CONSUME_CHUNKS_OF_NON_EMPTY_ARRAY<
@@ -390,30 +408,30 @@ define_traits!({
     >;
     fn start_to_consume_chunks_of_non_empty_array(
         self,
-        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
+        yes: <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Array>,
     ) -> Self::ConsumeChunksOfNonEmptyArray;
 
     type ConsumeChainedArrays: CONSUME_CHAINED<json_kinds::Array, InitialConsumer = Self>;
 
     fn start_to_consume_chained_arrays(
         self,
-        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
+        yes: <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Array>,
     ) -> Self::ConsumeChainedArrays;
 
     fn consume_array_of_items(
         self,
         items: impl IntoIterator<Item: IntoJson>,
-        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
+        yes: <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Array>,
     ) -> Output![Consumed<json_kinds::Array, Self>];
 
     fn consume_empty_object(
         self,
-        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+        yes: <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Object>,
     ) -> Output![Consumed<json_kinds::Object, Self>];
     fn consume_non_empty_object_as_str(
         self,
         v: crate::r#const::NonEmptyObjectAsStr<'_>,
-        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+        yes: <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Object>,
     ) -> Output![Consumed<json_kinds::Object, Self>];
 
     type ConsumeChunksOfNonEmptyObject: READY_TO_CONSUME_CHUNKS_OF_NON_EMPTY_OBJECT<
@@ -421,19 +439,19 @@ define_traits!({
     >;
     fn start_to_consume_chunks_of_non_empty_object(
         self,
-        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+        yes: <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Object>,
     ) -> Self::ConsumeChunksOfNonEmptyObject;
 
     type ConsumeChainedObjects: CONSUME_CHAINED<json_kinds::Object, InitialConsumer = Self>;
     fn start_to_consume_chained_objects(
         self,
-        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+        yes: <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Object>,
     ) -> Self::ConsumeChainedObjects;
 
     fn consume_object_of_iter(
         self,
         kvs: impl IntoIterator<Item: crate::ser::IntoJsonKeyColonValue>,
-        yes: <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+        yes: <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Object>,
     ) -> Output![Consumed<json_kinds::Object, Self>];
 });
 
@@ -711,10 +729,18 @@ impl_many!({
         type ConsumeJsonKind = json_kinds::AnyValue;
         type Writer = W;
 
+        fn consume_any_value_of_any_kind(
+            self,
+            value: impl IntoJson,
+            (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::AnyValue>,
+        ) -> Output![Consumed<json_kinds::AnyValue, Self>] {
+            value.json_provide_into_x(self).x_map_ok(Consumed::upcast)
+        }
+
         fn consume_any_value(
             mut self,
             value: texts::Value<impl traits::IntoTextChunks>,
-            (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::AnyValue>,
+            (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::AnyValue>,
         ) -> Output![Consumed<json_kinds::AnyValue, Self>] {
             de_async_move!(async move {
                 select_method!(
@@ -730,7 +756,7 @@ impl_many!({
 
         fn consume_empty_string(
             mut self,
-            (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+            (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::JsonString>,
         ) -> Output![Consumed<json_kinds::JsonString, Self>] {
             de_async_move!(async move {
                 select_method!(
@@ -747,7 +773,7 @@ impl_many!({
         fn consume_json_string_as_str(
             mut self,
             v: crate::r#const::JsonStringAsStr<'_>,
-            (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+            (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::JsonString>,
         ) -> Output![Consumed<json_kinds::JsonString, Self>] {
             de_async_move!(async move {
                 select_method!(
@@ -764,7 +790,7 @@ impl_many!({
         fn consume_str(
             mut self,
             s: &str,
-            (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+            (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::JsonString>,
         ) -> Output![Consumed<json_kinds::JsonString, Self>] {
             de_async_move!(async move {
                 if s.is_empty() {
@@ -800,7 +826,7 @@ impl_many!({
         fn start_to_consume_chunks_of_json_string_with_first_chunk(
             mut self,
             v: crate::r#const::FirstChunkOfJsonStringAsStr<'_>,
-            (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+            (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::JsonString>,
         ) -> Output![CONSUME_IN_JSON_STRING<Self::EndJsonString, Self>] {
             de_async_move!(async move {
                 () = select_method!(
@@ -816,7 +842,7 @@ impl_many!({
         fn start_to_consume_chunks_of_json_string(
             mut self,
             v: impl IntoJson<JsonKind = json_kinds::JsonString>,
-            (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+            (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::JsonString>,
         ) -> Output![CONSUME_IN_JSON_STRING<Self::EndJsonString, Self>] {
             de_async_move!(async move {
                 // TODO: optimize with ConsumeJsonStringOpenFragment
@@ -845,14 +871,14 @@ impl_many!({
         type ConsumeChainedStrings = ConsumeChainedStringsFull<W>;
         fn start_to_consume_chained_strings(
             self,
-            (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::JsonString>,
+            (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::JsonString>,
         ) -> Self::ConsumeChainedStrings {
             ConsumeChainedStringsFull::new(self.0)
         }
 
         fn consume_empty_array(
             mut self,
-            (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
+            (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Array>,
         ) -> Output![Consumed<json_kinds::Array, Self>] {
             de_async_move!(async move {
                 () = await_try!(self.0.x_consume_text_chunk("[]"));
@@ -862,7 +888,7 @@ impl_many!({
         fn consume_non_empty_array_as_str(
             mut self,
             v: crate::r#const::NonEmptyArrayAsStr<'_>,
-            (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
+            (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Array>,
         ) -> Output![Consumed<json_kinds::Array, Self>] {
             de_async_move!(async move {
                 () = select_method!(
@@ -880,7 +906,7 @@ impl_many!({
             ConsumeChunksOfNonEmptyArray<W, Self, states::Init, { OpenClose::BOTH_GROUP.as_u8() }>;
         fn start_to_consume_chunks_of_non_empty_array(
             self,
-            (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
+            (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Array>,
         ) -> Self::ConsumeChunksOfNonEmptyArray {
             ConsumeChunksOfNonEmptyArray(self.0, PhantomData)
         }
@@ -888,7 +914,7 @@ impl_many!({
         type ConsumeChainedArrays = ConsumeChainedArraysFull<W>;
         fn start_to_consume_chained_arrays(
             self,
-            (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
+            (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Array>,
         ) -> Self::ConsumeChainedArrays {
             ConsumeChainedArraysFull::new(self.0)
         }
@@ -896,7 +922,7 @@ impl_many!({
         fn consume_array_of_items(
             mut self,
             items: impl IntoIterator<Item: IntoJson>,
-            (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
+            (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Array>,
         ) -> Output![Consumed<json_kinds::Array, Self>] {
             de_async_move!(async move {
                 let mut items = items.into_iter();
@@ -925,7 +951,7 @@ impl_many!({
 
         fn consume_empty_object(
             mut self,
-            (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+            (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Object>,
         ) -> Output![Consumed<json_kinds::Object, Self>] {
             de_async_move!(async move {
                 () = select_method!(
@@ -942,7 +968,7 @@ impl_many!({
         fn consume_non_empty_object_as_str(
             mut self,
             v: crate::r#const::NonEmptyObjectAsStr<'_>,
-            (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+            (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Object>,
         ) -> Output![Consumed<json_kinds::Object, Self>] {
             de_async_move!(async move {
                 () = select_method!(
@@ -961,7 +987,7 @@ impl_many!({
 
         fn start_to_consume_chunks_of_non_empty_object(
             self,
-            (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+            (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Object>,
         ) -> Self::ConsumeChunksOfNonEmptyObject {
             ConsumeChunksOfNonEmptyObject(self.0, PhantomData)
         }
@@ -969,7 +995,7 @@ impl_many!({
         type ConsumeChainedObjects = consume_chained_full::ConsumeChainedObjectsFull<W>;
         fn start_to_consume_chained_objects(
             self,
-            (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+            (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Object>,
         ) -> Self::ConsumeChainedObjects {
             consume_chained_full::ConsumeChainedObjectsFull::new(self.0)
         }
@@ -977,7 +1003,7 @@ impl_many!({
         fn consume_object_of_iter(
             mut self,
             kvs: impl IntoIterator<Item: crate::ser::IntoJsonKeyColonValue>,
-            (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+            (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Object>,
         ) -> Output![Consumed<json_kinds::Object, Self>] {
             de_async_move!(async move {
                 let mut items = kvs.into_iter();
@@ -1394,13 +1420,13 @@ impl_many!({
 
             fn end_with_right_bracket(
                 self,
-                yes: <K as JsonKind>::Contains<json_kinds::Array>,
+                yes: <K as JsonKindContains>::Contains<json_kinds::Array>,
             ) -> Output![Consumed<K, Self::InitialConsumer>, W] {
                 IMPL_END_WITH_RIGHT(self).impl_end_with_right_bracket(yes)
             }
             fn end_with_right_brace(
                 self,
-                yes: <K as JsonKind>::Contains<json_kinds::Object>,
+                yes: <K as JsonKindContains>::Contains<json_kinds::Object>,
             ) -> Output![Consumed<K, Self::InitialConsumer>, W] {
                 IMPL_END_WITH_RIGHT(self).impl_end_with_right_brace(yes)
             }
@@ -1552,14 +1578,14 @@ impl_many!({
 
             fn consume_empty_array(
                 self,
-                (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
+                (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Array>,
             ) -> Output![Consumed<json_kinds::Array, Self>, W] {
                 only_expr!(Consumed::ASSERT_ARRAY)
             }
             fn consume_non_empty_array_as_str(
                 mut self,
                 v: crate::r#const::NonEmptyArrayAsStr<'_>,
-                (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
+                (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Array>,
             ) -> Output![Consumed<json_kinds::Array, Self>, W] {
                 let (chunk1, chunk2) = make_non_empty_array(v.items());
                 de_async_move!(async move {
@@ -1572,7 +1598,7 @@ impl_many!({
                 ConsumeChunksOfNonEmptyArray<W, Self, states::Init, { OC.as_u8() }>;
             fn start_to_consume_chunks_of_non_empty_array(
                 self,
-                (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
+                (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Array>,
             ) -> Self::ConsumeChunksOfNonEmptyArray {
                 ConsumeChunksOfNonEmptyArray(self.0, PhantomData)
             }
@@ -1580,7 +1606,7 @@ impl_many!({
             type ConsumeChainedArrays = Self;
             fn start_to_consume_chained_arrays(
                 self,
-                (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
+                (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Array>,
             ) -> Self::ConsumeChainedArrays {
                 self
             }
@@ -1588,7 +1614,7 @@ impl_many!({
             fn consume_array_of_items(
                 self,
                 items: impl IntoIterator<Item: IntoJson>,
-                (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Array>,
+                (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Array>,
             ) -> Output![Consumed<json_kinds::Array, Self>, W] {
                 fn consume_array_of_items<W: CONSUME_TEXT_CHUNK, T: IntoJson>(
                     mut w: W,
@@ -1695,7 +1721,7 @@ impl_many!({
 
             fn consume_empty_object(
                 self,
-                (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+                (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Object>,
             ) -> Output![Consumed<json_kinds::Object, Self>, W] {
                 only_expr!(Consumed::ASSERT_OBJECT)
             }
@@ -1703,7 +1729,7 @@ impl_many!({
             fn consume_non_empty_object_as_str(
                 mut self,
                 v: crate::r#const::NonEmptyObjectAsStr<'_>,
-                (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+                (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Object>,
             ) -> Output![Consumed<json_kinds::Object, Self>, W] {
                 let (chunk1, chunk2) = make_non_empty_object(v.kvs());
                 de_async_move!(async move {
@@ -1717,7 +1743,7 @@ impl_many!({
 
             fn start_to_consume_chunks_of_non_empty_object(
                 self,
-                (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+                (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Object>,
             ) -> Self::ConsumeChunksOfNonEmptyObject {
                 ConsumeChunksOfNonEmptyObject(self.0, PhantomData)
             }
@@ -1725,7 +1751,7 @@ impl_many!({
             type ConsumeChainedObjects = Self;
             fn start_to_consume_chained_objects(
                 self,
-                (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+                (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Object>,
             ) -> Self::ConsumeChainedObjects {
                 self
             }
@@ -1733,7 +1759,7 @@ impl_many!({
             fn consume_object_of_iter(
                 mut self,
                 kvs: impl IntoIterator<Item: crate::ser::IntoJsonKeyColonValue>,
-                (): <Self::ConsumeJsonKind as JsonKind>::Contains<json_kinds::Object>,
+                (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::Object>,
             ) -> Output![Consumed<json_kinds::Object, Self>] {
                 de_async_move!(async move {
                     () = await_try!(write_iter!(self.0, kvs));
