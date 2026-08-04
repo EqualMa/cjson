@@ -201,12 +201,16 @@ macro_rules! __private_impl_to_json_parsed_as_body {
             <<__CJsonWriter as $crate::ser::TryConsumeJson>::Writer as $crate::ser::traits::TryConsumeTextChunk>::Err
         > {
             $($($prepend_fn_and_const)*)?
-            $crate::__private::Result::Ok($($write_macro_bang)+ {
+
+            let out = $($write_macro_bang)+ {
                 $($($write_prev)*)?
                 { try_ ? }
                 (w)
                 $($($write_rest)*)?
-            })
+            };
+
+            #[allow(unreachable_code)] // this happens for empty types for example.
+            $crate::__private::Result::Ok(out)
         }
 
         async fn $provide_async_try<__CJsonWriter: $crate::ser::AsyncTryConsumeJson<
@@ -221,12 +225,16 @@ macro_rules! __private_impl_to_json_parsed_as_body {
             <<__CJsonWriter as $crate::ser::AsyncTryConsumeJson>::Writer as $crate::ser::traits::AsyncTryConsumeTextChunk>::Err
         > {
             $($($prepend_fn_and_const)*)?
-            $crate::__private::Result::Ok($($write_macro_bang)+ {
+
+            let out = $($write_macro_bang)+ {
                 $($($write_prev)*)?
                 { async_try .await? }
                 (w)
                 $($($write_rest)*)?
-            })
+            };
+
+            #[allow(unreachable_code)] // this happens for empty types for example.
+            $crate::__private::Result::Ok(out)
         }
 
         $crate::__private_impl_to_json_expand_if_else! {($($just_fns)?){}{
