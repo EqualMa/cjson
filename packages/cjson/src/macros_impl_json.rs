@@ -355,6 +355,38 @@ macro_rules! __private_impl_json_auto_ref_to   { ($($t:tt)*) => { &$($t)* }; }
 #[macro_export]
 macro_rules! __private_impl_json_auto_ref_into { ($($t:tt)*) => {  $($t)* }; }
 
+/// This macro exists because elided lifetimes are not allowed when defining a `type`.
+///
+/// <details><summary>
+/// Expand this section to see the tests.
+/// </summary>
+///
+/// ```compile_fail
+/// trait HasAssocType {
+///     type Type;
+/// }
+///
+/// impl HasAssocType for &str {
+///     type Type = ();
+/// }
+///
+/// type AssocTypeOfStr = <&str as HasAssocType>::Type;
+/// ```
+///
+/// ```
+/// trait HasAssocType {
+///     type Type;
+/// }
+///
+/// impl HasAssocType for &str {
+///     type Type = ();
+/// }
+///
+/// type AssocTypeOfStr = <&'static str as HasAssocType>::Type;
+/// ```
+///
+/// </details>
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_json_auto_ref_to_type {
     ($t:ty) => {

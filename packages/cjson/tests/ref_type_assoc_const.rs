@@ -1,6 +1,9 @@
+//! Also see the compile_fail doc test in
+//! [`::cjson::macro_helpers::impl_json_auto_ref::to_type::auto_ref`].
+
 use std::marker::PhantomData;
 
-use cjson::into_json;
+use cjson::{into_json, into_json_fns, to_json_fns};
 
 enum Never {}
 
@@ -13,43 +16,7 @@ impl cjson::ser::IntoJson for Never {
 impl cjson::ser::ToJson2 for Val<'_> {
     type ToJsonKind = cjson::ser::json_kinds::AnyValue;
 
-    // TODO: refactor with json_provide_to!(|self| match self.1 {});
-    fn json_provide_to<
-        W: cjson::ser::ConsumeJson<
-                ConsumeJsonKind: cjson::ser::json_kinds::JsonKind<Contains<Self::ToJsonKind> = ()>,
-            >,
-    >(
-        &self,
-        _: W,
-    ) -> cjson::ser::Consumed<Self::ToJsonKind, W> {
-        match self.1 {}
-    }
-    fn json_provide_to_try<
-        W: cjson::ser::TryConsumeJson<
-                ConsumeJsonKind: cjson::ser::json_kinds::JsonKind<Contains<Self::ToJsonKind> = ()>,
-            >,
-    >(
-        &self,
-        _: W,
-    ) -> Result<
-        cjson::ser::Consumed<Self::ToJsonKind, W>,
-        <W::Writer as cjson::ser::traits::TryConsumeTextChunk>::Err,
-    > {
-        match self.1 {}
-    }
-    async fn json_provide_to_async_try<
-        W: cjson::ser::AsyncTryConsumeJson<
-                ConsumeJsonKind: cjson::ser::json_kinds::JsonKind<Contains<Self::ToJsonKind> = ()>,
-            >,
-    >(
-        &self,
-        _: W,
-    ) -> Result<
-        cjson::ser::Consumed<Self::ToJsonKind, W>,
-        <W::Writer as cjson::ser::traits::AsyncTryConsumeTextChunk>::Err,
-    > {
-        match self.1 {}
-    }
+    to_json_fns!(|self| match (self.1) {});
 
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = true;
 }
@@ -58,48 +25,23 @@ enum Never2 {}
 
 impl cjson::ser::IntoJson for Never2 {
     type JsonKind = cjson::ser::json_kinds::AnyValue;
-    fn json_provide_into<
-        W: cjson::ser::ConsumeJson<
-                ConsumeJsonKind: cjson::ser::json_kinds::JsonKind<Contains<Self::JsonKind> = ()>,
-            >,
-    >(
-        self,
-        _: W,
-    ) -> cjson::ser::Consumed<Self::JsonKind, W> {
-        match self {}
-    }
-    fn json_provide_into_try<
-        W: cjson::ser::TryConsumeJson<
-                ConsumeJsonKind: cjson::ser::json_kinds::JsonKind<Contains<Self::JsonKind> = ()>,
-            >,
-    >(
-        self,
-        _: W,
-    ) -> Result<
-        cjson::ser::Consumed<Self::JsonKind, W>,
-        <W::Writer as cjson::ser::traits::TryConsumeTextChunk>::Err,
-    > {
-        match self {}
-    }
-    async fn json_provide_into_async_try<
-        W: cjson::ser::AsyncTryConsumeJson<
-                ConsumeJsonKind: cjson::ser::json_kinds::JsonKind<Contains<Self::JsonKind> = ()>,
-            >,
-    >(
-        self,
-        _: W,
-    ) -> Result<
-        cjson::ser::Consumed<Self::JsonKind, W>,
-        <W::Writer as cjson::ser::traits::AsyncTryConsumeTextChunk>::Err,
-    > {
-        match self {}
-    }
+
+    into_json_fns!(|self| match self {});
 
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool =
         <&Val<'_> as ::cjson::ser::IntoJson>::IS_CHAINABLE_AND_ALWAYS_EMPTY;
 }
 
+struct ExpectBool<const B: bool>;
+
+impl<const B: bool> ExpectBool<B> {
+    const DEFAULT: Self = Self;
+}
+
+type ExpectTrue = ExpectBool<{ <&Val<'_> as cjson::ser::IntoJson>::IS_CHAINABLE_AND_ALWAYS_EMPTY }>;
+
 const _: () = {
+    let self::ExpectBool::<true> = ExpectTrue::DEFAULT;
     assert!(!<Never as cjson::ser::IntoJson>::IS_CHAINABLE_AND_ALWAYS_EMPTY);
     assert!(<&Val<'_> as cjson::ser::IntoJson>::IS_CHAINABLE_AND_ALWAYS_EMPTY);
     assert!(<Never2 as cjson::ser::IntoJson>::IS_CHAINABLE_AND_ALWAYS_EMPTY);

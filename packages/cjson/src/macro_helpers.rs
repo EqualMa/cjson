@@ -16,6 +16,7 @@ pub mod impl_json_auto_ref {
     }
 
     pub mod to_type {
+        #[doc(inline)]
         pub use crate::__private_impl_json_auto_ref_to_type as auto_ref;
     }
 
