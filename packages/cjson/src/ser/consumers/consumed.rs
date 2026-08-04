@@ -2,7 +2,9 @@ use core::marker::PhantomData;
 
 use crate::ser::json_kinds;
 
-use super::json_kinds::JsonKind;
+use super::{
+    ConsumeJsonText, json_kinds::JsonKind, writer_assert::WriterAssertIsFromConsumeJsonText,
+};
 
 pub struct Consumed<K: JsonKind, W: ?Sized>(K, PhantomData<W>);
 
@@ -13,6 +15,21 @@ impl<K: JsonKind, W: ?Sized> Consumed<K, W> {
 
     pub(crate) fn upcast<A: JsonKind<Contains<K> = ()>>(self) -> Consumed<A, W> {
         Consumed(self.0.upcast(), self.1)
+    }
+
+    // pub fn upcast_to_any_value(self) -> Consumed<json_kinds::AnyValue, W> {
+    //     Consumed(self.0.upcast(), self.1)
+    // }
+}
+
+impl<K: JsonKind, Writer> Consumed<K, ConsumeJsonText<Writer>> {
+    pub fn assert_consume_json_text_and_upcast_to_any_value<C>(
+        self,
+    ) -> Consumed<json_kinds::AnyValue, C>
+    where
+        Writer: WriterAssertIsFromConsumeJsonText<C, ()>,
+    {
+        Writer::writer_assert_is_from_consume_json_text(self.upcast::<json_kinds::AnyValue>(), ())
     }
 }
 

@@ -259,3 +259,34 @@ pub enum NeverWithMatch {}
 // Note that we have to parenthesize the matched expr
 // so that it stays as one TokenTree
 impl_json!(|self: NeverWithMatch| match (auto_deref!(self)) {});
+
+pub enum EnumOfSameType {
+    Literal1,
+    Literal2,
+}
+
+impl_json!(|self: EnumOfSameType| match self {
+    Self::Literal1 => json!(1u8),
+    Self::Literal2 => json!(2i8),
+});
+
+pub enum EnumOfSameTypeArray {
+    Empty,
+    NonEmpty,
+}
+
+impl_json!(|self: EnumOfSameTypeArray| match self {
+    Self::Empty => json!([]),
+    Self::NonEmpty => json!([[]]),
+});
+
+pub enum EnumOfDifferentTypes {
+    EmptyArray,
+    EmptyObject,
+}
+
+impl_json!(|self: EnumOfDifferentTypes| #[json_x(any_value)]
+match self {
+    Self::EmptyArray => json_x!([]),
+    Self::EmptyObject => json_x!({}),
+});

@@ -11,7 +11,7 @@ pub use self::consumers::{
 #[cfg(feature = "std")]
 pub use self::traits::impl_std::IoWrite;
 
-pub(crate) use self::consumers::define_traits;
+pub(crate) use self::consumers::{define_traits, writer_assert::WriterAssertIsFromConsumeJsonText};
 
 use json_kinds::JsonKind;
 

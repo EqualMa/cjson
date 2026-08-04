@@ -35,3 +35,20 @@ pub mod well_known_ident {
 pub mod well_known_attribute {
     pub use crate::__private_json_x as json_x;
 }
+
+pub mod json_x {
+    use crate::ser::{
+        ConsumeJsonText, Consumed, WriterAssertIsFromConsumeJsonText,
+        json_kinds::{self, JsonKind},
+    };
+
+    // TODO: document
+    pub fn any_value<C>(
+        consumed: Consumed<
+            impl JsonKind,
+            ConsumeJsonText<impl WriterAssertIsFromConsumeJsonText<C, ()>>,
+        >,
+    ) -> Consumed<json_kinds::AnyValue, C> {
+        consumed.assert_consume_json_text_and_upcast_to_any_value()
+    }
+}

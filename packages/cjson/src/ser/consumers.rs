@@ -27,6 +27,13 @@ pub use self::consumed::Consumed;
 #[rustfmt::skip]
 macro_rules! not_any_value {
     () => {
+        fn into_consume_json_text(
+            self,
+            yes: crate::ser::consumers::yes_or_no::No,
+        ) -> crate::ser::consumers::ConsumeJsonText<Self::Writer> {
+            match yes {}
+        }
+
         fn consume_any_value_of_any_kind(
             self,
             _: impl crate::ser::IntoJson,
@@ -322,13 +329,15 @@ mod consumed;
 pub(super) mod json_string_chunks;
 mod never_consume;
 
+pub(crate) mod writer_assert;
+
 // TODO: seal
 define_traits!({
     #[common_items]
     {
         use trait_mod::{
-            CONSUME_CHAINED, CONSUME_IN_JSON_STRING, CONSUME_TEXT_CHUNK, END_JSON_STRING, Output,
-            READY_TO_CONSUME_CHUNKS_OF_NON_EMPTY_ARRAY,
+            CONSUME_CHAINED, CONSUME_IN_JSON_STRING, CONSUME_JSON, CONSUME_TEXT_CHUNK,
+            END_JSON_STRING, Output, READY_TO_CONSUME_CHUNKS_OF_NON_EMPTY_ARRAY,
             READY_TO_CONSUME_CHUNKS_OF_NON_EMPTY_OBJECT,
         };
     }
@@ -344,7 +353,16 @@ define_traits!({
     }
 
     type ConsumeJsonKind: JsonKind;
-    type Writer: CONSUME_TEXT_CHUNK;
+    type Writer: CONSUME_TEXT_CHUNK
+        + writer_assert::WriterAssertIsFromConsumeJsonText<
+            Self,
+            <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::AnyValue>,
+        >;
+
+    fn into_consume_json_text(
+        self,
+        yes: <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::AnyValue>,
+    ) -> ConsumeJsonText<Self::Writer>;
 
     fn consume_any_value_of_any_kind(
         self,
@@ -728,6 +746,13 @@ impl_many!({
     impl<W: CONSUME_TEXT_CHUNK> CONSUME_JSON for ConsumeJsonText<W> {
         type ConsumeJsonKind = json_kinds::AnyValue;
         type Writer = W;
+
+        fn into_consume_json_text(
+            self,
+            (): <Self::ConsumeJsonKind as JsonKindContains>::Contains<json_kinds::AnyValue>,
+        ) -> ConsumeJsonText<Self::Writer> {
+            self
+        }
 
         fn consume_any_value_of_any_kind(
             self,
