@@ -28,6 +28,7 @@ macro_rules! impl_json {
             }
             {
                 impl_generics[] // empty
+                derive_from[] // empty
                 where_clause[] // empty
                 where_clause_to[] // empty
                 where_clause_into[] // empty
@@ -140,6 +141,7 @@ macro_rules! __private_impl_json_option_impl_generics {
         )
         {
             impl_generics[] // this forbids multiple impl_generics![]
+            derive_from $derive_from:tt
             where_clause $where_clause:tt
             where_clause_to $where_clause_to:tt
             where_clause_into $where_clause_into:tt
@@ -152,6 +154,42 @@ macro_rules! __private_impl_json_option_impl_generics {
             $($($on_parsed_prepend)*)?
             {
                 impl_generics $option_bracketed
+                derive_from $derive_from
+                where_clause $where_clause
+                where_clause_to $where_clause_to
+                where_clause_into $where_clause_into
+                JsonKind $JsonKind
+                IS_CHAINABLE_AND_ALWAYS_EMPTY $IS_CHAINABLE_AND_ALWAYS_EMPTY
+            }
+            $($($on_parsed_append)*)?
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_impl_json_option_derive_from {
+    (
+        (
+            ($($on_parsed_macro_bang:tt)+)
+            $([$($on_parsed_prepend:tt)*])?
+            $({$($on_parsed_append:tt)*})?
+        )
+        {
+            impl_generics $impl_generics:tt
+            derive_from[] // this forbids multiple derive_from![]
+            where_clause $where_clause:tt
+            where_clause_to $where_clause_to:tt
+            where_clause_into $where_clause_into:tt
+            JsonKind $JsonKind:tt
+            IS_CHAINABLE_AND_ALWAYS_EMPTY $IS_CHAINABLE_AND_ALWAYS_EMPTY:tt
+        }
+        $option_bracketed:tt
+    ) => {
+        $($on_parsed_macro_bang)+ {
+            $($($on_parsed_prepend)*)?
+            {
+                impl_generics $impl_generics
+                derive_from $option_bracketed
                 where_clause $where_clause
                 where_clause_to $where_clause_to
                 where_clause_into $where_clause_into
@@ -173,6 +211,7 @@ macro_rules! __private_impl_json_option_where_clause {
         )
         {
             impl_generics $impl_generics:tt
+            derive_from $derive_from:tt
             where_clause[] // this forbids multiple where_clause![]
             where_clause_to $where_clause_to:tt
             where_clause_into $where_clause_into:tt
@@ -185,6 +224,7 @@ macro_rules! __private_impl_json_option_where_clause {
             $($($on_parsed_prepend)*)?
             {
                 impl_generics $impl_generics
+                derive_from $derive_from
                 where_clause $option_bracketed
                 where_clause_to $where_clause_to
                 where_clause_into $where_clause_into
@@ -206,6 +246,7 @@ macro_rules! __private_impl_json_option_where_clause_to {
         )
         {
             impl_generics $impl_generics:tt
+            derive_from $derive_from:tt
             where_clause $where_clause:tt
             where_clause_to[] // this forbids multiple where_clause_to![]
             where_clause_into $where_clause_into:tt
@@ -218,6 +259,7 @@ macro_rules! __private_impl_json_option_where_clause_to {
             $($($on_parsed_prepend)*)?
             {
                 impl_generics $impl_generics
+                derive_from $derive_from
                 where_clause $where_clause
                 where_clause_to $option_bracketed
                 where_clause_into $where_clause_into
@@ -239,6 +281,7 @@ macro_rules! __private_impl_json_option_where_clause_into {
         )
         {
             impl_generics $impl_generics:tt
+            derive_from $derive_from:tt
             where_clause $where_clause:tt
             where_clause_to $where_clause_to:tt
             where_clause_into[] // this forbids multiple where_clause_to![]
@@ -251,6 +294,7 @@ macro_rules! __private_impl_json_option_where_clause_into {
             $($($on_parsed_prepend)*)?
             {
                 impl_generics $impl_generics
+                derive_from $derive_from
                 where_clause $where_clause
                 where_clause_to $where_clause_to
                 where_clause_into $option_bracketed
@@ -272,6 +316,7 @@ macro_rules! __private_impl_json_option_JsonKind {
         )
         {
             impl_generics $impl_generics:tt
+            derive_from $derive_from:tt
             where_clause $where_clause:tt
             where_clause_to $where_clause_to:tt
             where_clause_into $where_clause_into:tt
@@ -284,6 +329,7 @@ macro_rules! __private_impl_json_option_JsonKind {
             $($($on_parsed_prepend)*)?
             {
                 impl_generics $impl_generics
+                derive_from $derive_from
                 where_clause $where_clause
                 where_clause_to $where_clause_to
                 where_clause_into $where_clause_into
@@ -305,6 +351,7 @@ macro_rules! __private_impl_json_option_IS_CHAINABLE_AND_ALWAYS_EMPTY {
         )
         {
             impl_generics $impl_generics:tt
+            derive_from $derive_from:tt
             where_clause $where_clause:tt
             where_clause_to $where_clause_to:tt
             where_clause_into $where_clause_into:tt
@@ -317,6 +364,7 @@ macro_rules! __private_impl_json_option_IS_CHAINABLE_AND_ALWAYS_EMPTY {
             $($($on_parsed_prepend)*)?
             {
                 impl_generics $impl_generics
+                derive_from $derive_from
                 where_clause $where_clause
                 where_clause_to $where_clause_to
                 where_clause_into $where_clause_into
@@ -405,6 +453,9 @@ macro_rules! __private_impl_json_on_parsed {
         $parsed:tt
         {
             impl_generics[ $($impl_generics:tt)* ]
+            derive_from[
+                $($DeriveFrom:ty $(= $DeriveFromKind:ident)?),* $(,)?
+            ]
             where_clause[$($where_clause:tt)*]
             where_clause_to[$($where_clause_to:tt)*]
             where_clause_into[$($where_clause_into:tt)*]
@@ -423,6 +474,7 @@ macro_rules! __private_impl_json_on_parsed {
             impl< $($impl_generics)* > $crate::ser::IntoJson
                 for $Type
                 where
+                    $($DeriveFrom: $crate::ser::IntoJson$(<JsonKind = $crate::ser::json_kinds::$DeriveFromKind>)?,)*
                     $($where_clause)*
                     $($where_clause_into)*
             {
@@ -449,6 +501,7 @@ macro_rules! __private_impl_json_on_parsed {
             impl< $($impl_generics)* > $crate::ser::ToJson2
                 for $Type
                 where
+                    $($DeriveFrom: $crate::ser::ToJson2$(<ToJsonKind = $crate::ser::json_kinds::$DeriveFromKind>)?,)*
                     $($where_clause)*
                     $($where_clause_to)*
             {

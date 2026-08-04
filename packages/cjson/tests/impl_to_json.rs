@@ -36,9 +36,20 @@ impl_json!(
     |self: Runtime<T>| (auto_ref!(self.0)) as auto_ref![T],
 );
 
+struct RuntimeDeriveFrom<T>(T);
+impl_json!(
+    impl_generics![T],
+    derive_from![T],
+    |self: RuntimeDeriveFrom<T>| (auto_ref!(self.0)) as auto_ref![T],
+);
+
 #[test]
 fn runtime() {
     assert_json_eq!(Runtime(cjson::values::Finite::new_f32(1.2).unwrap()), "1.2");
+    assert_json_eq!(
+        RuntimeDeriveFrom(cjson::values::Finite::new_f64(3.14159).unwrap()),
+        "3.14159"
+    );
 }
 
 struct Literal;
