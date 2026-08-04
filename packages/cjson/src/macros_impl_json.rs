@@ -363,6 +363,11 @@ macro_rules! __private_impl_json_auto_ref_to_type {
 }
 
 #[macro_export]
+macro_rules! __private_impl_json_auto_deref_to   { ($($t:tt)*) => { *$($t)* }; }
+#[macro_export]
+macro_rules! __private_impl_json_auto_deref_into { ($($t:tt)*) => {  $($t)* }; }
+
+#[macro_export]
 macro_rules! __private_impl_json_on_parsed {
     (
         $parsed:tt
@@ -382,7 +387,7 @@ macro_rules! __private_impl_json_on_parsed {
         #[automatically_derived] // TODO: is this needed?
         const _: () = {
             #[allow(unused_imports)]
-            use $crate::macro_helpers::impl_json_auto_ref::into::*;
+            use $crate::macro_helpers::impl_json_auto_ref::into::auto_ref;
             impl< $($impl_generics)* > $crate::ser::IntoJson
                 for $Type
                 where
@@ -395,6 +400,10 @@ macro_rules! __private_impl_json_on_parsed {
                         $(JsonKind($JsonKind))?
                         $(IS_CHAINABLE_AND_ALWAYS_EMPTY($IS_CHAINABLE_AND_ALWAYS_EMPTY))?
                         self $_self
+                        prepend_fn_and_const(
+                            #[allow(unused_imports)]
+                            use $crate::macro_helpers::impl_json_auto_ref::into::auto_deref;
+                        )
                     }
                 }
             }
@@ -403,7 +412,7 @@ macro_rules! __private_impl_json_on_parsed {
         #[automatically_derived] // TODO: is this needed?
         const _: () = {
             #[allow(unused_imports)]
-            use $crate::macro_helpers::impl_json_auto_ref::to_type::*;
+            use $crate::macro_helpers::impl_json_auto_ref::to_type::auto_ref;
 
             impl< $($impl_generics)* > $crate::ser::ToJson2
                 for $Type
@@ -419,7 +428,7 @@ macro_rules! __private_impl_json_on_parsed {
                         self $_self
                         prepend_fn_and_const(
                             #[allow(unused_imports)]
-                            use $crate::macro_helpers::impl_json_auto_ref::to::auto_ref;
+                            use $crate::macro_helpers::impl_json_auto_ref::to::{auto_ref, auto_deref};
                         )
                     }
                 }

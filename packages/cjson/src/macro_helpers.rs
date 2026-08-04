@@ -11,6 +11,7 @@ pub mod impl_json_options {
 
 pub mod impl_json_auto_ref {
     pub mod to {
+        pub use crate::__private_impl_json_auto_deref_to as auto_deref;
         pub use crate::__private_impl_json_auto_ref_to as auto_ref;
     }
 
@@ -19,6 +20,7 @@ pub mod impl_json_auto_ref {
     }
 
     pub mod into {
+        pub use crate::__private_impl_json_auto_deref_into as auto_deref;
         pub use crate::__private_impl_json_auto_ref_into as auto_ref;
     }
 }
