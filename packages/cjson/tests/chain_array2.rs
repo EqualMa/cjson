@@ -35,7 +35,7 @@ impl_json!(
     IS_CHAINABLE_AND_ALWAYS_EMPTY![
         A::IS_CHAINABLE_AND_ALWAYS_EMPTY && B::IS_CHAINABLE_AND_ALWAYS_EMPTY
     ],
-    |self: ChainArray2Both<A, B>| #[json_x]
+    |self: ChainArray2Both<A, B>| #[json_x(macro(json_x))]
     if const { A::IS_CHAINABLE_AND_ALWAYS_EMPTY } {
         json_x!((auto_ref!(self.1)))
     } else if const { B::IS_CHAINABLE_AND_ALWAYS_EMPTY } {

@@ -235,3 +235,8 @@ fn json_string_runtime() {
 // impl_to_json!(impl_generics![T], |self: JsonItemsRuntime<T>| [
 //     ..(&self.0) as &'cjson_lt_to_json T,
 // ]);
+
+pub enum Never {}
+
+impl_json!(|self: Never| #[json_x(macro())]
+match auto_deref!(self) {});

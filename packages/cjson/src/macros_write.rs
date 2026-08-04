@@ -1348,7 +1348,11 @@ macro_rules! __wrap_one {
 #[macro_export]
 macro_rules! __private_json_write_attribute_expr_parsed {
     (
-        json_x {} // parsed options
+        json_x
+        // parsed options
+        {
+            macro($($json_x_macro_name:tt)?)
+        }
         {$_:tt} // $_
         $json_x:ident
         $maybe_try:tt
@@ -1356,7 +1360,7 @@ macro_rules! __private_json_write_attribute_expr_parsed {
         ($attr_expr:expr)
     ) => {{
         let __cjson_consumer = $consumer;
-        macro_rules! $json_x {
+        $(macro_rules! $json_x_macro_name {
             ($_($json_comma:tt)+) => {
                 $crate::__private_json_write! {
                     $maybe_try
@@ -1364,7 +1368,7 @@ macro_rules! __private_json_write_attribute_expr_parsed {
                     $_($json_comma)+
                 }
             };
-        }
+        })?
         $attr_expr
     }};
 }
