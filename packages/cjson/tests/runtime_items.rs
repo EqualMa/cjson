@@ -1,5 +1,5 @@
 use cjson::{
-    impl_to_json,
+    impl_json,
     ser::{ToJson2 as ToJson, ToJsonArray2 as ToJsonArray},
 };
 
@@ -20,9 +20,9 @@ macro_rules! json {
 
 struct BetweenBrackets<T: ToJsonArray>(T);
 
-impl_to_json!(
+impl_json!(
     impl_generics![T],
-    where_clause![where T: ToJsonArray],
+    where_clause![T: ToJsonArray],
     |self: BetweenBrackets<T>| [
         //
         ..(&self.0) as &'_ T
@@ -31,7 +31,7 @@ impl_to_json!(
 
 struct BetweenBracketsChained<T1: ToJsonArray, T2: ToJsonArray>(T1, T2);
 
-impl_to_json!(
+impl_json!(
     impl_generics![T1: ToJsonArray, T2: ToJsonArray],
     |self: BetweenBracketsChained<T1, T2>| [..(&self.0) as &'_ T1, ..(&self.1) as &'_ T2,],
 );
@@ -60,7 +60,7 @@ fn between_brackets() {
 pub struct AfterArrayStartBeforeItem<T: ToJsonArray>(T);
 pub struct AfterArrayStartBeforeItemChained<A: ToJsonArray, B: ToJsonArray>(A, B);
 
-impl_to_json!(
+impl_json!(
     impl_generics![T: ToJsonArray],
     |self: AfterArrayStartBeforeItem<T>| [
         //
@@ -69,7 +69,7 @@ impl_to_json!(
     ],
 );
 
-impl_to_json!(
+impl_json!(
     impl_generics![A: ToJsonArray, B: ToJsonArray],
     |self: AfterArrayStartBeforeItemChained<A, B>| [
         //
@@ -106,7 +106,7 @@ fn after_array_start_before_item() {
 pub struct AfterItemBeforeBracket<T: ToJsonArray>(T);
 pub struct AfterItemBeforeBracketChained<V: ToJson, A: ToJsonArray, B: ToJsonArray>(V, A, B);
 
-impl_to_json!(
+impl_json!(
     impl_generics![T: ToJsonArray],
     |self: AfterItemBeforeBracket<T>| [
         //
@@ -115,7 +115,7 @@ impl_to_json!(
     ],
 );
 
-impl_to_json!(
+impl_json!(
     impl_generics![V: ToJson, A: ToJsonArray, B: ToJsonArray],
     |self: AfterItemBeforeBracketChained<V, A, B>| [
         //
@@ -152,7 +152,7 @@ fn after_item_before_bracket() {
 pub struct AfterItemBeforeItem<T: ToJsonArray>(T);
 pub struct AfterItemBeforeItemChained<A: ToJsonArray, B: ToJsonArray, V: ToJson>(A, B, V);
 
-impl_to_json!(
+impl_json!(
     impl_generics![T: ToJsonArray],
     |self: AfterItemBeforeItem<T>| [
         //
@@ -162,7 +162,7 @@ impl_to_json!(
     ],
 );
 
-impl_to_json!(
+impl_json!(
     impl_generics![A: ToJsonArray, B: ToJsonArray,V: ToJson, ],
     |self: AfterItemBeforeItemChained<A, B, V>| [
         //
