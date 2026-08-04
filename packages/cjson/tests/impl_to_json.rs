@@ -236,7 +236,15 @@ fn json_string_runtime() {
 //     ..(&self.0) as &'cjson_lt_to_json T,
 // ]);
 
-pub enum Never {}
+pub enum NeverWithJsonX {}
 
-impl_json!(|self: Never| #[json_x(macro())]
+impl_json!(|self: NeverWithJsonX| #[json_x(macro())]
+// Note that we don't need to parenthesize the matched expr
+// because the whole match expression is parsed as a single expr after #[json_x]
 match auto_deref!(self) {});
+
+pub enum NeverWithMatch {}
+
+// Note that we have to parenthesize the matched expr
+// so that it stays as one TokenTree
+impl_json!(|self: NeverWithMatch| match (auto_deref!(self)) {});

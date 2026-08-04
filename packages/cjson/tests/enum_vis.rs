@@ -5,23 +5,19 @@ pub enum PubEnum {
     A,
 }
 
-::cjson::impl_json!(
-    impl_generics![],
-    where_clause![],
-    |self: PubEnum| match self {
-        Self::A => json!("A"),
-    }
-);
+::cjson::impl_json!(|self: PubEnum| #[json_x]
+match self {
+    Self::A => json_x!("A"),
+});
 
 #[expect(unused)]
-enum PrivateWithPubImpl {
+enum PrivateEnum {
     A,
 }
 
-::cjson::impl_json!(
-    impl_generics![],
-    where_clause![],
-    |self: PrivateWithPubImpl| match self {
-        Self::A => json!("A"),
-    }
-);
+::cjson::impl_json!(|self: PrivateEnum| match self {
+    Self::A => json!("A"),
+});
+
+#[test]
+fn compile_only() {}
