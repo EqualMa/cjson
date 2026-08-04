@@ -1,5 +1,7 @@
 pub mod impl_json_options {
     pub use crate::{
+        __private_impl_json_option_IS_CHAINABLE_AND_ALWAYS_EMPTY as IS_CHAINABLE_AND_ALWAYS_EMPTY,
+        __private_impl_json_option_JsonKind as JsonKind,
         __private_impl_json_option_impl_generics as impl_generics,
         __private_impl_json_option_where_clause as where_clause,
         __private_impl_json_option_where_clause_into as where_clause_into,
@@ -24,4 +26,8 @@ pub mod impl_json_auto_ref {
 // TODO: move to pub module
 pub mod well_known_ident {
     pub use crate::values::Null as null;
+}
+
+pub mod well_known_attribute {
+    pub use crate::__private_json_x as json_x;
 }

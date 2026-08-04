@@ -31,6 +31,8 @@ macro_rules! impl_json {
                 where_clause[] // empty
                 where_clause_to[] // empty
                 where_clause_into[] // empty
+                JsonKind[] // empty
+                IS_CHAINABLE_AND_ALWAYS_EMPTY[] // empty
             }
             {$($t)+}
             {$($t)+}
@@ -141,6 +143,8 @@ macro_rules! __private_impl_json_option_impl_generics {
             where_clause $where_clause:tt
             where_clause_to $where_clause_to:tt
             where_clause_into $where_clause_into:tt
+            JsonKind $JsonKind:tt
+            IS_CHAINABLE_AND_ALWAYS_EMPTY $IS_CHAINABLE_AND_ALWAYS_EMPTY:tt
         }
         $option_bracketed:tt
     ) => {
@@ -151,6 +155,8 @@ macro_rules! __private_impl_json_option_impl_generics {
                 where_clause $where_clause
                 where_clause_to $where_clause_to
                 where_clause_into $where_clause_into
+                JsonKind $JsonKind
+                IS_CHAINABLE_AND_ALWAYS_EMPTY $IS_CHAINABLE_AND_ALWAYS_EMPTY
             }
             $($($on_parsed_append)*)?
         }
@@ -170,6 +176,8 @@ macro_rules! __private_impl_json_option_where_clause {
             where_clause[] // this forbids multiple where_clause![]
             where_clause_to $where_clause_to:tt
             where_clause_into $where_clause_into:tt
+            JsonKind $JsonKind:tt
+            IS_CHAINABLE_AND_ALWAYS_EMPTY $IS_CHAINABLE_AND_ALWAYS_EMPTY:tt
         }
         $option_bracketed:tt
     ) => {
@@ -180,6 +188,8 @@ macro_rules! __private_impl_json_option_where_clause {
                 where_clause $option_bracketed
                 where_clause_to $where_clause_to
                 where_clause_into $where_clause_into
+                JsonKind $JsonKind
+                IS_CHAINABLE_AND_ALWAYS_EMPTY $IS_CHAINABLE_AND_ALWAYS_EMPTY
             }
             $($($on_parsed_append)*)?
         }
@@ -199,6 +209,8 @@ macro_rules! __private_impl_json_option_where_clause_to {
             where_clause $where_clause:tt
             where_clause_to[] // this forbids multiple where_clause_to![]
             where_clause_into $where_clause_into:tt
+            JsonKind $JsonKind:tt
+            IS_CHAINABLE_AND_ALWAYS_EMPTY $IS_CHAINABLE_AND_ALWAYS_EMPTY:tt
         }
         $option_bracketed:tt
     ) => {
@@ -209,6 +221,8 @@ macro_rules! __private_impl_json_option_where_clause_to {
                 where_clause $where_clause
                 where_clause_to $option_bracketed
                 where_clause_into $where_clause_into
+                JsonKind $JsonKind
+                IS_CHAINABLE_AND_ALWAYS_EMPTY $IS_CHAINABLE_AND_ALWAYS_EMPTY
             }
             $($($on_parsed_append)*)?
         }
@@ -228,6 +242,8 @@ macro_rules! __private_impl_json_option_where_clause_into {
             where_clause $where_clause:tt
             where_clause_to $where_clause_to:tt
             where_clause_into[] // this forbids multiple where_clause_to![]
+            JsonKind $JsonKind:tt
+            IS_CHAINABLE_AND_ALWAYS_EMPTY $IS_CHAINABLE_AND_ALWAYS_EMPTY:tt
         }
         $option_bracketed:tt
     ) => {
@@ -238,6 +254,74 @@ macro_rules! __private_impl_json_option_where_clause_into {
                 where_clause $where_clause
                 where_clause_to $where_clause_to
                 where_clause_into $option_bracketed
+                JsonKind $JsonKind
+                IS_CHAINABLE_AND_ALWAYS_EMPTY $IS_CHAINABLE_AND_ALWAYS_EMPTY
+            }
+            $($($on_parsed_append)*)?
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_impl_json_option_JsonKind {
+    (
+        (
+            ($($on_parsed_macro_bang:tt)+)
+            $([$($on_parsed_prepend:tt)*])?
+            $({$($on_parsed_append:tt)*})?
+        )
+        {
+            impl_generics $impl_generics:tt
+            where_clause $where_clause:tt
+            where_clause_to $where_clause_to:tt
+            where_clause_into $where_clause_into:tt
+            JsonKind[] // this forbids multiple JsonKind![]
+            IS_CHAINABLE_AND_ALWAYS_EMPTY $IS_CHAINABLE_AND_ALWAYS_EMPTY:tt
+        }
+        $option_bracketed:tt
+    ) => {
+        $($on_parsed_macro_bang)+ {
+            $($($on_parsed_prepend)*)?
+            {
+                impl_generics $impl_generics
+                where_clause $where_clause
+                where_clause_to $where_clause_to
+                where_clause_into $where_clause_into
+                JsonKind $option_bracketed
+                IS_CHAINABLE_AND_ALWAYS_EMPTY $IS_CHAINABLE_AND_ALWAYS_EMPTY
+            }
+            $($($on_parsed_append)*)?
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! __private_impl_json_option_IS_CHAINABLE_AND_ALWAYS_EMPTY {
+    (
+        (
+            ($($on_parsed_macro_bang:tt)+)
+            $([$($on_parsed_prepend:tt)*])?
+            $({$($on_parsed_append:tt)*})?
+        )
+        {
+            impl_generics $impl_generics:tt
+            where_clause $where_clause:tt
+            where_clause_to $where_clause_to:tt
+            where_clause_into $where_clause_into:tt
+            JsonKind $JsonKind:tt
+            IS_CHAINABLE_AND_ALWAYS_EMPTY[] // this forbids multiple IS_CHAINABLE_AND_ALWAYS_EMPTY![]
+        }
+        $option_bracketed:tt
+    ) => {
+        $($on_parsed_macro_bang)+ {
+            $($($on_parsed_prepend)*)?
+            {
+                impl_generics $impl_generics
+                where_clause $where_clause
+                where_clause_to $where_clause_to
+                where_clause_into $where_clause_into
+                JsonKind $JsonKind
+                IS_CHAINABLE_AND_ALWAYS_EMPTY $option_bracketed
             }
             $($($on_parsed_append)*)?
         }
@@ -287,6 +371,8 @@ macro_rules! __private_impl_json_on_parsed {
             where_clause[$($where_clause:tt)*]
             where_clause_to[$($where_clause_to:tt)*]
             where_clause_into[$($where_clause_into:tt)*]
+            JsonKind[$($JsonKind:ty)?]
+            IS_CHAINABLE_AND_ALWAYS_EMPTY[$($IS_CHAINABLE_AND_ALWAYS_EMPTY:expr)?]
         }
         {
             self $_self:tt
@@ -305,7 +391,11 @@ macro_rules! __private_impl_json_on_parsed {
             {
                 $crate::__private_impl_to_json_parsed_as_into_body! {
                     $parsed
-                    { self $_self }
+                    {
+                        $(JsonKind($JsonKind))?
+                        $(IS_CHAINABLE_AND_ALWAYS_EMPTY($IS_CHAINABLE_AND_ALWAYS_EMPTY))?
+                        self $_self
+                    }
                 }
             }
         };
@@ -324,6 +414,8 @@ macro_rules! __private_impl_json_on_parsed {
                 $crate::__private_impl_to_json_parsed_as_to_body! {
                     $parsed
                     {
+                        $(JsonKind($JsonKind))?
+                        $(IS_CHAINABLE_AND_ALWAYS_EMPTY($IS_CHAINABLE_AND_ALWAYS_EMPTY))?
                         self $_self
                         prepend_fn_and_const(
                             #[allow(unused_imports)]

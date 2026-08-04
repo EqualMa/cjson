@@ -1,6 +1,6 @@
-use cjson::ser::{
-    ConsumeChained as _, ConsumeJson, Consumed, IntoJson,
-    json_kinds::{self, JsonKind},
+use cjson::{
+    impl_json, into_json_fns,
+    ser::{IntoJson, IntoJsonArray, ToJsonArray2 as ToJsonArray, json_kinds},
 };
 
 pub struct ChainArray2<
@@ -12,25 +12,35 @@ impl<A: IntoJson<JsonKind = json_kinds::Array>, B: IntoJson<JsonKind = json_kind
     for ChainArray2<A, B>
 {
     type JsonKind = json_kinds::Array;
-
-    fn json_provide_into<
-        W: ConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::JsonKind> = ()>>,
-    >(
-        self,
-        w: W,
-    ) -> Consumed<Self::JsonKind, W> {
-        if const { A::IS_CHAINABLE_AND_ALWAYS_EMPTY } {
-            self.1.json_provide_into(w)
-        } else if const { B::IS_CHAINABLE_AND_ALWAYS_EMPTY } {
-            self.0.json_provide_into(w)
-        } else {
-            let Self(a, b) = self;
-            let mut w = w.start_to_consume_chained_arrays(());
-            w.extend(a);
-            w.end_with(b)
-        }
-    }
-
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool =
         A::IS_CHAINABLE_AND_ALWAYS_EMPTY && B::IS_CHAINABLE_AND_ALWAYS_EMPTY;
+
+    into_json_fns!(|self| #[json_x]
+    if const { A::IS_CHAINABLE_AND_ALWAYS_EMPTY } {
+        json_x!((self.1))
+    } else if const { B::IS_CHAINABLE_AND_ALWAYS_EMPTY } {
+        json_x!((self.0))
+    } else {
+        json_x!([..(self.0), ..(self.1)])
+    });
 }
+
+pub struct ChainArray2Both<A, B>(pub A, pub B);
+
+impl_json!(
+    impl_generics![A, B],
+    where_clause_to![A: ToJsonArray, B: ToJsonArray],
+    where_clause_into![A: IntoJsonArray, B: IntoJsonArray],
+    JsonKind![json_kinds::Array],
+    IS_CHAINABLE_AND_ALWAYS_EMPTY![
+        A::IS_CHAINABLE_AND_ALWAYS_EMPTY && B::IS_CHAINABLE_AND_ALWAYS_EMPTY
+    ],
+    |self: ChainArray2Both<A, B>| #[json_x]
+    if const { A::IS_CHAINABLE_AND_ALWAYS_EMPTY } {
+        json_x!((auto_ref!(self.1)))
+    } else if const { B::IS_CHAINABLE_AND_ALWAYS_EMPTY } {
+        json_x!((auto_ref!(self.0)))
+    } else {
+        json_x!([..(auto_ref!(self.0)), ..(auto_ref!(self.1))])
+    }
+);

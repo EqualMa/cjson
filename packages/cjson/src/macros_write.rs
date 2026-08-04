@@ -45,6 +45,27 @@ macro_rules! __private_json_write {
     (
         $maybe_try:tt
         $consumer:tt
+        #[$attr_name:tt $($attr_options:tt)*]
+        $attr_expr:expr
+        $(,)?
+    ) => {
+        $crate::macro_helpers::well_known_attribute::$attr_name! {
+            [$attr_name $($attr_options)*]
+            (
+                ($crate::__private_json_write_attribute_expr_parsed!)
+                {
+                    {$} // $_
+                    $attr_name
+                    $maybe_try
+                    $consumer
+                    ($attr_expr)
+                }
+            )
+        }
+    };
+    (
+        $maybe_try:tt
+        $consumer:tt
         $lit:literal
         // literal should precede ident,
         // so that false and true work.
@@ -1322,4 +1343,28 @@ macro_rules! __wrap_one {
     ({$($t:tt)*}($($append:tt)*)) => {
         $($t)* $($append)*
     };
+}
+
+#[macro_export]
+macro_rules! __private_json_write_attribute_expr_parsed {
+    (
+        json_x {} // parsed options
+        {$_:tt} // $_
+        $json_x:ident
+        $maybe_try:tt
+        ($consumer:expr)
+        ($attr_expr:expr)
+    ) => {{
+        let __cjson_consumer = $consumer;
+        macro_rules! $json_x {
+            ($_($json_comma:tt)+) => {
+                $crate::__private_json_write! {
+                    $maybe_try
+                    (__cjson_consumer)
+                    $_($json_comma)+
+                }
+            };
+        }
+        $attr_expr
+    }};
 }

@@ -100,6 +100,7 @@ mod macros;
 mod macros_generic_const;
 mod macros_impl_json;
 mod macros_impl_to_json;
+mod macros_json_x;
 mod macros_write;
 
 pub mod macro_helpers;
