@@ -28,7 +28,10 @@ pub mod rename {
 pub mod attrs {
     pub mod r#struct {
         pub mod cjson {
-            pub use super::super::common::cjson::{crate_, r#where};
+            pub use super::super::common::cjson::{
+                IS_CHAINABLE_AND_ALWAYS_EMPTY, JsonKind, crate_, derive_from, r#where, where_into,
+                where_to,
+            };
 
             pub mod rename {
                 pub use super::super::super::super::rename::*;
@@ -47,7 +50,13 @@ pub mod attrs {
 
     pub mod r#enum {
         pub mod cjson {
-            pub use super::super::common::cjson::{crate_, r#where};
+            pub use super::super::common::cjson::{
+                IS_CHAINABLE_AND_ALWAYS_EMPTY, JsonKind, crate_, derive_from, r#where, where_into,
+                where_to,
+            };
+
+            /// See [`#[json_x(any_value)]`](crate::macro_helpers::json_x::any_value).
+            pub mod any_value {}
         }
         pub mod variant {
             pub mod field {}
@@ -66,6 +75,14 @@ pub mod attrs {
             /// ```
             pub mod crate_ {}
             pub mod r#where {}
+            pub mod where_to {}
+            pub mod where_into {}
+            pub mod derive_from {}
+
+            #[allow(non_snake_case)]
+            pub mod JsonKind {}
+            #[allow(non_snake_case)]
+            pub mod IS_CHAINABLE_AND_ALWAYS_EMPTY {}
         }
     }
 }

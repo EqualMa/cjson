@@ -4,6 +4,7 @@ use proc_macro::{Delimiter, Group, Ident, Punct, Span, TokenStream, TokenTree};
 use typed_quote::{prelude::*, tokens::IterTokens};
 
 use crate::{
+    item_attr_where::ItemAttrWhere,
     syn_generic::{
         ConsumedTokens, ErrorCollector, MetaSimple, ParseItemStart, ParsingTokenStream,
         TokenTreeExt,
@@ -19,6 +20,8 @@ mod utils;
 
 mod syn_generic;
 
+mod item_attr_where;
+
 mod to_json;
 
 // mod to;
@@ -29,13 +32,8 @@ mod expand_props;
 struct ItemAttrsParser {
     crate_path: Option<TokenStream>,
     r#where: Option<ItemAttrWhere>,
-
+    special_attrs: to_json::item::ItemSpecialAttrsParser,
     item_attrs: to_json::item::ItemAttrsParser,
-}
-
-struct ItemAttrWhere {
-    where_span: Span,
-    bound: TokenStream,
 }
 
 struct IdentTree {
@@ -246,7 +244,12 @@ impl ItemAttrsParser {
                 config_mod_name = "";
                 Config::Where
             }
-            _ => return self.item_attrs.push_meta_simple(meta, errors),
+            _ =>
+                return if to_json::item::ItemSpecialAttrsParser::has_attr(&meta.path) {
+                    self.special_attrs.push_meta_simple(meta, errors)
+                } else {
+                    self.item_attrs.push_meta_simple(meta, errors)
+                },
         });
 
         let MetaSimple { path, after_path } = meta;
@@ -297,41 +300,15 @@ impl ItemAttrsParser {
                     ));
                 }
 
-                let value = match after_path {
-                    syn_generic::MetaAfterPath::Empty => Err(path.span()),
-                    syn_generic::MetaAfterPath::Group(group) => Err(group.span_open()),
-                    syn_generic::MetaAfterPath::Eq {
-                        eq,
-                        before_comma_or_eof,
-                    } => {
-                        let mut before_comma_or_eof = before_comma_or_eof.parse();
-                        match before_comma_or_eof.next() {
-                            Some(TokenTree::Group(g)) => {
-                                let value = g.stream();
-                                if let Err(e) = before_comma_or_eof.expect_eof() {
-                                    errors.push(e);
-                                }
-                                Ok(value)
-                            }
-                            tt => Err(tt.map_or_else(|| eq.span(), |tt| tt.span_open_or_entire())),
-                        }
-                    }
+                let value = match ItemAttrWhere::parse_meta_impl(
+                    syn_generic::parse_meta::MetaToParse::from_ident(&path, after_path),
+                    errors,
+                ) {
+                    Ok(v) => v,
+                    Err(e) => break 'v Err(e),
                 };
 
-                let value = match value {
-                    Ok(value) => value,
-                    Err(span) => {
-                        break 'v Err(syn_generic::ParseError::custom(
-                            "expect `where = (Bounds:)`",
-                            span,
-                        ));
-                    }
-                };
-
-                self.r#where = Some(ItemAttrWhere {
-                    where_span: path.span(),
-                    bound: value,
-                });
+                self.r#where = Some(value);
 
                 Ok(())
             }
@@ -375,7 +352,7 @@ pub fn derive_to_json(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let mut config_ident_trees: Vec<IdentTree> = vec![];
 
     let ParseItemStart {
-        vis: item_vis,
+        vis: _, // item_vis
         first_ident,
     } = match syn_generic::parse_item_start(&mut input, |_, tt| {
         match syn_generic::GroupBracket::parse_from_token_tree(tt) {
@@ -401,6 +378,7 @@ pub fn derive_to_json(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let ItemAttrsParser {
         crate_path,
         r#where,
+        special_attrs,
         item_attrs,
     } = item_attrs;
 
@@ -430,7 +408,8 @@ pub fn derive_to_json(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let item = to_json::ToJson {
         input: &mut input,
         first_ident,
-        append_where_clause: r#where.map(|v| (v.where_span, v.bound)),
+        append_where_clause: r#where,
+        special_attrs,
         item_attrs,
     }
     .try_parse(
@@ -448,13 +427,7 @@ pub fn derive_to_json(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
     let use_item_attrs = item_ident_tree.into_tokens();
 
-    let ts = item.map(|item| {
-        item.into_tokens(
-            //
-            crate_path,
-            item_vis.map(|vis| vis.into_tokens()),
-        )
-    });
+    let ts = item.map(|item| item.into_tokens(crate_path));
 
     let errors = errors
         .ok()

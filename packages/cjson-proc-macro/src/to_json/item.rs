@@ -1,14 +1,15 @@
 use std::{collections::HashMap, vec};
 
 use proc_macro::{Group, Ident, Literal, Span, TokenTree};
-use typed_quote::{IntoTokenTree, IntoTokens, ToTokens, WithSpan, quote};
+use typed_quote::{Either, IntoTokenTree, IntoTokens, ToTokens, WithSpan, quote};
 
 use crate::{
-    ConsumedTokens, ErrorCollector, IdentTree, MetaSimple, ParsingTokenStream, TokenTreeExt,
+    ConsumedTokens, ErrorCollector, IdentTree, ItemAttrWhere, MetaSimple, ParsingTokenStream,
+    TokenTreeExt,
     expand_props::TokensCollector,
     ident_match,
     syn_generic::{
-        EnumVariantBody, GroupBrace, GroupBracket, GroupParen, MetaAfterPath, ParseError,
+        EnumVariantBody, GroupBrace, GroupBracket, GroupParen, MetaAfterPath, ParseError, PunctEq,
         StructData,
         parse_meta::ParseMeta,
         parse_meta_utils::{EqValue as EqValueGeneric, FlagPresent, MetaPathSpanWith},
@@ -24,19 +25,46 @@ use super::ctx::{
 
 type EqValue = EqValueGeneric<vec::IntoIter<TokenTree>>;
 
+macro_rules! expand_or {
+    (()               $($or:tt)*) => {$($or)*};
+    (($($expand:tt)+) $($or:tt)*) => {$($expand)+};
+}
+
+macro_rules! expand_if {
+    (()           $($expand:tt)*) => {};
+    (($($if:tt)+) $($expand:tt)*) => { $($expand)* };
+}
+
 macro_rules! impl_parse_attrs {
     (
         $(#$attr:tt)*
         $vis:vis struct $Struct:ident {
-            $($field_vis:vis $field:ident: $FieldType:ty ),* $(,)?
+            $(
+                $(#[name = $field_name:expr])?
+                $field_vis:vis $field:ident: $FieldType:ty
+            ),* $(,)?
         }
 
         fn $push_meta_simple:ident();
+
+        $($vis_has_attr:vis fn $has_attr:ident();)?
     ) => {
         $(#$attr)*
         $vis struct $Struct {
             $($field_vis $field : Option<$FieldType> ),*
         }
+
+        const _: () = {
+            mod __private_meta_names {
+                $(
+                    pub mod $field {
+                        pub const BYTES: &[u8] = expand_or!(
+                            ($($field_name)?)
+                            ::core::stringify!($field).as_bytes()
+                        );
+                    }
+                )*
+            }
 
         impl PushMetaSimple for $Struct {
             fn $push_meta_simple(
@@ -44,14 +72,6 @@ macro_rules! impl_parse_attrs {
                 MetaSimple { path, after_path }: MetaSimple<ConsumedTokens<'_>>,
                 errors: &mut ErrorCollector,
             ) -> Option<IdentTree> {
-                mod __private_meta_names {
-                    $(
-                        pub mod $field {
-                            pub const BYTES: &[u8] = ::core::stringify!($field).as_bytes();
-                        }
-                    )*
-                }
-
                 use $crate::const_pattern;
 
                 let children = ident_match!(match path {
@@ -94,8 +114,39 @@ macro_rules! impl_parse_attrs {
                 })
             }
         }
+
+        expand_if! { ($($has_attr)?)
+            impl $Struct {
+                $($vis_has_attr)? fn $($has_attr)?(attr: &Ident) -> bool {
+                    use $crate::const_pattern;
+                    crate::ident_match!(match attr {
+                        $(const_pattern!(__private_meta_names::$field::BYTES))|* => true,
+                        _ => false,
+                    })
+                }
+            }
+        }
+        };
     };
 }
+
+impl_parse_attrs!(
+    #[derive(Default)]
+    pub struct ItemSpecialAttrsParser {
+        pub where_to: ItemAttrWhere,
+        pub where_into: ItemAttrWhere,
+        pub derive_from: MetaPathSpanWith<GroupMaybeFromEq>,
+        #[name = b"IS_CHAINABLE_AND_ALWAYS_EMPTY"]
+        pub is_chainable_and_always_empty: MetaPathSpanWith<GroupOrExpr>,
+        #[name = b"JsonKind"]
+        pub json_kind: MetaPathSpanWith<GroupMaybeFromEq>,
+        pub any_value: FlagPresent,
+    }
+
+    fn push_meta_simple();
+
+    pub(crate) fn has_attr();
+);
 
 impl_parse_attrs!(
     #[derive(Default)]
@@ -272,7 +323,7 @@ pub enum Rename {
 pub trait RenameAbleName: ToTokens {}
 
 impl RenameAbleName for &Ident {}
-impl RenameAbleName for &typed_quote::Either<Ident, Literal> {}
+impl RenameAbleName for &Either<Ident, Literal> {}
 
 impl Rename {
     pub fn to_tokens_as_json_object_key(
@@ -495,9 +546,7 @@ impl Fields {
                             .or_else(|| comma.map(|v| v.span()))
                             .unwrap_or(default_span);
 
-                        let name = typed_quote::Either::B(
-                            Literal::usize_unsuffixed(i).with_replaced_span(span),
-                        );
+                        let name = Either::B(Literal::usize_unsuffixed(i).with_replaced_span(span));
 
                         let f = attrs.make_struct_field(name, ty);
                         fs.push(f);
@@ -541,7 +590,7 @@ impl Fields {
                         let i = fs.len();
                         ident_to_index.insert(name.to_string(), i);
 
-                        let name = typed_quote::Either::A(name);
+                        let name = Either::A(name);
                         let f = attrs.make_struct_field(name, ty);
                         fs.push(f);
                     },
@@ -676,7 +725,7 @@ impl ItemAttrsParser {
 impl StructFieldAttrsParser {
     fn make_struct_field(
         self,
-        name: typed_quote::Either<Ident, Literal>,
+        name: Either<Ident, Literal>,
         ty: crate::syn_generic::TokenStreamCow<'_>,
     ) -> StructField {
         let StructFieldAttrsParser {
@@ -923,5 +972,125 @@ impl TagModeAttrs {
                 flag.map(|flag| SpecifiedTagMode::new(flag.0, mode))
             }
         })
+    }
+}
+
+pub struct GroupMaybeFromEq {
+    eq: Option<PunctEq>,
+    group: Group,
+}
+
+impl GroupMaybeFromEq {
+    pub fn into_group(self) -> Group {
+        self.group
+    }
+}
+
+impl ParseMeta<'_> for GroupMaybeFromEq {
+    fn parse_meta(
+        input: crate::syn_generic::parse_meta::MetaToParse<'_, '_>,
+        errors: &mut ErrorCollector,
+        _: crate::syn_generic::parse_meta::IdentTreeCollector<'_>,
+    ) -> Result<Self, ParseError> {
+        let err_span = 'err: {
+            match input.after_path {
+                MetaAfterPath::Empty => break 'err input.path_span(),
+                MetaAfterPath::Group(group) => return Ok(Self { eq: None, group }),
+                MetaAfterPath::Eq {
+                    eq,
+                    before_comma_or_eof,
+                } => {
+                    let mut ts = before_comma_or_eof.parse();
+
+                    let Some(tt) = ts.next() else {
+                        break 'err eq.span();
+                    };
+
+                    let TokenTree::Group(group) = tt else {
+                        break 'err tt.span();
+                    };
+
+                    if let Err(e) = ts.expect_eof() {
+                        errors.push(e);
+                    }
+
+                    return Ok(Self {
+                        eq: Some(eq),
+                        group,
+                    });
+                }
+            }
+        };
+
+        Err(ParseError::custom("expect `(...)`", err_span))
+    }
+}
+
+pub struct GroupOrExpr {
+    eq: Option<PunctEq>,
+    /// [Group] / [Literal] / [Ident]
+    value: Either<Group, TokenTree>,
+}
+
+impl GroupOrExpr {
+    pub fn make_group(self) -> Group {
+        let lit = match self.value {
+            Either::A(g) => return g,
+            Either::B(lit) => lit,
+        };
+
+        let span = lit.span();
+
+        let mut g = Group::new(proc_macro::Delimiter::Bracket, lit.into_token_stream());
+        g.set_span(self.eq.map_or(span, |eq| eq.span()));
+        g
+    }
+}
+
+impl ParseMeta<'_> for GroupOrExpr {
+    fn parse_meta(
+        input: crate::syn_generic::parse_meta::MetaToParse<'_, '_>,
+        errors: &mut ErrorCollector,
+        _: crate::syn_generic::parse_meta::IdentTreeCollector<'_>,
+    ) -> Result<Self, ParseError> {
+        let err_span = 'err: {
+            match input.after_path {
+                MetaAfterPath::Empty => break 'err input.path_span(),
+                MetaAfterPath::Group(group) => {
+                    return Ok(Self {
+                        eq: None,
+                        value: Either::A(group),
+                    });
+                }
+                MetaAfterPath::Eq {
+                    eq,
+                    before_comma_or_eof,
+                } => {
+                    let mut ts = before_comma_or_eof.parse();
+
+                    let Some(tt) = ts.next() else {
+                        break 'err eq.span();
+                    };
+
+                    let value = match tt {
+                        TokenTree::Group(group) => Either::A(group),
+                        TokenTree::Ident(ident) => Either::B(ident.into_token_tree()),
+                        TokenTree::Literal(literal) => Either::B(literal.into_token_tree()),
+                        _ => break 'err tt.span(),
+                    };
+
+                    if let Err(e) = ts.expect_eof() {
+                        errors.push(e);
+                    }
+
+                    return Ok(Self {
+                        eq: Some(eq),
+                        value,
+                    });
+                }
+            }
+        };
+
+        Err(ParseError::custom("expect `(...)`", err_span))
     }
 }

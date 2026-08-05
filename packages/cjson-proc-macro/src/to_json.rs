@@ -1,12 +1,16 @@
-use proc_macro::{Ident, Span, TokenStream, TokenTree};
-use typed_quote::{IntoTokens, quote, tokens::IterTokens};
+use proc_macro::{Delimiter, Group, Ident, Span, TokenStream, TokenTree};
+use typed_quote::{Either, IntoTokens, WithSpan, quote, tokens::IterTokens};
 
 use crate::{
-    ErrorCollector, IdentTree, ident_match,
+    ErrorCollector, IdentTree, ItemAttrWhere, ident_match,
     syn_generic::{
-        self, ParseError, ParseGenericsOutput, WhereClause, with_trailing_punct_if_not_empty,
+        self, ParseError, ParseGenericsOutput, WhereClause, parse_meta_utils::MetaPathSpanWith,
+        with_trailing_punct_if_not_empty,
     },
-    to_json::ctx::Options,
+    to_json::{
+        ctx::Options,
+        item::{GroupMaybeFromEq, GroupOrExpr},
+    },
 };
 
 pub mod item;
@@ -16,7 +20,8 @@ mod ctx;
 pub struct ToJson<'a> {
     pub input: &'a mut syn_generic::ParsingTokenStream,
     pub first_ident: proc_macro::Ident,
-    pub append_where_clause: Option<(Span, TokenStream)>,
+    pub append_where_clause: Option<ItemAttrWhere>,
+    pub special_attrs: item::ItemSpecialAttrsParser,
     pub item_attrs: item::ItemAttrsParser,
 }
 
@@ -31,6 +36,15 @@ impl<'a> ToJson<'a> {
             input,
             first_ident,
             append_where_clause,
+            special_attrs:
+                item::ItemSpecialAttrsParser {
+                    where_to,
+                    where_into,
+                    derive_from,
+                    is_chainable_and_always_empty,
+                    json_kind,
+                    any_value,
+                },
             item_attrs,
         } = self;
 
@@ -66,6 +80,10 @@ impl<'a> ToJson<'a> {
 
         let data = match kind {
             Kind::Struct => {
+                if let Some(any_value) = any_value {
+                    errors.push_custom("struct doesn't support any_value", any_value.0);
+                }
+
                 let struct_data;
                 (where_clause, struct_data) = input.parse_struct_after_generics()?;
 
@@ -105,7 +123,7 @@ impl<'a> ToJson<'a> {
                     children: variant_ident_trees,
                 });
 
-                ToJsonItemData::Enum(ctx.into_to_json(errors))
+                ToJsonItemData::Enum(ctx.into_to_json(any_value.map(|v| v.0), errors))
             }
         };
 
@@ -116,10 +134,7 @@ impl<'a> ToJson<'a> {
              }| {
                 WhereClause {
                     r#where,
-                    predicates: syn_generic::with_trailing_punct_if_not_empty(
-                        predicates.into_vec(),
-                        ',',
-                    ),
+                    predicates: predicates.into_vec(),
                 }
             },
         );
@@ -128,33 +143,18 @@ impl<'a> ToJson<'a> {
             errors.push(e);
         }
 
-        let where_clause = match (where_clause, append_where_clause) {
-            (v, None::<_>) => v,
-            (None, Some((span, bounds))) => Some(WhereClause {
-                r#where: span.into(),
-                predicates: {
-                    with_trailing_punct_if_not_empty(
-                        //
-                        bounds.into_iter().collect::<Vec<_>>(),
-                        ',',
-                    )
-                },
-            }),
-            (Some(mut where_clause), Some((_, bounds))) => {
-                where_clause.predicates.extend(bounds);
-
-                where_clause.predicates =
-                    with_trailing_punct_if_not_empty(where_clause.predicates, ',');
-
-                Some(where_clause)
-            }
-        };
+        let where_clause = join_where(where_clause, append_where_clause);
 
         Ok(ToJsonItem {
             name: item_name,
             impl_generics,
             ty_generics,
             where_clause,
+            where_to,
+            where_into,
+            derive_from,
+            is_chainable_and_always_empty,
+            json_kind,
             data,
         })
     }
@@ -164,44 +164,77 @@ pub struct ToJsonItem {
     name: Ident,
     impl_generics: TokenStream,
     ty_generics: TokenStream,
-    where_clause: Option<WhereClause<Vec<TokenTree>>>,
+    where_clause: Option<JointWhere>,
+    where_to: Option<ItemAttrWhere>,
+    where_into: Option<ItemAttrWhere>,
+    derive_from: Option<MetaPathSpanWith<GroupMaybeFromEq>>,
+    is_chainable_and_always_empty: Option<MetaPathSpanWith<GroupOrExpr>>,
+    json_kind: Option<MetaPathSpanWith<GroupMaybeFromEq>>,
     data: ToJsonItemData,
 }
 impl ToJsonItem {
-    pub fn into_tokens(
-        self,
-        crate_path: impl IntoTokens,
-        item_vis: impl IntoTokens,
-    ) -> impl IntoTokens {
+    pub fn into_tokens(self, crate_path: impl IntoTokens) -> impl IntoTokens {
         let Self {
             name,
             impl_generics,
             ty_generics,
             where_clause,
+            where_to,
+            where_into,
+            derive_from,
+            is_chainable_and_always_empty,
+            json_kind,
             data,
         } = self;
 
-        let where_clause = where_clause.map(
-            |WhereClause {
-                 r#where,
-                 predicates,
-             }| {
-                let r#where: Ident = r#where.into();
-                let predicates = IterTokens(predicates);
-                quote!(
-                    #r#where
-                    #predicates
-                )
-            },
-        );
+        let derive_from = derive_from.map(|MetaPathSpanWith(span, group)| {
+            let group = make_bracket(group.into_group());
+            quote!(derive_from! #group,).with_default_span(span)
+        });
+
+        let where_clause = where_clause.map(|mut w| {
+            let should_make_sure_trailing_comma = where_to.is_some() || where_into.is_some();
+
+            if should_make_sure_trailing_comma {
+                w = w.with_trailing_comma(None);
+            }
+
+            let JointWhere {
+                where_span,
+                predicates,
+            } = w;
+            make_where_bang(where_span, quote!(where_clause!), predicates)
+        });
+
+        let where_clause_to = where_to.map(|ItemAttrWhere { where_span, bound }| {
+            make_where_bang(where_span, quote!(where_clause_to!), bound)
+        });
+        let where_clause_into = where_into.map(|ItemAttrWhere { where_span, bound }| {
+            make_where_bang(where_span, quote!(where_clause_into!), bound)
+        });
+
+        let is_chainable_and_always_empty =
+            is_chainable_and_always_empty.map(|MetaPathSpanWith(span, group)| {
+                let group = make_bracket(group.make_group());
+                quote!(IS_CHAINABLE_AND_ALWAYS_EMPTY! #group,).with_default_span(span)
+            });
+
+        let json_kind = json_kind.map(|MetaPathSpanWith(span, group)| {
+            let group = make_bracket(group.into_group());
+            quote!(JsonKind! #group,).with_default_span(span)
+        });
 
         let data = data.into_tokens();
 
         quote!(
-            #crate_path ::impl_to_json!(
-                vis![#item_vis],
+            #crate_path ::impl_json!(
                 impl_generics![#impl_generics],
-                where_clause![#where_clause],
+                #derive_from
+                #where_clause
+                #where_clause_to
+                #where_clause_into
+                #json_kind
+                #is_chainable_and_always_empty
                 |self: #name< #ty_generics >|
                     #data
             );
@@ -222,4 +255,99 @@ impl ToJsonItemData {
         };
         TokenStream::from_iter(ts)
     }
+}
+
+fn make_where_bang(
+    span: Span,
+    where_bang: impl IntoTokens + WithSpan,
+    predicates: impl IntoTokens,
+) -> impl IntoTokens {
+    let where_bang = where_bang.with_default_span(span);
+    quote!(
+        #where_bang
+        [#predicates],
+    )
+}
+
+struct JointWhere {
+    where_span: Span,
+    predicates: Either<IterTokens<Vec<TokenTree>>, TokenStream>,
+}
+
+impl JointWhere {
+    fn with_trailing_comma(self, span: Option<Span>) -> Self {
+        let Self {
+            where_span,
+            predicates,
+        } = self;
+
+        let predicates = match predicates {
+            Either::A(IterTokens(predicates)) => predicates,
+            Either::B(ts) => ts.into_iter().collect(),
+        };
+
+        let predicates =
+            with_trailing_punct_if_not_empty(predicates, ',', Some(span.unwrap_or(where_span)));
+
+        Self {
+            where_span,
+            predicates: Either::A(IterTokens(predicates)),
+        }
+    }
+}
+
+fn join_where(
+    where_clause: Option<WhereClause<Vec<TokenTree>>>,
+    append_where_clause: Option<ItemAttrWhere>,
+) -> Option<JointWhere> {
+    match (where_clause, append_where_clause) {
+        (None::<_>, None::<_>) => None,
+        (
+            Some(WhereClause {
+                r#where,
+                predicates,
+            }),
+            None::<_>,
+        ) => Some(JointWhere {
+            where_span: r#where.span(),
+            predicates: Either::A(IterTokens(predicates)),
+        }),
+        (None, Some(ItemAttrWhere { where_span, bound })) => Some(JointWhere {
+            where_span,
+            predicates: Either::B(bound),
+        }),
+        (
+            Some(WhereClause {
+                r#where,
+                mut predicates,
+            }),
+            Some(ItemAttrWhere { where_span, bound }),
+        ) => {
+            predicates = with_trailing_punct_if_not_empty(predicates, ',', Some(where_span));
+            predicates.extend(bound);
+
+            Some(JointWhere {
+                where_span: r#where.span(),
+                predicates: Either::A(IterTokens(predicates)),
+            })
+        }
+    }
+}
+
+fn make_bracket(g: Group) -> Group {
+    make_delimiter(g, Delimiter::Bracket)
+}
+
+fn make_delimiter(g: Group, delimiter: Delimiter) -> Group {
+    if g.delimiter() == delimiter {
+        return g;
+    }
+
+    let span = g.span();
+    let stream = g.stream();
+
+    let mut g = Group::new(delimiter, stream);
+    g.set_span(span);
+
+    g
 }

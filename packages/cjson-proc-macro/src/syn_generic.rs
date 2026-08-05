@@ -9,7 +9,7 @@ use std::{
 };
 
 use proc_macro::{Delimiter, Group, Ident, Literal, Punct, Spacing, Span, TokenStream, TokenTree};
-use typed_quote::{Either, IntoTokens, ToTokens, WithSpan, quote};
+use typed_quote::{Either, IntoTokens, ToTokens, WithSpan, maybe_span::MaybeSpan as _, quote};
 
 use crate::{ident_match, syn_generic};
 
@@ -370,12 +370,18 @@ impl From<Vec<TokenTree>> for ParsingTokenStream {
     }
 }
 
-pub fn with_trailing_punct_if_not_empty(mut ts: Vec<TokenTree>, punct: char) -> Vec<TokenTree> {
+pub fn with_trailing_punct_if_not_empty(
+    mut ts: Vec<TokenTree>,
+    punct: char,
+    punct_span: Option<Span>,
+) -> Vec<TokenTree> {
     if ts
         .last()
         .is_some_and(|tt| !matches!(tt, TokenTree::Punct(p) if *p == punct))
     {
-        ts.push(TokenTree::Punct(Punct::new(punct, Spacing::Alone)));
+        ts.push(TokenTree::Punct(
+            punct_span.make_punct(Punct::new(punct, Spacing::Alone)),
+        ));
     }
 
     ts
@@ -1475,6 +1481,12 @@ pub struct IdentIn(Ident);
 
 /// `where`
 pub struct IdentWhere(Ident);
+
+impl IdentWhere {
+    pub(crate) fn span(&self) -> Span {
+        self.0.span()
+    }
+}
 
 impl From<Span> for IdentWhere {
     fn from(span: Span) -> Self {

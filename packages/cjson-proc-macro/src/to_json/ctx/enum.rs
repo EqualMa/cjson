@@ -320,16 +320,41 @@ struct ContextOfEnumVariant<'a> {
 }
 
 impl ContextOfEnum {
-    pub fn into_to_json(mut self, errors: &mut ErrorCollector) -> Vec<TokenTree> {
+    pub fn into_to_json(
+        mut self,
+        any_value: Option<Span>,
+        errors: &mut ErrorCollector,
+    ) -> Vec<TokenTree> {
         let mut ts = Vec::new();
-        self.expand_to(From::from(&mut ts), errors);
+        self.expand_to(any_value, From::from(&mut ts), errors);
 
         // TODO: report unused
         ts
     }
 
-    fn expand_to(&mut self, mut out: TokensCollector, errors: &mut ErrorCollector) {
+    fn expand_to(
+        &mut self,
+        any_value: Option<Span>,
+        mut out: TokensCollector,
+        errors: &mut ErrorCollector,
+    ) {
         let item_span = self.name.span();
+
+        let json_macro;
+        if let Some(any_value) = any_value {
+            let any_value = quote!(any_value).with_replaced_span(any_value);
+
+            let json_x = quote!(json_x).with_replaced_span(item_span);
+
+            out.extend([
+                quote!(#).into_token_tree(),
+                quote!([#json_x(#any_value)]).into_token_tree(),
+            ]);
+
+            json_macro = typed_quote::Either::B(json_x);
+        } else {
+            json_macro = typed_quote::Either::A(quote!(json));
+        }
 
         let mut match_inner = TokenStream::new();
         (0..(self.variants.len())).for_each(|index_variant| {
@@ -364,7 +389,7 @@ impl ContextOfEnum {
 
             match_inner.extend(Some(
                 quote! {
-                    json!( #to ),
+                    #json_macro!( #to ),
                 }
                 .with_default_span(span)
                 .into_token_stream(),
@@ -375,7 +400,7 @@ impl ContextOfEnum {
 
         out.push(quote!(match).into_token_tree());
         if self.variants.is_empty() {
-            out.push(quote!((*self)).into_token_tree());
+            out.push(quote!((auto_deref!(self))).into_token_tree());
         } else {
             out.push(quote!(self).into_token_tree());
         }

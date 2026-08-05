@@ -1,11 +1,27 @@
-#![cfg(todo)]
 #![cfg(feature = "proc-macro")]
 
-use cjson::{self as my_json, ToJson, ser::exts::TextExt as _};
+use cjson::{
+    self as my_json, ToJson,
+    ser::{IntoJson, ToJson2 as ToJson},
+};
 
 macro_rules! assert_json_eq {
-    ($v:expr,$eq:expr) => {
-        assert_eq!($v.to_json().into_string().into_inner(), $eq)
+    ($v:expr, $eq:expr) => {
+        assert_eq!(::cjson::ser::ToJsonExt::to_json_as_string(&$v), $eq);
+        assert_eq!(
+            ::cjson::ser::ToJsonExt::to_json_as_try::<::cjson::ser::IoWrite<Vec<u8>>>(&$v)
+                .unwrap()
+                .0,
+            $eq.as_bytes()
+        );
+        // TODO: test async try
+        assert_eq!(::cjson::ser::IntoJsonExt::into_json_as_string($v), $eq);
+        assert_eq!(
+            ::cjson::ser::IntoJsonExt::into_json_as_try::<::cjson::ser::IoWrite<Vec<u8>>>($v)
+                .unwrap()
+                .0,
+            $eq.as_bytes()
+        );
     };
 }
 
@@ -33,7 +49,10 @@ struct TransparentImplicit(u8);
 struct TransparentExplicit<'a>(&'a str);
 
 #[derive(ToJson)]
-#[cjson(where = (T: ToJson))]
+#[cjson(
+    where_to = (T: ToJson),
+    where_into = (T: IntoJson),
+)]
 #[cjson(transparent)]
 struct TransparentExplicitNamed<T> {
     only: T,
@@ -82,7 +101,7 @@ fn obj_one_field() {
 }
 
 #[derive(ToJson)]
-#[cjson(where = (V: ToJson))]
+#[cjson(derive_from(V))]
 #[cjson(crate(::cjson))]
 struct ObjFields<'a, V, const UNUSED: u32> {
     name: &'a str,
@@ -119,6 +138,7 @@ enum EnumOne {
 }
 
 #[derive(ToJson)]
+#[cjson(any_value)]
 enum EnumMany {
     First(),
     Second,

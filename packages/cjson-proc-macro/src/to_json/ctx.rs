@@ -133,7 +133,7 @@ pub struct ContextOfStruct {
     /// Asserts `self.fields_ident_to_index.len() == self.fields.len()`
     fields_ident_to_index: Option<HashMap<String, usize>>,
 
-    self_dot: Option<Vec<TokenTree>>,
+    self_dot: Option<[TokenTree; 2]>,
 
     to_untagged_default: StructToDefault,
     cache_for_to_untagged_default: Option<custom::TokensExpanded<StructToDefaultExpandError>>,
@@ -260,8 +260,8 @@ impl<'a> field::FieldHelper for FieldHelper<'a> {
 
     fn to_calc_expr(&mut self) -> field::CalcExpr<'_> {
         let name = ctx_struct_field!(self).name.clone();
-        let ref_self_dot = self.ctx_struct.self_dot();
-        field::CalcExpr::RefSelfDot { ref_self_dot, name }
+        let self_dot = self.ctx_struct.self_dot();
+        field::CalcExpr::SelfDot { self_dot, name }
     }
 }
 
@@ -1086,11 +1086,9 @@ impl ContextOfStruct {
         self.self_dot.get_or_insert_with(|| {
             let span = self.name.span();
             [
-                quote!(&).with_replaced_span(span).into_token_tree(),
                 quote!(self).with_replaced_span(span).into_token_tree(),
                 quote!(.).with_replaced_span(span).into_token_tree(),
             ]
-            .into()
         })
     }
 }

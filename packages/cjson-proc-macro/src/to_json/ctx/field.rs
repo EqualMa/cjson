@@ -260,8 +260,15 @@ impl<Ctx: ContextSupportsField> ContextOfField<Ctx> {
     }
 
     fn expand_type(&self, mut out: TokensCollector<'_>) {
-        let ts = self.field().type_.as_slice();
-        out.extend_from_slice(ts);
+        let ts = self.field().type_.as_slice().iter().cloned();
+        out.extend([
+            quote!(auto_ref).into_token_tree(),
+            quote!(!).into_token_tree(),
+            TokenTree::Group(proc_macro::Group::new(
+                proc_macro::Delimiter::Bracket,
+                TokenStream::from_iter(ts),
+            )),
+        ]);
     }
 
     fn expand_index_to_str(
@@ -370,11 +377,7 @@ impl<Ctx: ContextSupportsField> ContextOfField<Ctx> {
 
     fn expand_default_to(&mut self, span: Span, mut out: TokensCollector<'_>) {
         self.expand_expr(out.as_mut(), span, None);
-        out.extend(
-            quote!(as &'cjson_lt_to_json)
-                .with_replaced_span(span)
-                .into_token_stream(),
-        );
+        out.extend([quote!(as).with_replaced_span(span).into_token_tree()]);
         self.expand_type(out);
     }
 
@@ -648,8 +651,8 @@ impl<'a> CalcName<'a> {
 }
 
 pub enum CalcExpr<'a> {
-    RefSelfDot {
-        ref_self_dot: &'a [TokenTree],
+    SelfDot {
+        self_dot: &'a [TokenTree],
         name: FieldName,
     },
     PatternDestruct(&'a Ident),
@@ -658,18 +661,18 @@ pub enum CalcExpr<'a> {
 impl<'a> CalcExpr<'a> {
     fn expand(self, span: Span, span_self: Option<Span>) -> TokenStream {
         match self {
-            CalcExpr::RefSelfDot { ref_self_dot, name } => {
-                let ref_self_dot: TokenStream = if let Some(span_self) = span_self {
-                    ref_self_dot
+            CalcExpr::SelfDot { self_dot, name } => {
+                let self_dot: TokenStream = if let Some(span_self) = span_self {
+                    self_dot
                         .iter()
                         .map(make_fn_clone_and_set_span(span_self))
                         .collect()
                 } else {
-                    ref_self_dot.iter().cloned().collect()
+                    self_dot.iter().cloned().collect()
                 };
                 let field_name = name.with_replaced_span(span);
 
-                quote! (#ref_self_dot #field_name).into_token_stream()
+                quote!(auto_ref!(#self_dot #field_name)).into_token_stream()
             }
             CalcExpr::PatternDestruct(ident) => ident.with_replaced_span(span).into_token_stream(),
         }

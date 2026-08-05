@@ -76,6 +76,13 @@ impl<const N: usize> IdentToBuf<N> {
             None => Err(self),
         }
     }
+
+    pub const fn as_slice_or_truncated(&self) -> Result<&[u8], &[u8; N]> {
+        match self.try_as_slice() {
+            Ok(t) => Ok(t),
+            Err(this) => Err(&this.0.buf),
+        }
+    }
 }
 
 pub fn _ident_to_buf<const N: usize>(ident: &impl fmt::Display) -> IdentToBuf<N> {
