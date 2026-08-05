@@ -1,9 +1,6 @@
 use core::{fmt, marker::PhantomData};
 
-use super::{
-    HasConstJsonValue, StatedChunkStr, array::NonEmptyArray, object::NonEmptyObject,
-    string::JsonString, value::Value,
-};
+use super::HasConstJsonValue;
 
 use self::IntermediateState::*;
 
@@ -1249,26 +1246,11 @@ enum Never {}
 
 pub struct CompileTimeChunkIsJsonValue<T: ?Sized + HasConstCompileTimeChunk>(Never, PhantomData<T>);
 
-impl<T: ?Sized + HasConstCompileTimeChunk> HasConstJsonValue for CompileTimeChunkIsJsonValue<T> {
-    const JSON_VALUE: crate::ser::texts::Value<&'static str> = {
-        _ = CompileTimeChunk::<T>::JSON_VALUE;
-        crate::ser::texts::Value::new_without_validation(T::CHUNK.into_inner())
-    };
-}
-
 impl<T: ?Sized + HasConstCompileTimeChunk> CompileTimeChunk<T> {
     pub const DEFAULT: Self = {
         _ = T::CHUNK;
         Self(PhantomData)
     };
-
-    pub const JSON_VALUE: Value<Self> = Value::new(Self::DEFAULT);
-
-    pub const JSON_STRING: JsonString<Self> = JsonString::new(Self::JSON_VALUE);
-
-    pub const JSON_ARRAY_NON_EMPTY: NonEmptyArray<Self> = NonEmptyArray::new(Self::JSON_VALUE);
-
-    pub const JSON_OBJECT_NON_EMPTY: NonEmptyObject<Self> = NonEmptyObject::new(Self::JSON_VALUE);
 }
 
 mod deserializer;

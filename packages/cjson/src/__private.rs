@@ -30,16 +30,6 @@ pub mod state_then_runtime {
     };
 }
 
-pub mod only_compile_time_kinds {
-    pub use crate::r#const::{
-        //
-        array::NonEmptyArray as JSON_ARRAY_NON_EMPTY,
-        object::NonEmptyObject as JSON_OBJECT_NON_EMPTY,
-        string::JsonString as JSON_STRING,
-        value::Value as JSON_VALUE,
-    };
-}
-
 pub mod impl_to_json_kinds {
     pub mod full {
         pub use crate::ser::json_kinds::{

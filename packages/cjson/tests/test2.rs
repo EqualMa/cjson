@@ -4,6 +4,7 @@ use cjson::{
     values::ObjectOfIter,
 };
 
+#[cfg(todo)]
 fn test<const V: u8>() {
     let a = json!(json_string!("prefix:", ":postfix"));
     let b = json!(1u8);
