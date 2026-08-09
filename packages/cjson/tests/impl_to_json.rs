@@ -260,6 +260,19 @@ pub enum NeverWithMatch {}
 // so that it stays as one TokenTree
 impl_json!(|self: NeverWithMatch| match (auto_deref!(self)) {});
 
+enum EnumOne {
+    Only(),
+}
+
+impl_json!(|self: EnumOne| match self {
+    Self::Only() => json!({ "Only" = [] }),
+});
+
+#[test]
+fn enum_one() {
+    assert_json_eq!(EnumOne::Only(), r#"{"Only":[]}"#);
+}
+
 pub enum EnumOfSameType {
     Literal1,
     Literal2,
