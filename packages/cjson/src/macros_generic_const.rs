@@ -3,6 +3,7 @@
 /// json_value_generic_const!($into_json:expr, $capacity:expr $(,)?)
 /// json_value_generic_const!($into_json:expr                 $(,)?)
 /// ```
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_well_known_macro_json_value_generic_const {
     (

@@ -82,6 +82,7 @@ macro_rules! __private_json_fns_parse_closure {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_to_json_parse {
     (
@@ -110,6 +111,7 @@ macro_rules! __private_impl_to_json_parse {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_to_json_parsed_as_to_body {
     (
@@ -132,6 +134,7 @@ macro_rules! __private_impl_to_json_parsed_as_to_body {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_to_json_parsed_as_into_body {
     (
@@ -154,6 +157,7 @@ macro_rules! __private_impl_to_json_parsed_as_into_body {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_to_json_parsed_as_body {
     ({
@@ -261,6 +265,7 @@ macro_rules! __private_impl_to_json_parsed_as_body {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_to_json_parse_with {
     (
@@ -370,6 +375,7 @@ macro_rules! __private_impl_to_json_parse_with {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_to_json_runtime_kind {
     (                         $(,)?) => {
@@ -386,6 +392,7 @@ macro_rules! __private_impl_to_json_runtime_kind {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_to_json_runtime_const_val {
     ($(,)?) => {
@@ -396,6 +403,7 @@ macro_rules! __private_impl_to_json_runtime_const_val {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_to_json_eof {
     (
@@ -414,6 +422,7 @@ macro_rules! __private_impl_to_json_eof {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_to_json_kind {
     (
@@ -431,6 +440,7 @@ macro_rules! __private_impl_to_json_kind {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_to_json_const_impl {
     (json_value_generic_const $json_value_generic_const_body:tt) => { false };
@@ -456,6 +466,7 @@ macro_rules! __private_impl_to_json_const_impl {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_to_json_match {
     (
@@ -496,12 +507,14 @@ macro_rules! __private_impl_to_json_match {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_to_json_expand_matched {
     [($matched:expr)] => [ $matched ];
     [ $matched:expr ] => [ $matched ];
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_to_json_match_variants {
     (
@@ -561,6 +574,7 @@ macro_rules! __private_impl_to_json_match_variants {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_to_json_write_matched {
     (
@@ -586,6 +600,7 @@ macro_rules! __private_impl_to_json_write_matched {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_to_json_variant_expand {
     (
@@ -661,6 +676,7 @@ macro_rules! __private_impl_to_json_variant_expand {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_to_json_expand_if_else {
     { ()       $then:tt {$($else:tt)*} } => { $($else)* };

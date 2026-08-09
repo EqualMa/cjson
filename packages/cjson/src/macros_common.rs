@@ -5,6 +5,7 @@ macro_rules! __expand_or {
     ([$($e:tt)+][$($or:tt)*]) => ($($e )+);
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_after_array_start {
     // EOF
@@ -94,6 +95,7 @@ macro_rules! __private_json_after_array_start {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_after_runtime_items {
     // runtime_items_after_array_start + EOF
@@ -291,6 +293,7 @@ macro_rules! __private_json_after_runtime_items {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_value {
     // literal
@@ -537,6 +540,7 @@ macro_rules! __private_json_value {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_after_array_comma {
     (
@@ -627,6 +631,7 @@ macro_rules! __private_json_after_array_comma {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_eof_normalize {
     // EmptyArray
@@ -875,6 +880,7 @@ macro_rules! __private_json_eof_normalize {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_after_value {
     (
@@ -995,12 +1001,14 @@ macro_rules! __private_json_after_value {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_array_detect_trailing_comma {
     [{ $($e:expr,)* }[$($has_trailing_semi:tt)*][$($no_trailing_semi:tt)*]] => [$($has_trailing_semi)*];
     [{ $($e:expr),+ }[$($has_trailing_semi:tt)*][$($no_trailing_semi:tt)*]] => [$($no_trailing_semi)* ];
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_concat_compile_time_tokens_state {
     (
@@ -1016,6 +1024,7 @@ macro_rules! __private_json_concat_compile_time_tokens_state {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_concat_compile_time_tokens_type {
     (
@@ -1031,6 +1040,7 @@ macro_rules! __private_json_concat_compile_time_tokens_type {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_concat_compile_time_tokens_len {
     (
@@ -1051,6 +1061,7 @@ macro_rules! __private_json_concat_compile_time_tokens_len {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_concat_compile_time_tokens_buf {
     (
@@ -1069,6 +1080,7 @@ macro_rules! __private_json_concat_compile_time_tokens_buf {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_concat_compile_time_token_buf {
     (
@@ -1108,6 +1120,7 @@ macro_rules! __private_json_concat_compile_time_token_buf {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_expand_token_args_for_len {
     (json_value_generic_const $($json_value_generic_const_body:tt)*) => {
@@ -1124,6 +1137,7 @@ macro_rules! __private_json_expand_token_args_for_len {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_expand_token_len_of_generic_const {
     ($value:expr, $capacity:expr $(,)?) => {
@@ -1131,6 +1145,7 @@ macro_rules! __private_json_expand_token_len_of_generic_const {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_after_object_start {
     // EOF
@@ -1217,6 +1232,7 @@ macro_rules! __private_json_after_object_start {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_after_runtime_kvs {
     // runtime_kvs_after_object_start + EOF
@@ -1408,12 +1424,14 @@ macro_rules! __private_json_after_runtime_kvs {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_object_detect_trailing_semi {
     [{ $($e:expr;)* }[$($has_trailing_semi:tt)*][$($no_trailing_semi:tt)*]] => [$($has_trailing_semi)*];
     [{ $($e:expr);+ }[$($has_trailing_semi:tt)*][$($no_trailing_semi:tt)*]] => [$($no_trailing_semi)* ];
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_object_field_name {
     (
@@ -1554,6 +1572,7 @@ macro_rules! __private_json_object_field_name {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_after_object_colon {
     // $lit:literal
@@ -1640,6 +1659,7 @@ macro_rules! __private_json_after_object_colon {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_after_object_field_value {
     (
@@ -1728,6 +1748,7 @@ macro_rules! __private_json_after_object_field_value {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_macro {
     ($macro:ident $bang:tt {$($body:tt)*} $state:tt) => [ $crate::__private_json_macro! { $macro $bang ($($body)*) $state} ];
@@ -1737,6 +1758,7 @@ macro_rules! __private_json_macro {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_string {
     (
@@ -1762,6 +1784,7 @@ macro_rules! __private_json_string {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_in_string {
     // EOF
@@ -1803,6 +1826,7 @@ macro_rules! __private_json_in_string {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_string_fragment {
     // literal
@@ -1950,6 +1974,7 @@ macro_rules! __private_json_string_fragment {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_well_known_macro_json_string {
     ($($t:tt)*) => {

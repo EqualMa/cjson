@@ -40,6 +40,7 @@ macro_rules! json_write_async_try {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_write {
     (
@@ -183,6 +184,7 @@ macro_rules! __private_json_write {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_maybe_try {
     (
@@ -242,6 +244,7 @@ macro_rules! __private_json_maybe_try {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_write_const {
     (
@@ -263,6 +266,7 @@ macro_rules! __private_json_write_const {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_write_generic_const {
     (
@@ -291,6 +295,7 @@ macro_rules! __private_json_write_generic_const {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_write_const_value_str {
     (
@@ -317,6 +322,7 @@ macro_rules! __private_json_write_const_value_str {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_write_eof {
     (
@@ -439,6 +445,7 @@ macro_rules! __private_json_write_eof {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_write_chained_content {
     (
@@ -494,6 +501,7 @@ macro_rules! __private_json_write_chained_content {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_write_chunks {
     (
@@ -535,6 +543,7 @@ macro_rules! __private_json_write_chunks {
     }};
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_write_json_string_chunks {
     (
@@ -589,6 +598,7 @@ macro_rules! __private_json_write_json_string_chunks {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_write_json_string_prev {
     (
@@ -673,6 +683,7 @@ macro_rules! __private_json_write_json_string_prev {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_write_json_string_compile_time_fragment {
     (
@@ -697,6 +708,7 @@ macro_rules! __private_json_write_json_string_compile_time_fragment {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_write_json_string_runtime_fragment {
     (
@@ -713,6 +725,7 @@ macro_rules! __private_json_write_json_string_runtime_fragment {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_write_json_string_prev_of_last_runtime {
     (
@@ -772,6 +785,7 @@ macro_rules! __private_json_write_json_string_prev_of_last_runtime {
     }};
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_write_chunks_prev {
     (
@@ -930,6 +944,7 @@ macro_rules! __private_json_write_chunks_prev {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_write_chunks_then {
     (
@@ -958,6 +973,7 @@ macro_rules! __private_json_write_chunks_then {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_write_chunks_intermediate {
     (
@@ -1004,6 +1020,7 @@ macro_rules! __private_json_write_chunks_intermediate {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_write_chunks_first {
     (
@@ -1055,6 +1072,7 @@ macro_rules! __private_json_write_chunks_first {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_write_chunks_start_to_consume_non_empty {
     (
@@ -1073,6 +1091,7 @@ macro_rules! __private_json_write_chunks_start_to_consume_non_empty {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_write_chunks_last {
     (
@@ -1135,6 +1154,7 @@ macro_rules! __private_json_write_chunks_last {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_write_chunks_runtime {
     (
@@ -1164,6 +1184,7 @@ macro_rules! __private_json_write_chunks_runtime {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_state_then_runtime {
     (
@@ -1174,6 +1195,7 @@ macro_rules! __private_json_state_then_runtime {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_write_runtime {
     (
@@ -1190,6 +1212,7 @@ macro_rules! __private_json_write_runtime {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_write_chunks_group_open_runtime {
     (
@@ -1289,6 +1312,7 @@ macro_rules! __private_json_write_chunks_group_open_runtime {
 }
 
 // TODO: refactor other code with this macro
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_chunk_as_str {
     (
@@ -1321,6 +1345,7 @@ macro_rules! __private_json_chunk_as_str {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __wrap_each {
     ([$($braced_t:tt)*]$append:tt) => {
@@ -1333,6 +1358,7 @@ macro_rules! __wrap_each {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __wrap_one {
     ({$($t:tt)*}($($append:tt)*)) => {

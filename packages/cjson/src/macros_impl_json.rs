@@ -41,6 +41,7 @@ macro_rules! impl_json {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_json_options {
     // []
@@ -131,6 +132,7 @@ macro_rules! __private_impl_json_options {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_json_option_impl_generics {
     (
@@ -166,6 +168,7 @@ macro_rules! __private_impl_json_option_impl_generics {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_json_option_derive_from {
     (
@@ -201,6 +204,7 @@ macro_rules! __private_impl_json_option_derive_from {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_json_option_where_clause {
     (
@@ -236,6 +240,7 @@ macro_rules! __private_impl_json_option_where_clause {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_json_option_where_clause_to {
     (
@@ -271,6 +276,7 @@ macro_rules! __private_impl_json_option_where_clause_to {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_json_option_where_clause_into {
     (
@@ -306,6 +312,7 @@ macro_rules! __private_impl_json_option_where_clause_into {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_json_option_JsonKind {
     (
@@ -341,6 +348,7 @@ macro_rules! __private_impl_json_option_JsonKind {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_json_option_IS_CHAINABLE_AND_ALWAYS_EMPTY {
     (
@@ -376,6 +384,7 @@ macro_rules! __private_impl_json_option_IS_CHAINABLE_AND_ALWAYS_EMPTY {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_json_options_resolved {
     (
@@ -398,8 +407,10 @@ macro_rules! __private_impl_json_options_resolved {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_json_auto_ref_to   { ($($t:tt)*) => { &$($t)* }; }
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_json_auto_ref_into { ($($t:tt)*) => {  $($t)* }; }
 
@@ -442,11 +453,14 @@ macro_rules! __private_impl_json_auto_ref_to_type {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_json_auto_deref_to   { ($($t:tt)*) => { *$($t)* }; }
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_json_auto_deref_into { ($($t:tt)*) => {  $($t)* }; }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_impl_json_on_parsed {
     (

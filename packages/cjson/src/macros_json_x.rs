@@ -1,3 +1,4 @@
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_x {
     (
@@ -31,6 +32,7 @@ macro_rules! __private_json_x {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_x_parse_options {
     (
@@ -113,6 +115,7 @@ macro_rules! __private_json_x_parse_options {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! __private_json_x_expand {
     (
