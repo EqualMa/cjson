@@ -562,6 +562,19 @@ define_traits!({
         <Self::InitialConsumer as CONSUME_JSON>::Writer
     ];
 
+    type ConsumeCommaJsonValue: CONSUME_JSON_CHUNKS<
+            K,
+            InitialConsumer = Self::InitialConsumer,
+            CurrentState = states::ThenCommaValue<Self::CurrentState>,
+        >;
+    fn comma_json_value<V: IntoJson>(
+        self,
+        v: V,
+    ) -> Output![
+        Self::ConsumeCommaJsonValue,
+        <Self::InitialConsumer as CONSUME_JSON>::Writer
+    ];
+
     type ConsumeJsonItemsAfterArrayStartBeforeItem: CONSUME_JSON_CHUNKS<
             K,
             InitialConsumer = Self::InitialConsumer,
@@ -1288,6 +1301,24 @@ impl_many!({
             fn json_value<V: IntoJson>(mut self, v: V) -> Output![Self::ConsumeJsonValue, W] {
                 const { _ = states::ThenValue::<S>::STATE }
                 de_async_move!(async move {
+                    let Consumed { .. } = await_try!(v.json_provide_into_x(ConsumeJsonText(
+                        self.0.as_mut_x_consume_text_chunk()
+                    )));
+                    last_expr!(CONSUME(self.0, PhantomData))
+                })
+            }
+
+            type ConsumeCommaJsonValue = CONSUME<W, InitialConsumer, states::ThenCommaValue<S>, OC>;
+            fn comma_json_value<V: IntoJson>(
+                mut self,
+                v: V,
+            ) -> Output![
+                Self::ConsumeCommaJsonValue,
+                <Self::InitialConsumer as CONSUME_JSON>::Writer
+            ] {
+                const { _ = states::ThenCommaValue::<S>::STATE }
+                de_async_move!(async move {
+                    () = await_try!(self.0.x_consume_text_chunk(","));
                     let Consumed { .. } = await_try!(v.json_provide_into_x(ConsumeJsonText(
                         self.0.as_mut_x_consume_text_chunk()
                     )));

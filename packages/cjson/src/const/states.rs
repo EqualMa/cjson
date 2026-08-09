@@ -30,6 +30,7 @@ macro_rules! define_then {
 }
 
 define_then!(
+    ThenComma::comma,
     ThenValue::json_value,
     ThenItemsAfterItem::json_items_after_item,
     ThenItemsAfterArrayStartBeforeItem::json_items_after_array_start_before_item,
@@ -52,3 +53,5 @@ pub type LeftBraceKvsBeforeKv = ThenKvsAfterObjectStartBeforeKv<LeftBrace>;
 
 type TopLevelInString = ThenDoubleQuote<Init>;
 pub const TOP_LEVEL_IN_STRING: State = TopLevelInString::STATE;
+
+pub(crate) type ThenCommaValue<S> = ThenValue<ThenComma<S>>;

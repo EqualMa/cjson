@@ -56,6 +56,17 @@ impl_many!({
             never_future!(match self.0 {})
         }
 
+        type ConsumeCommaJsonValue = NeverConsume<INITIAL, states::ThenCommaValue<S>>;
+        fn comma_json_value<V: IntoJson>(
+            self,
+            _: V,
+        ) -> Output![
+            Self::ConsumeCommaJsonValue,
+            <Self::InitialConsumer as CONSUME_JSON>::Writer
+        ] {
+            never_future!(match self.0 {})
+        }
+
         type ConsumeJsonItemsAfterArrayStartBeforeItem =
             NeverConsume<INITIAL, states::ThenItemsAfterArrayStartBeforeItem<S>>;
         fn json_items_after_array_start_before_item<V: IntoJson<JsonKind = json_kinds::Array>>(
