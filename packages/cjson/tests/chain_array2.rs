@@ -1,5 +1,5 @@
 use cjson::{
-    impl_json, into_json_fns,
+    impl_json, json_fns,
     ser::{IntoJson, IntoJsonArray, ToJsonArray2 as ToJsonArray, json_kinds},
 };
 
@@ -15,7 +15,7 @@ impl<A: IntoJson<JsonKind = json_kinds::Array>, B: IntoJson<JsonKind = json_kind
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool =
         A::IS_CHAINABLE_AND_ALWAYS_EMPTY && B::IS_CHAINABLE_AND_ALWAYS_EMPTY;
 
-    into_json_fns!(|self| #[json_x]
+    json_fns!(|self| #[json_x]
     if const { A::IS_CHAINABLE_AND_ALWAYS_EMPTY } {
         json_x!((self.1))
     } else if const { B::IS_CHAINABLE_AND_ALWAYS_EMPTY } {

@@ -463,7 +463,7 @@ macro_rules! __private_impl_json_on_parsed {
             IS_CHAINABLE_AND_ALWAYS_EMPTY[$($IS_CHAINABLE_AND_ALWAYS_EMPTY:expr)?]
         }
         {
-            self $_self:tt
+            self($_self:tt)
             Self($Type:ty)
         }
     ) => {
@@ -483,7 +483,8 @@ macro_rules! __private_impl_json_on_parsed {
                     {
                         $(JsonKind($JsonKind))?
                         $(IS_CHAINABLE_AND_ALWAYS_EMPTY($IS_CHAINABLE_AND_ALWAYS_EMPTY))?
-                        self $_self
+                        receiver($_self)
+                        self($_self)
                         prepend_fn_and_const(
                             #[allow(unused_imports)]
                             use $crate::macro_helpers::impl_json_auto_ref::into::auto_deref;
@@ -510,7 +511,8 @@ macro_rules! __private_impl_json_on_parsed {
                     {
                         $(JsonKind($JsonKind))?
                         $(IS_CHAINABLE_AND_ALWAYS_EMPTY($IS_CHAINABLE_AND_ALWAYS_EMPTY))?
-                        self $_self
+                        receiver(&$_self)
+                        self($_self)
                         prepend_fn_and_const(
                             #[allow(unused_imports)]
                             use $crate::macro_helpers::impl_json_auto_ref::to::{auto_ref, auto_deref};

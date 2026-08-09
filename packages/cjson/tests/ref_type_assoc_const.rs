@@ -3,20 +3,20 @@
 
 use std::marker::PhantomData;
 
-use cjson::{into_json, into_json_fns, to_json_fns};
+use cjson::{json_fns, json_items};
 
 enum Never {}
 
 struct Val<'a>(PhantomData<&'a ()>, Never);
 
 impl cjson::ser::IntoJson for Never {
-    into_json!(|self| match self {});
+    json_items!(|self| match self {});
 }
 
 impl cjson::ser::ToJson2 for Val<'_> {
     type ToJsonKind = cjson::ser::json_kinds::AnyValue;
 
-    to_json_fns!(|self| match (self.1) {});
+    json_fns!(|&self| match (self.1) {});
 
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = true;
 }
@@ -26,7 +26,7 @@ enum Never2 {}
 impl cjson::ser::IntoJson for Never2 {
     type JsonKind = cjson::ser::json_kinds::AnyValue;
 
-    into_json_fns!(|self| match self {});
+    json_fns!(|self| match self {});
 
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool =
         <&Val<'_> as ::cjson::ser::IntoJson>::IS_CHAINABLE_AND_ALWAYS_EMPTY;

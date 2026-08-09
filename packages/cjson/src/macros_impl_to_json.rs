@@ -1,70 +1,80 @@
 /// Implement items in [`ToJson`](crate::ser::ToJson).
 ///
-/// See [`to_json_fns!`] if you just want to implement `fn` items.
+/// See [`json_fns!`] if you just want to implement `fn` items.
 #[macro_export]
-macro_rules! to_json {
-    (|$_self:ident| $($json_comma:tt)*) => {
-        $crate::__private_impl_to_json_parse! {
-            ($($json_comma)*)
-            {
-                expand_macro_bang($crate::__private_impl_to_json_parsed_as_to_body!)
-                expand_macro_rest({
-                    self($_self)
-                })
-            }
+macro_rules! json_items {
+    ($($closure:tt)*) => {
+        $crate::__private_json_fns_parse_closure! {
+            {$($closure)*}
+            {$($closure)*}
+            []
         }
     };
 }
 
-/// Implement items in [`IntoJson`](crate::ser::IntoJson).
+/// Implement fns in [`IntoJson`](crate::ser::IntoJson) or [`ToJson`](crate::ser::ToJson).
 ///
-/// See [`into_json_fns!`] if you just want to implement `fn` items.
+/// See [`json_items!`] if you want to implement all items.
 #[macro_export]
-macro_rules! into_json {
-    (|$_self:ident| $($json_comma:tt)*) => {
+macro_rules! json_fns {
+    ($($closure:tt)*) => {
+        $crate::__private_json_fns_parse_closure! {
+            {$($closure)*}
+            {$($closure)*}
+            [just_fns()]
+        }
+    };
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __private_json_fns_parse_closure {
+    (
+        { | self         $(,)?| $($_json_comma:tt)* }
+        { | $_self:ident $(,)?| $( $json_comma:tt)* }
+        [$($prepend_args:tt)*]
+    ) => {
         $crate::__private_impl_to_json_parse! {
             ($($json_comma)*)
             {
                 expand_macro_bang($crate::__private_impl_to_json_parsed_as_into_body!)
                 expand_macro_rest({
+                    $($prepend_args)*
+                    receiver($_self)
                     self($_self)
                 })
             }
         }
     };
-}
-
-/// Implement fns in [`ToJson`](crate::ser::ToJson).
-///
-/// See [`to_json!`] if you want to implement all items.
-#[macro_export]
-macro_rules! to_json_fns {
-    (|$_self:ident| $($json_comma:tt)*) => {
+    (
+        { | &        self         $(,)?| $($_json_comma:tt)* }
+        { | $_ref:tt $_self:ident $(,)?| $( $json_comma:tt)* }
+        [$($prepend_args:tt)*]
+    ) => {
         $crate::__private_impl_to_json_parse! {
             ($($json_comma)*)
             {
                 expand_macro_bang($crate::__private_impl_to_json_parsed_as_to_body!)
                 expand_macro_rest({
-                    just_fns()
+                    $($prepend_args)*
+                    receiver($_ref $_self)
                     self($_self)
                 })
             }
         }
     };
-}
-
-/// Implement fns in [`IntoJson`](crate::ser::IntoJson).
-///
-/// See [`into_json!`] if you want to implement all items.
-#[macro_export]
-macro_rules! into_json_fns {
-    (|$_self:ident| $($json_comma:tt)*) => {
+    (
+        { | mut         self         $(,)?| $($_json_comma:tt)* }
+        { | $_mut:ident $_self:ident $(,)?| $( $json_comma:tt)* }
+        [$($prepend_args:tt)*]
+    ) => {
         $crate::__private_impl_to_json_parse! {
             ($($json_comma)*)
             {
                 expand_macro_bang($crate::__private_impl_to_json_parsed_as_into_body!)
                 expand_macro_rest({
-                    just_fns()
+                    $($prepend_args)*
+                    receiver($_mut $_self)
                     self($_self)
                 })
             }
@@ -158,12 +168,13 @@ macro_rules! __private_impl_to_json_parsed_as_body {
         provide $provide:ident
         provide_try $provide_try:ident
         provide_async_try $provide_async_try:ident
-        ref($($ref:tt)?)
+        ref($($ref:tt)?) // TODO_LATER: remove
     }{
         $(just_fns $just_fns:tt)?
         $(JsonKind($($CustomJsonKind:ty)?))?
         $(IS_CHAINABLE_AND_ALWAYS_EMPTY($($CUSTOM_IS_CHAINABLE_AND_ALWAYS_EMPTY:expr)?))?
-        self($_self:ident)
+        receiver($($receiver:tt)+)
+        self($_self:ident) // TODO_LATER: remove
         $(prepend_fn_and_const($($prepend_fn_and_const:tt)*))?
     })) => {
         $crate::__private_impl_to_json_expand_if_else! {($($just_fns)?){}{
@@ -177,7 +188,7 @@ macro_rules! __private_impl_to_json_parsed_as_body {
                 Contains<Self::$ToJsonKind> = ()
             >
         >>(
-            $($ref)? $_self,
+            $($receiver)+,
             w: __CJsonWriter,
         ) -> $crate::ser::Consumed<Self::$ToJsonKind, __CJsonWriter> {
             $($($prepend_fn_and_const)*)?
@@ -194,7 +205,7 @@ macro_rules! __private_impl_to_json_parsed_as_body {
                 Contains<Self::$ToJsonKind> = ()
             >
         >>(
-            $($ref)? $_self,
+            $($receiver)+,
             w: __CJsonWriter,
         ) -> $crate::__private::Result<
             $crate::ser::Consumed<Self::$ToJsonKind, __CJsonWriter>,
@@ -218,7 +229,7 @@ macro_rules! __private_impl_to_json_parsed_as_body {
                 Contains<Self::$ToJsonKind> = ()
             >
         >>(
-            $($ref)? $_self,
+            $($receiver)+,
             w: __CJsonWriter,
         ) -> $crate::__private::Result<
             $crate::ser::Consumed<Self::$ToJsonKind, __CJsonWriter>,
