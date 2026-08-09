@@ -96,7 +96,6 @@ json! {false}
 // mod const_json;
 
 pub mod r#const;
-mod macros;
 #[doc(hidden)]
 mod macros_common;
 mod macros_generic_const;

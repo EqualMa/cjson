@@ -517,94 +517,6 @@ macro_rules! __private_impl_to_json_mod_resolve {
 }
 
 #[macro_export]
-macro_rules! __private_impl_to_json_impl {
-    (
-        $compile_runtime:tt
-        $last_compile_time:tt
-        {$(const $CONST:ident : $ConstTy:ty $(= $const_value:expr)?;)*}
-        $path:tt
-        $(($($next_list:tt)*))?
-    ) => {
-        $crate::__private_impl_to_json_impl_resolve! {
-            $compile_runtime
-            $last_compile_time
-            // prev_state
-            ($crate::r#const::State::INIT)
-            // impl_generics
-            ($( const $CONST: $ConstTy, )*)
-            // used_const_names
-            ($($CONST,)*)
-            // next_paths
-            ( $($($next_list)*)? )
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! __private_impl_to_json_impl_resolve {
-    (
-        []
-        $compile_time:tt
-        $prev_state:tt
-        $impl_generics:tt
-        $used_const_names:tt
-        ($($next_list:tt)*)
-    ) => {
-        $crate::__private_impl_for_only_compile_time_tokens! {
-            prev_state $prev_state
-            tokens $compile_time
-            impl_generics $impl_generics
-            for(
-                $crate::__private_impl_to_json_for_type![
-                    used_const_names $used_const_names
-                    prefix_path(cjson_macro_generated_types:: $($next_list::)*)
-                ]
-            )
-        }
-    };
-    (
-        [
-            {
-                compile_time $compile_time:tt
-                runtime[
-                    $runtime_kind:ident $runtime_expr:tt
-                    $(as $runtime_type:ty)?
-                ]
-            }
-            $($rest_compile_runtime:tt)*
-        ]
-        $last_compile_time:tt
-        $prev_state:tt
-        $impl_generics:tt
-        $used_const_names:tt
-        ($($next_list:tt)*)
-    ) => {
-        $crate::__private_impl_to_json_impl_resolve! {
-            []
-            $compile_time
-            $prev_state
-            $impl_generics
-            $used_const_names
-            ($($next_list)*)
-        }
-
-        $crate::__private_impl_to_json_impl_resolve! {
-            [$($rest_compile_runtime)*]
-            $last_compile_time
-            (<
-                $crate::__private_impl_to_json_for_type![
-                    used_const_names $used_const_names
-                    prefix_path(cjson_macro_generated_types:: $($next_list::)*)
-                ] as $crate::r#const::HasConstCompileTimeChunk
-            >::CHUNK.into_next_state().$runtime_kind())
-            $impl_generics
-            $used_const_names
-            ($($next_list)* next)
-        }
-    };
-}
-
-#[macro_export]
 macro_rules! __private_impl_to_json_type {
     (
         $compile_runtime:tt
@@ -922,35 +834,6 @@ macro_rules! __private_impl_to_json_after_value_mixed_expand {
             $($expand_macro_rest)*
         }
     };
-}
-
-#[macro_export]
-macro_rules! __private_impl_to_json_concat_only_compile_time_tokens {
-    (
-        used_const_generics[
-            $( const $CONST:ident: $ConstTy:ty $(= $const_value:expr)? ;)*
-        ]
-        prev_state $prev_state:tt
-        tokens $tokens:tt
-        prefix_path $prefix_path:tt
-        then_bang($($then_bang:tt)+)
-        then_rest($($then_rest:tt)*)
-    ) => { $($then_bang)+ {
-        impl(
-            $crate::__private_impl_for_only_compile_time_tokens! {
-                prev_state $prev_state
-                tokens $tokens:tt
-                impl_generics($( const $CONST: $ConstTy, )*)
-                for($crate::__private_impl_to_json_for_type![
-                    used_const_names(
-                        $( $CONST, )*
-                    )
-                    prefix_path $prefix_path
-                ])
-            }
-        )
-        $($then_rest)*
-    } };
 }
 
 #[macro_export]
