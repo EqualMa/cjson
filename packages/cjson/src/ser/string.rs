@@ -1,8 +1,8 @@
-use crate::ser::{ToJson2, texts};
+use crate::ser::{ToJson, texts};
 
 use super::{helpers::json_fns, json_kinds};
 
-impl ToJson2 for str {
+impl ToJson for str {
     type ToJsonKind = json_kinds::JsonString;
 
     json_fns!({

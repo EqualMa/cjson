@@ -55,7 +55,7 @@ pub trait IntoJson {
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool;
 }
 
-pub trait ToJson2 {
+pub trait ToJson {
     type ToJsonKind: JsonKind;
     fn json_provide_to<W: ConsumeJson<ConsumeJsonKind: JsonKind<Contains<Self::ToJsonKind> = ()>>>(
         &self,
@@ -86,7 +86,7 @@ pub trait ToJsonByCopyIntoJson: Copy + IntoJson {}
 mod into_json_key_colon_value;
 pub trait IntoJsonKeyColonValue: into_json_key_colon_value::Sealed {}
 
-impl<T: ?Sized + ToJson2> IntoJson for &T {
+impl<T: ?Sized + ToJson> IntoJson for &T {
     type JsonKind = T::ToJsonKind;
 
     fn json_provide_into<
@@ -119,7 +119,7 @@ impl<T: ?Sized + ToJson2> IntoJson for &T {
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = T::IS_CHAINABLE_AND_ALWAYS_EMPTY;
 }
 
-impl<T: ToJsonByCopyIntoJson> ToJson2 for T {
+impl<T: ToJsonByCopyIntoJson> ToJson for T {
     type ToJsonKind = T::JsonKind;
 
     fn json_provide_to<
@@ -155,7 +155,7 @@ impl<T: ToJsonByCopyIntoJson> ToJson2 for T {
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = <T as IntoJson>::IS_CHAINABLE_AND_ALWAYS_EMPTY;
 }
 
-impl<T: ?Sized + ToJson2> ToJsonByCopyIntoJson for &T {}
+impl<T: ?Sized + ToJson> ToJsonByCopyIntoJson for &T {}
 
 pub trait IntoJsonExt: IntoJson + Sized {
     fn into_json_as<W: Default + traits::ConsumeTextChunk>(self) -> W {
@@ -192,7 +192,7 @@ pub trait IntoJsonExt: IntoJson + Sized {
     }
 }
 
-pub trait ToJsonExt: ToJson2 {
+pub trait ToJsonExt: ToJson {
     fn to_json_as<W: Default + traits::ConsumeTextChunk>(&self) -> W {
         <&Self as IntoJsonExt>::into_json_as(self)
     }
@@ -214,7 +214,7 @@ pub trait ToJsonExt: ToJson2 {
 }
 
 impl<T: IntoJson> IntoJsonExt for T {}
-impl<T: ToJson2 + ?Sized> ToJsonExt for T {}
+impl<T: ToJson + ?Sized> ToJsonExt for T {}
 
 mod bool;
 mod int;
@@ -227,14 +227,14 @@ mod tuple;
 #[cfg(feature = "alloc")]
 mod alloc;
 
-pub trait ToJsonArray2: ToJson2<ToJsonKind = json_kinds::Array> {}
-impl<T: ?Sized + ToJson2<ToJsonKind = json_kinds::Array>> ToJsonArray2 for T {}
+pub trait ToJsonArray: ToJson<ToJsonKind = json_kinds::Array> {}
+impl<T: ?Sized + ToJson<ToJsonKind = json_kinds::Array>> ToJsonArray for T {}
 
-pub trait ToJsonObject2: ToJson2<ToJsonKind = json_kinds::Object> {}
-impl<T: ?Sized + ToJson2<ToJsonKind = json_kinds::Object>> ToJsonObject2 for T {}
+pub trait ToJsonObject: ToJson<ToJsonKind = json_kinds::Object> {}
+impl<T: ?Sized + ToJson<ToJsonKind = json_kinds::Object>> ToJsonObject for T {}
 
-pub trait ToJsonString2: ToJson2<ToJsonKind = json_kinds::JsonString> {}
-impl<T: ?Sized + ToJson2<ToJsonKind = json_kinds::JsonString>> ToJsonString2 for T {}
+pub trait ToJsonString: ToJson<ToJsonKind = json_kinds::JsonString> {}
+impl<T: ?Sized + ToJson<ToJsonKind = json_kinds::JsonString>> ToJsonString for T {}
 
 pub trait IntoJsonArray: IntoJson<JsonKind = json_kinds::Array> {}
 impl<T: ?Sized + IntoJson<JsonKind = json_kinds::Array>> IntoJsonArray for T {}

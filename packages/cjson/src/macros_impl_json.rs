@@ -499,10 +499,10 @@ macro_rules! __private_impl_json_on_parsed {
             #[allow(unused_imports)]
             use $crate::macro_helpers::impl_json_auto_ref::to_type::auto_ref;
 
-            impl< $($impl_generics)* > $crate::ser::ToJson2
+            impl< $($impl_generics)* > $crate::ser::ToJson
                 for $Type
                 where
-                    $($DeriveFrom: $crate::ser::ToJson2$(<ToJsonKind = $crate::ser::json_kinds::$DeriveFromKind>)?,)*
+                    $($DeriveFrom: $crate::ser::ToJson$(<ToJsonKind = $crate::ser::json_kinds::$DeriveFromKind>)?,)*
                     $($where_clause)*
                     $($where_clause_to)*
             {

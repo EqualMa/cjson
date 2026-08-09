@@ -13,7 +13,7 @@ impl cjson::ser::IntoJson for Never {
     json_items!(|self| match self {});
 }
 
-impl cjson::ser::ToJson2 for Val<'_> {
+impl cjson::ser::ToJson for Val<'_> {
     type ToJsonKind = cjson::ser::json_kinds::AnyValue;
 
     json_fns!(|&self| match (self.1) {});

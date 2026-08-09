@@ -1,11 +1,11 @@
-use crate::ser::{IntoJson, ToJson2, helpers::json_fns};
+use crate::ser::{IntoJson, ToJson, helpers::json_fns};
 
 pub mod prelude_refed {}
 
 enum Never {}
 pub struct Refed<T>(Never, ::core::marker::PhantomData<T>);
 
-impl<T: ToJson2> IntoJson for Refed<T> {
+impl<T: ToJson> IntoJson for Refed<T> {
     type JsonKind = T::ToJsonKind;
 
     json_fns!({
@@ -14,5 +14,5 @@ impl<T: ToJson2> IntoJson for Refed<T> {
         |self, _| trait_mod::never_future!(match self.0 {})
     });
 
-    const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = <T as ToJson2>::IS_CHAINABLE_AND_ALWAYS_EMPTY;
+    const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = <T as ToJson>::IS_CHAINABLE_AND_ALWAYS_EMPTY;
 }

@@ -211,7 +211,7 @@ define!({
             w: W,
         ) -> Output![Consumed<Self::ToJsonKind, W>, W::Writer]
         where
-            Self: crate::ser::ToJson2,
+            Self: crate::ser::ToJson,
         {
             select_method!(
                 self.json_provide_to(w)

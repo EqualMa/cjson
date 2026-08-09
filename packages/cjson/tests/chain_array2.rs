@@ -1,6 +1,6 @@
 use cjson::{
     impl_json, json_fns,
-    ser::{IntoJson, IntoJsonArray, ToJsonArray2 as ToJsonArray, json_kinds},
+    ser::{IntoJson, IntoJsonArray, ToJsonArray, json_kinds},
 };
 
 pub struct ChainArray2<

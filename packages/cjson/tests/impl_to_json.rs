@@ -1,4 +1,4 @@
-use cjson::{impl_json, ser::IntoJson, ser::ToJson2 as ToJson};
+use cjson::{impl_json, ser::IntoJson, ser::ToJson};
 
 macro_rules! assert_json_eq {
     ($v:expr, $eq:expr) => {
@@ -183,7 +183,7 @@ struct ObjectRuntime2<A, B>(A, B);
 impl_json!(
     impl_generics![A, B],
     where_clause_to![
-        A: cjson::ser::ToJsonString2,
+        A: cjson::ser::ToJsonString,
         B: ToJson,
     ],
     where_clause_into![

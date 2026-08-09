@@ -1,4 +1,4 @@
-use super::{IntoJson, ToJson2 as ToJson, helpers::json_fns, json_kinds};
+use super::{IntoJson, ToJson as ToJson, helpers::json_fns, json_kinds};
 
 macro_rules! impl_tuple {
     ($pre:tt) => {};

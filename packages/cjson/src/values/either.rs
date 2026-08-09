@@ -1,5 +1,5 @@
 use crate::{
-    ser::{IntoJson, ToJson2 as ToJson, helpers::json_fns, json_kinds::JsonKind},
+    ser::{IntoJson, ToJson as ToJson, helpers::json_fns, json_kinds::JsonKind},
     utils::impl_many,
 };
 

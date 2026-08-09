@@ -1,8 +1,8 @@
 use crate::values::ArrayOfIter;
 
-use super::{IntoJson, ToJson2, helpers::json_fns, json_kinds};
+use super::{IntoJson, ToJson, helpers::json_fns, json_kinds};
 
-impl<T> ToJson2 for [T]
+impl<T> ToJson for [T]
 where
     for<'a> &'a T: IntoJson,
 {
@@ -35,7 +35,7 @@ impl<T: IntoJson, const N: usize> IntoJson for [T; N] {
     const IS_CHAINABLE_AND_ALWAYS_EMPTY: bool = false;
 }
 
-impl<T, const N: usize> ToJson2 for [T; N]
+impl<T, const N: usize> ToJson for [T; N]
 where
     for<'a> &'a T: IntoJson,
 {

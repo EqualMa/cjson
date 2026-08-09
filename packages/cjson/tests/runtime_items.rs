@@ -1,6 +1,6 @@
 use cjson::{
     impl_json,
-    ser::{ToJson2 as ToJson, ToJsonArray2 as ToJsonArray},
+    ser::{ToJson, ToJsonArray},
 };
 
 macro_rules! assert_json_eq {

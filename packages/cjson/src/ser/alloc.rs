@@ -2,7 +2,7 @@ use alloc::{boxed::Box, rc::Rc, sync::Arc};
 
 use crate::utils::impl_many;
 
-use super::{IntoJson, ToJson2 as ToJson, helpers::json_fns};
+use super::{IntoJson, ToJson as ToJson, helpers::json_fns};
 
 /// - For Sized T, we just unbox it.
 /// - For `Box<[T]>`, same as `Vec<T>`

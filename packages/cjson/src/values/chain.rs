@@ -1,6 +1,6 @@
 // TODO: optimize IntoJson with IS_CHAINABLE_AND_ALWAYS_EMPTY
 use crate::{
-    ser::{ConsumeJson, IntoJson, ToJson2, helpers::json_fns, json_kinds, traits},
+    ser::{ConsumeJson, IntoJson, ToJson, helpers::json_fns, json_kinds, traits},
     utils::impl_many,
 };
 
@@ -96,7 +96,7 @@ impl_many!({
             A::IS_CHAINABLE_AND_ALWAYS_EMPTY && B::IS_CHAINABLE_AND_ALWAYS_EMPTY;
     }
 
-    impl<A: ToJson2<ToJsonKind = K>, B: ToJson2<ToJsonKind = K>> ToJson2 for Chain<A, B> {
+    impl<A: ToJson<ToJsonKind = K>, B: ToJson<ToJsonKind = K>> ToJson for Chain<A, B> {
         type ToJsonKind = K;
 
         json_fns!({

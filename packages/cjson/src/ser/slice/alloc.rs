@@ -1,7 +1,7 @@
 use alloc::{boxed::Box, vec::Vec};
 
 use crate::{
-    ser::{IntoJson, ToJson2 as ToJson, helpers::json_fns, json_kinds},
+    ser::{IntoJson, ToJson as ToJson, helpers::json_fns, json_kinds},
     utils::impl_many,
     values::ArrayOfIter,
 };

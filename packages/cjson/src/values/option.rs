@@ -1,4 +1,4 @@
-use crate::ser::{IntoJson, ToJson2 as ToJson, helpers::json_fns, json_kinds};
+use crate::ser::{IntoJson, ToJson as ToJson, helpers::json_fns, json_kinds};
 
 use super::Null;
 

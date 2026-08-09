@@ -376,10 +376,10 @@ macro_rules! __private_impl_to_json_runtime_kind {
         $crate::ser::json_kinds::AnyValue
     };
     (as & $lt:lifetime $Ty:ty $(,)?) => {
-        <$Ty as $crate::ser::ToJson2>::ToJsonKind
+        <$Ty as $crate::ser::ToJson>::ToJsonKind
     };
     (as &              $Ty:ty $(,)?) => {
-        <$Ty as $crate::ser::ToJson2>::ToJsonKind
+        <$Ty as $crate::ser::ToJson>::ToJsonKind
     };
     (as                $Ty:ty $(,)?) => {
         <$Ty as $crate::ser::IntoJson>::JsonKind
