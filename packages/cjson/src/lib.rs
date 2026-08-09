@@ -101,7 +101,7 @@ mod macros_common;
 mod macros_generic_const;
 #[doc(hidden)]
 mod macros_impl_json;
-mod macros_impl_to_json;
+mod macros_json_items;
 mod macros_json_x;
 mod macros_write;
 
