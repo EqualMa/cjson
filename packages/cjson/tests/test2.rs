@@ -1,5 +1,5 @@
 use cjson::{
-    json, json_to_async_try, json_to_string, json_to_try,
+    json_to_async_try, json_to_string, json_to_try,
     ser::{ConsumeJson, json_kinds},
     values::ObjectOfIter,
 };
