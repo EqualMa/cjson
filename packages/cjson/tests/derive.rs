@@ -1,6 +1,6 @@
 #![cfg(feature = "proc-macro")]
 
-use cjson::{self as my_json, ToJson, ser::IntoJson};
+use cjson::{self as my_json, IntoAndToJson, IntoJson, ToJson};
 
 macro_rules! assert_json_eq {
     ($v:expr, $eq:expr) => {
@@ -22,7 +22,7 @@ macro_rules! assert_json_eq {
     };
 }
 
-#[derive(ToJson)]
+#[derive(IntoAndToJson)]
 struct UnitStruct;
 
 #[test]
@@ -30,7 +30,7 @@ fn unit_struct() {
     assert_json_eq!(UnitStruct, "null");
 }
 
-#[derive(ToJson)]
+#[derive(IntoAndToJson)]
 struct UnitTuple();
 
 #[test]
@@ -38,14 +38,14 @@ fn unit_tuple() {
     assert_json_eq!(UnitTuple(), "[]");
 }
 
-#[derive(ToJson)]
+#[derive(IntoAndToJson)]
 struct TransparentImplicit(u8);
 
-#[derive(ToJson)]
+#[derive(IntoAndToJson)]
 #[cjson(transparent)]
 struct TransparentExplicit<'a>(&'a str);
 
-#[derive(ToJson)]
+#[derive(IntoAndToJson)]
 #[cjson(
     where_to = (T: ToJson),
     where_into = (T: IntoJson),
@@ -62,7 +62,7 @@ fn transparent() {
     assert_json_eq!(TransparentExplicitNamed { only: false }, "false");
 }
 
-#[derive(ToJson)]
+#[derive(IntoAndToJson)]
 struct Tuple(u8, cjson::values::Finite<f32>);
 
 #[test]
@@ -73,7 +73,7 @@ fn tuple() {
     );
 }
 
-#[derive(ToJson)]
+#[derive(IntoAndToJson)]
 struct ObjEmpty {}
 
 #[test]
@@ -81,7 +81,7 @@ fn obj_empty() {
     assert_json_eq!(ObjEmpty {}, "{}");
 }
 
-#[derive(ToJson)]
+#[derive(IntoAndToJson)]
 #[cjson(crate(my_json))]
 struct ObjOneField {
     name: String,
@@ -97,7 +97,7 @@ fn obj_one_field() {
     );
 }
 
-#[derive(ToJson)]
+#[derive(IntoAndToJson)]
 #[cjson(derive_from(V))]
 #[cjson(crate(::cjson))]
 struct ObjFields<'a, V, const UNUSED: u32> {
@@ -116,7 +116,7 @@ fn obj_fields() {
     );
 }
 
-#[derive(ToJson)]
+#[derive(IntoAndToJson)]
 enum Never {}
 
 #[test]
@@ -124,17 +124,17 @@ fn never() {
     assert_json_eq!(None::<Never>, "null");
 }
 
-#[derive(ToJson)]
+#[derive(IntoAndToJson)]
 enum EnumOnlyUnit {
     OnlyUnit,
 }
 
-#[derive(ToJson)]
+#[derive(IntoAndToJson)]
 enum EnumOne {
     Only(),
 }
 
-#[derive(ToJson)]
+#[derive(IntoAndToJson)]
 #[cjson(any_value)]
 enum EnumMany {
     First(),

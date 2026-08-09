@@ -339,8 +339,8 @@ impl ItemAttrsParser {
     }
 }
 
-#[proc_macro_derive(ToJson, attributes(cjson))]
-pub fn derive_to_json(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+#[proc_macro_derive(IntoAndToJson, attributes(cjson))]
+pub fn derive_into_and_to_json(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     // let lit = proc_macro::Literal::string(&input.to_string());
     // let lit_debug = proc_macro::Literal::string(&format!("{input:?}"));
 
