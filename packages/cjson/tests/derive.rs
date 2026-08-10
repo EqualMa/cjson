@@ -152,3 +152,28 @@ fn enums() {
     assert_json_eq!(EnumMany::Third {}, r#"{"Third":{}}"#);
     assert_json_eq!(EnumMany::Runtime { v: 1 }, r#"{"Runtime":{"v":1}}"#);
 }
+
+#[test]
+fn two_separate_derive() {
+    #[derive(ToJson, IntoJson)]
+    #[cjson(derive_from(A))]
+    #[cjson(
+        where = (B: ToJson),
+        where_to = (C: ToJson),
+        where_into = (C: IntoJson),
+    )]
+    struct MyObj<'b, A, B: ?Sized, C> {
+        a: A,
+        b: &'b B,
+        c: C,
+    }
+
+    assert_json_eq!(
+        MyObj {
+            a: true,
+            b: "b",
+            c: 3
+        },
+        r#"{"a":true,"b":"b","c":3}"#
+    );
+}

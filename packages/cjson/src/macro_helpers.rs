@@ -10,6 +10,13 @@ pub mod impl_json_options {
     };
 }
 
+pub mod impl_into_or_to_json_options {
+    #[doc(no_inline)]
+    pub use super::impl_json_options::{
+        IS_CHAINABLE_AND_ALWAYS_EMPTY, JsonKind, derive_from, impl_generics, where_clause,
+    };
+}
+
 pub mod impl_json_auto_ref {
     pub mod to {
         pub use crate::__private_impl_json_auto_deref_to as auto_deref;

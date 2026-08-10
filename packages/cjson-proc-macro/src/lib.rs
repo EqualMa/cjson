@@ -341,6 +341,23 @@ impl ItemAttrsParser {
 
 #[proc_macro_derive(IntoAndToJson, attributes(cjson))]
 pub fn derive_into_and_to_json(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    derive_ser_json(input, DeriveWhich::Both)
+}
+
+#[proc_macro_derive(IntoJson, attributes(cjson))]
+pub fn derive_into_json(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    derive_ser_json(input, DeriveWhich::IntoJson)
+}
+
+#[proc_macro_derive(ToJson, attributes(cjson))]
+pub fn derive_to_json(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    derive_ser_json(input, DeriveWhich::ToJson)
+}
+
+fn derive_ser_json(
+    input: proc_macro::TokenStream,
+    derive_which: DeriveWhich,
+) -> proc_macro::TokenStream {
     // let lit = proc_macro::Literal::string(&input.to_string());
     // let lit_debug = proc_macro::Literal::string(&format!("{input:?}"));
 
@@ -427,7 +444,7 @@ pub fn derive_into_and_to_json(input: proc_macro::TokenStream) -> proc_macro::To
 
     let use_item_attrs = item_ident_tree.into_tokens();
 
-    let ts = item.map(|item| item.into_tokens(crate_path));
+    let ts = item.map(|item| item.into_tokens(crate_path, derive_which));
 
     let errors = errors
         .ok()
@@ -599,3 +616,9 @@ impl JsonValueExpr {
 
 #[derive(Debug)]
 struct ParseError;
+
+enum DeriveWhich {
+    Both,
+    IntoJson,
+    ToJson,
+}

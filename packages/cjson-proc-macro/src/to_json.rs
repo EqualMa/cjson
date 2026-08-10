@@ -2,7 +2,7 @@ use proc_macro::{Delimiter, Group, Ident, Span, TokenStream, TokenTree};
 use typed_quote::{Either, IntoTokens, WithSpan, quote, tokens::IterTokens};
 
 use crate::{
-    ErrorCollector, IdentTree, ItemAttrWhere, ident_match,
+    DeriveWhich, ErrorCollector, IdentTree, ItemAttrWhere, ident_match,
     syn_generic::{
         self, ParseError, ParseGenericsOutput, WhereClause, parse_meta_utils::MetaPathSpanWith,
         with_trailing_punct_if_not_empty,
@@ -173,19 +173,48 @@ pub struct ToJsonItem {
     data: ToJsonItemData,
 }
 impl ToJsonItem {
-    pub fn into_tokens(self, crate_path: impl IntoTokens) -> impl IntoTokens {
+    pub fn into_tokens(
+        self,
+        crate_path: impl IntoTokens,
+        derive_which: DeriveWhich,
+    ) -> impl IntoTokens {
         let Self {
             name,
             impl_generics,
             ty_generics,
-            where_clause,
-            where_to,
-            where_into,
+            mut where_clause,
+            mut where_to,
+            mut where_into,
             derive_from,
             is_chainable_and_always_empty,
             json_kind,
             data,
         } = self;
+
+        // 1. Silently ignore the irrelevant where clauses in case both #[derive(ToJson, IntoJson)]
+        // 2. Merge where_[in]to to where
+        'merge: {
+            let where_append = match derive_which {
+                DeriveWhich::Both => break 'merge,
+                DeriveWhich::IntoJson => {
+                    where_to = None;
+                    where_into.take()
+                }
+                DeriveWhich::ToJson => {
+                    where_into = None;
+                    where_to.take()
+                }
+            };
+
+            where_clause = match (where_clause, where_append) {
+                (None, Some(ItemAttrWhere { where_span, bound })) => Some(JointWhere {
+                    where_span,
+                    predicates: Either::B(bound),
+                }),
+                (Some(w), Some(where_append)) => Some(w.concat(where_append)),
+                (v, None) => v,
+            };
+        }
 
         let derive_from = derive_from.map(|MetaPathSpanWith(span, group)| {
             let group = make_bracket(group.into_group());
@@ -226,8 +255,14 @@ impl ToJsonItem {
 
         let data = data.into_tokens();
 
+        let macro_name = match derive_which {
+            DeriveWhich::Both => quote!(impl_json).as_ident(),
+            DeriveWhich::IntoJson => quote!(impl_into_json).as_ident(),
+            DeriveWhich::ToJson => quote!(impl_to_json).as_ident(),
+        };
+
         quote!(
-            #crate_path ::impl_json!(
+            #crate_path::#macro_name!(
                 impl_generics![#impl_generics],
                 #derive_from
                 #where_clause
@@ -293,6 +328,16 @@ impl JointWhere {
             where_span,
             predicates: Either::A(IterTokens(predicates)),
         }
+    }
+
+    fn concat(mut self, ItemAttrWhere { where_span, bound }: ItemAttrWhere) -> Self {
+        self = self.with_trailing_comma(Some(where_span));
+        self.predicates = {
+            let predicates = self.predicates;
+            Either::B(quote!(#predicates #bound).into_token_stream())
+        };
+
+        self
     }
 }
 

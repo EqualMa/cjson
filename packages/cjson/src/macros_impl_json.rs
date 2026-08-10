@@ -21,10 +21,62 @@
 #[macro_export]
 macro_rules! impl_json {
     ($($t:tt)+) => {
+        $crate::__private_impl_json! {
+            (both)
+            ($crate::macro_helpers::impl_json_options)
+            {$($t)+}
+        }
+    };
+}
+
+/// You only need this macro if you need [`derive_from![]`](crate::macro_helpers::impl_into_or_to_json_options::derive_from)
+///
+/// In other cases, you might not need this macro.
+///
+/// - If you just want to implement one of [`IntoJson`] or [`ToJson`],
+///   use [`json_items!`](crate::json_items!) or [`json_fns!`](crate::json_fns!) inside your `impl ... for ...`.
+/// - If you want to implement both [`IntoJson`] and [`ToJson`], use [`impl_json!`].
+///
+/// [`IntoJson`]: crate::ser::IntoJson
+/// [`ToJson`]: crate::ser::ToJson
+#[macro_export]
+macro_rules! impl_into_json {
+    ($($t:tt)+) => {
+        $crate::__private_impl_json! {
+            (justIntoJson)
+            ($crate::macro_helpers::impl_into_or_to_json_options)
+            {$($t)+}
+        }
+    };
+}
+
+/// See docs in [impl_into_json!].
+#[macro_export]
+macro_rules! impl_to_json {
+    ($($t:tt)+) => {
+        $crate::__private_impl_json! {
+            (justToJson)
+            ($crate::macro_helpers::impl_into_or_to_json_options)
+            {$($t)+}
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __private_impl_json {
+    (
+        $paren_impl_which_traits:tt
+        $paren_parse_mod:tt
+        $braced_ts:tt
+    ) => {
         $crate::__private_impl_json_options! {
             {
-                parse_mod($crate::macro_helpers::impl_json_options)
-                on_parsed(($crate::__private_impl_json_options_resolved!))
+                parse_mod $paren_parse_mod
+                on_parsed(
+                    ($crate::__private_impl_json_options_resolved!)
+                    [impl_which_traits $paren_impl_which_traits]
+                )
             }
             {
                 impl_generics[] // empty
@@ -35,8 +87,8 @@ macro_rules! impl_json {
                 JsonKind[] // empty
                 IS_CHAINABLE_AND_ALWAYS_EMPTY[] // empty
             }
-            {$($t)+}
-            {$($t)+}
+            $braced_ts
+            $braced_ts
         }
     };
 }
@@ -388,6 +440,7 @@ macro_rules! __private_impl_json_option_IS_CHAINABLE_AND_ALWAYS_EMPTY {
 #[macro_export]
 macro_rules! __private_impl_json_options_resolved {
     (
+        impl_which_traits $impl_which_traits:tt
         $options:tt
         {
             |$_self:ident : $Type:ty|
@@ -398,10 +451,14 @@ macro_rules! __private_impl_json_options_resolved {
             ($($json_comma)*)
             {
                 expand_macro_bang($crate::__private_impl_json_on_parsed!)
-                expand_macro_rest($options {
-                    self($_self)
-                    Self($Type)
-                })
+                expand_macro_rest(
+                    impl_which_traits $impl_which_traits
+                    $options
+                    {
+                        self($_self)
+                        Self($Type)
+                    }
+                )
             }
         }
     };
@@ -465,6 +522,7 @@ macro_rules! __private_impl_json_auto_deref_into { ($($t:tt)*) => {  $($t)* }; }
 macro_rules! __private_impl_json_on_parsed {
     (
         $parsed:tt
+        impl_which_traits($impl_which_traits:tt)
         {
             impl_generics[ $($impl_generics:tt)* ]
             derive_from[
@@ -481,6 +539,7 @@ macro_rules! __private_impl_json_on_parsed {
             Self($Type:ty)
         }
     ) => {
+        $crate::__private_impl_json_expand_if_impl_includes! { $impl_which_traits IntoJson
         #[automatically_derived] // TODO: is this needed?
         const _: () = {
             #[allow(unused_imports)]
@@ -507,7 +566,9 @@ macro_rules! __private_impl_json_on_parsed {
                 }
             }
         };
+        }
 
+        $crate::__private_impl_json_expand_if_impl_includes! { $impl_which_traits ToJson
         #[automatically_derived] // TODO: is this needed?
         const _: () = {
             #[allow(unused_imports)]
@@ -535,5 +596,17 @@ macro_rules! __private_impl_json_on_parsed {
                 }
             }
         };
+        }
     };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __private_impl_json_expand_if_impl_includes {
+    { both         IntoJson $item:item } => { $item };
+    { both         ToJson   $item:item } => { $item };
+    { justToJson   IntoJson $item:item } => {       };
+    { justToJson   ToJson   $item:item } => { $item };
+    { justIntoJson IntoJson $item:item } => { $item };
+    { justIntoJson ToJson   $item:item } => {       };
 }

@@ -10,7 +10,7 @@ extern crate std;
 pub mod ser;
 pub mod values;
 
-pub use ::cjson_proc_macro::IntoAndToJson;
+pub use ::cjson_proc_macro::{IntoAndToJson, IntoJson, ToJson};
 pub use ser::{IntoJson, ToJson};
 
 #[macro_export]
